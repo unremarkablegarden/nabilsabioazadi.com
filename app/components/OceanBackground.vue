@@ -5,9 +5,6 @@ import { Water } from "three/addons/objects/Water.js";
 import { Sky } from "three/addons/objects/Sky.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 
-// Debug sliders: always in dev, and in production with `?debug` in the URL.
-const route = useRoute();
-const showDebug = computed(() => import.meta.dev || "debug" in route.query);
 const container = ref<HTMLDivElement>();
 let dispose: (() => void) | undefined;
 
@@ -200,7 +197,7 @@ onBeforeUnmount(() => dispose?.());
 <template>
 	<div ref="container" class="fixed inset-0 -z-10" aria-hidden="true" />
 	<!-- Client only: the server's clock and time zone differ from the visitor's. -->
-	<ClientOnly v-if="showDebug">
+	<ClientOnly>
 		<div
 			class="fixed top-4 right-4 z-10 grid grid-cols-[auto_12rem_auto] items-center gap-x-3 gap-y-2 rounded bg-black/50 px-3 py-2 font-mono text-sm text-white"
 		>
