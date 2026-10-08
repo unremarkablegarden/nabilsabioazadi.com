@@ -60,18 +60,52 @@ onMounted(() => {
 	skyUniforms.cloudDensity.value = 0.5;
 	skyUniforms.cloudElevation.value = 0.5;
 
-	// Sun 2° above the horizon, straight ahead of the camera.
-	const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(88), THREE.MathUtils.degToRad(180));
-	skyUniforms.sunPosition.value.copy(sun);
-	water.material.uniforms.sunDirection.value.copy(sun).normalize();
-
-	// The sky is rendered once into an environment map so the water reflects it.
+	// The sky is rendered into an environment map so the water reflects it.
 	const pmremGenerator = new THREE.PMREMGenerator(renderer);
 	const sceneEnv = new THREE.Scene();
-	sceneEnv.add(sky);
-	const envTarget = pmremGenerator.fromScene(sceneEnv);
-	scene.add(sky);
-	scene.environment = envTarget.texture;
+	let envTarget: THREE.WebGLRenderTarget | undefined;
+
+	const daySunColor = new THREE.Color(0xffffff);
+	const nightSunColor = new THREE.Color(0x6677aa);
+	const dayWaterColor = new THREE.Color(0x001e0f);
+	const nightWaterColor = new THREE.Color(0x000308);
+
+	// Sun position from the visitor's local clock: rises 06:00, peaks 60° at 12:00, sets 18:00.
+	// Azimuth sweeps 120°..240° so the sun stays near the view direction (180°).
+	// `?hour=21.5` overrides the clock for testing.
+	// Below -4° the light source switches to a moon mirrored above the horizon,
+	// rendered with the same sky shader at low exposure.
+	const updateTimeOfDay = () => {
+		const now = new Date();
+		const override = new URLSearchParams(location.search).get("hour");
+		const hour = override ? Number(override) : now.getHours() + now.getMinutes() / 60;
+
+		const sunElevation = 60 * Math.sin(((hour - 6) / 12) * Math.PI);
+		const isNight = sunElevation < -4;
+		const elevation = isNight ? Math.max(-sunElevation, 15) : sunElevation;
+		const hoursSinceRise = isNight ? (hour + 6) % 24 : hour - 6;
+		const azimuth = 120 + THREE.MathUtils.clamp(hoursSinceRise / 12, 0, 1) * 120;
+		const daylight = THREE.MathUtils.smoothstep(sunElevation, -4, 8);
+
+		const light = new THREE.Vector3().setFromSphericalCoords(
+			1,
+			THREE.MathUtils.degToRad(90 - elevation),
+			THREE.MathUtils.degToRad(azimuth),
+		);
+		skyUniforms.sunPosition.value.copy(light);
+		water.material.uniforms.sunDirection.value.copy(light).normalize();
+		water.material.uniforms.sunColor.value.lerpColors(nightSunColor, daySunColor, daylight);
+		water.material.uniforms.waterColor.value.lerpColors(nightWaterColor, dayWaterColor, daylight);
+		renderer.toneMappingExposure = isNight ? 0.008 : THREE.MathUtils.lerp(0.02, 0.1, daylight);
+
+		envTarget?.dispose();
+		sceneEnv.add(sky);
+		envTarget = pmremGenerator.fromScene(sceneEnv);
+		scene.add(sky);
+		scene.environment = envTarget.texture;
+	};
+	updateTimeOfDay();
+	const clockInterval = setInterval(updateTimeOfDay, 60_000);
 
 	const timer = new THREE.Timer();
 	renderer.setAnimationLoop(() => {
@@ -93,8 +127,9 @@ onMounted(() => {
 	dispose = () => {
 		window.removeEventListener("resize", onResize);
 		window.removeEventListener("pointermove", onPointerMove);
+		clearInterval(clockInterval);
 		renderer.setAnimationLoop(null);
-		envTarget.dispose();
+		envTarget?.dispose();
 		pmremGenerator.dispose();
 		renderer.dispose();
 		renderer.domElement.remove();
