@@ -172,7 +172,7 @@ What to know while it runs:
 - The terminal is now busy running the site. Leave it open. To stop the site, click in the terminal and press **Ctrl + C**.
 - When you (or Claude) save a change to a file, the browser updates by itself within a second or two. If it does not, reload the page.
 - Move the mouse to look around: the camera follows the pointer.
-- In the top right corner there are two sliders. They only appear while running locally, never on the live site:
+- In the top right corner there are two sliders. They always appear while running locally. On the live site, add `?debug` to the address to show them (for example `https://nabilsabioazadi.com/?debug`):
   - **time** sets the time of day. Click **now** to go back to the real clock.
   - **weather** goes from a calm sea (0%) to a storm (100%).
 
@@ -279,7 +279,7 @@ Context for an AI assistant working on this repository.
 - **Time of day:** the sun's elevation and azimuth come from the local hour (rises 06:00, sets 18:00, peaks 60°). The sky shader's brightness collapses near the horizon, so exposure is raised at dusk using a JavaScript copy of the shader's `sunIntensity()` (`skySunIntensity`). At night the sky keeps the real, set sun and is shown at `NIGHT_EXPOSURE`. The moon is a separate disc mesh (`toneMapped: false`) and is the water's specular light source.
 - **Weather (0..1):** drives cloud coverage and density, turbidity, Mie and Rayleigh scattering, exposure, wave steepness and wavelength, foam, and normal-map speed. It must not move the camera.
 - **Camera:** fixed position at height 18, which is above the highest storm crests (about 14). The pointer eases yaw ±20° and pitch ±6°.
-- **Debug sliders:** shown only when `import.meta.dev` is true, inside `<ClientOnly>` because the server's clock and time zone differ from the visitor's.
+- **Debug sliders:** shown when `import.meta.dev` is true or the URL has a `debug` query parameter, inside `<ClientOnly>` because the server's clock and time zone differ from the visitor's.
 - **Known issues and open work:**
   - The page text is black and can't be read at night or in a storm.
   - Daytime water could have more colour and sparkle (see the reference: a turquoise, choppy sea with white foam).
