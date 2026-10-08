@@ -1,0 +1,4 @@
+<template>
+	<OceanBackground />
+	<NuxtPage />
+</template>
