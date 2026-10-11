@@ -1361,7 +1361,9 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		// How strongly the flow is taking the air with it: only where it is one flow (not held back
 		// in four), and with the force it is driven by.
 		const pull = weaving.some(Boolean) ? Math.max(...gate) * (called ? strength : lastStrength) * (0.5 + 0.5 * Math.max(need, control, gathering)) * (1 - hold) : 0;
-		return { working: any ? 1 : 0, surge: surge * (1 - masters), pull, flowPoint, masters };
+		// (`anything`: 1 while any weave at all is out, the scout's and the soundings' too. The boat's
+		// lamps are only the light there is when nobody is channelling.)
+		return { working: any ? 1 : 0, anything: any || scoutMesh.visible || soundingMesh.visible ? 1 : 0, surge: surge * (1 - masters), pull, flowPoint, masters };
 	};
 
 	return { update };

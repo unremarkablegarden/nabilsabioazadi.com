@@ -432,6 +432,8 @@ onMounted(() => {
 	const spread = THREE.MathUtils.randFloatSpread;
 	let measuredSea = false;
 	let holdLevel = 0;
+	// 0..1 how far the boat's lamps show on the water (eased).
+	let lampLevel = 0;
 	// Tomorrow's forecast wind as the scout feels it: across and along the view, scaled by its
 	// strength (a 40 km/h wind counts as full).
 	const NO_WIND = { across: 0, along: 0 };
@@ -704,7 +706,12 @@ onMounted(() => {
 		waveUniforms.channelLight.value = (1 - 0.7 * lightIsLoss) * (0.06 * (1 + 0.5 * channelling.surge) * (0.45 + 0.55 * need) * Math.max(darkness, controlLevel * nightfall) * alive) / steadyExposure;
 		// Whenever there is no channelling at night, the boat's electric lamps are all the light there is near by.
 		// (Twelve per cent brighter than it first was, at the owner's request.)
-		waveUniforms.boatLamp.value = (0.01344 * nightfall * (1 - channelling.working) * alive) / steadyExposure;
+		// (The lamps do not snap on and off with the weaving, which made the water at the bottom of
+		// the page turn brown and back in an instant. Their light is lost in the weaving's over two
+		// or three seconds as it runs out, and comes back over six once the weaving has gone.)
+		const lampWanted = nightfall * (1 - channelling.anything);
+		lampLevel += (lampWanted - lampLevel) * Math.min(1, delta / (lampWanted > lampLevel ? 6 : 2.5));
+		waveUniforms.boatLamp.value = (0.01344 * lampLevel * alive) / steadyExposure;
 		waveUniforms.weavePull.value = formed * (0.6 + 0.8 * fury);
 		vortexUniforms.knotDirection.value.subVectors(knotPosition, camera.position).normalize();
 		vortexUniforms.vortex.value = formed;
