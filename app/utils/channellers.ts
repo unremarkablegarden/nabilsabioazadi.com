@@ -82,6 +82,9 @@ uniform float uStrength;
 // 0..1 how light the sky is. Against a light sky a fine bright line reads as a wire, so there
 // each filament is drawn broad and soft and fainter: a breath of light, not a line.
 uniform float uSoften;
+// For each seat, 0..1 how restless its occupant is (their temperament): a restless one's
+// filaments stray further and wander quicker; a steady one's lie close and still.
+uniform vec4 uRestless;
 uniform vec3 uTints[ 3 ];
 uniform vec3 uElements[ 6 ];
 uniform vec3 uBaseTone;
@@ -171,9 +174,10 @@ vec3 threadPoint( float t ) {
 	// (Less and less as the flow goes down to the horizon, where strays would only make a tangle.)
 	// (In the trial, a strong channeller's tress is taut: its filaments hardly stray.)
 	float skill = channelOf( channelOwn, who ) * channelLoss;
-	across += aSeed.w * 0.55 * ( 1.0 - 0.75 * skill ) * ( 1.0 - 0.6 * channelHold ) * ( 1.0 - 0.85 * smoothstep( 0.3, 0.8, way ) ) * vec2(
-		drift( q * 2.3 + aSeed.x * 40.0 - channelTime * 0.22 ),
-		drift( q * 2.9 + aSeed.y * 40.0 + channelTime * 0.17 )
+	float restless = channelOf( uRestless, who );
+	across += aSeed.w * 0.55 * ( 0.55 + 1.1 * restless ) * ( 1.0 - 0.75 * skill ) * ( 1.0 - 0.6 * channelHold ) * ( 1.0 - 0.85 * smoothstep( 0.3, 0.8, way ) ) * vec2(
+		drift( q * 2.3 + aSeed.x * 40.0 - channelTime * ( 0.14 + 0.2 * restless ) ),
+		drift( q * 2.9 + aSeed.y * 40.0 + channelTime * ( 0.11 + 0.16 * restless ) )
 	);
 	// What is spent shows as trembling, finer and quicker than the wandering, and worse with
 	// distance; where the tress has gathered itself the trembling stops and the strays are drawn in.
@@ -543,6 +547,8 @@ uniform float uStrength;
 // once they let go (past the end when there is none).
 uniform vec4 uHead;
 uniform vec4 uTail;
+// How far out each one's tress goes, in metres: the stronger and the more water-minded, the further.
+uniform vec4 uReach;
 uniform float uSoften;
 // 1 when the strongest is sounding alone: that tress is their own weave.
 uniform float uOwn;
@@ -583,7 +589,7 @@ vec3 soundingStem( float t, float who ) {
 	float held = uTogether * ( 1.0 - 0.7 * under );
 	float own = ( who - 1.5 ) * 0.36 + 0.14 * drift( uTime * 0.04 + who * 7.1 );
 	float bearing = mix( own, 0.1 * drift( uTime * 0.03 ), held );
-	float reach = mix( 34.0 + 30.0 * hash1( who * 9.1 + 0.5 ), 50.0, held );
+	float reach = mix( ofSounder( uReach, who ), 50.0, held );
 	vec2 out_ = vec2( sin( bearing ), - cos( bearing ) );
 	vec2 across = vec2( - out_.y, out_.x );
 	// Out along one side and back along the other: which side, and how wide, is each one's own.
@@ -773,6 +779,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uSoften: { value: 0 },
 		uWhite: { value: 1 },
 		uGain: { value: 1 },
+		uRestless: { value: new THREE.Vector4() },
 		uTints: { value: TINTS },
 		uElements: { value: ELEMENTS },
 		uBaseTone: { value: BASE },
@@ -974,6 +981,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uSoften: uniforms.uSoften,
 		uWhite: uniforms.uWhite,
 		uOwn: { value: 0 },
+		uReach: { value: new THREE.Vector4(40, 50, 60, 45) },
 		uHead: { value: new THREE.Vector4(0, 0, 0, 0) },
 		uTail: { value: new THREE.Vector4(2, 2, 2, 2) },
 		uTogether: { value: 0 },
@@ -1006,7 +1014,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	let nextSounding = between(18, 45);
 	let togetherWanted = 0;
 	let togetherTurns = 0;
-	const tendSoundings = (delta: number, time: number, thermal: number, always: boolean, linkedAll: boolean, strongestAlone: boolean) => {
+	let soundingSociable = 0.5;
+	const tendSoundings = (delta: number, time: number, thermal: number, always: boolean, linkedAll: boolean, strongestAlone: boolean, calls: Calls) => {
 		const u = soundingUniforms;
 		// The strongest, looking into something in the water, sounds it alone, and for as long as the looking lasts.
 		const own = sounders[STRONGEST]!;
@@ -1017,6 +1026,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			u.uTail.value.setComponent(STRONGEST, 2);
 			togetherWanted = 0;
 			u.uOwn.value = 1;
+			u.uReach.value.setComponent(STRONGEST, 62);
 		} else if (!strongestAlone && own.lets === Infinity) own.lets = time;
 		if (!own.sounding) u.uOwn.value = 0;
 		// (Not while all thirteen are linked: whoever is sounding then lets go and joins.)
@@ -1026,26 +1036,38 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		}
 		if (strongestAlone) nextSounding = Math.max(nextSounding, time + 40);
 		if (!sounders.some((one) => one.sounding) && (time > nextSounding || always)) {
-			// Three of them, or all four.
+			// Three of them, or all four: from those not at the front, the curious and the
+			// water-minded likeliest, and more so when the sea is doing something.
 			const rests = Math.random() < 0.5 ? Math.floor(Math.random() * SOUNDERS) : -1;
+			const free = TEMPERS.map((_, member) => member).filter((member) => !atFront.includes(member));
+			soundingSociable = 0;
 			sounders.forEach((one, who) => {
 				if (who === rests) return;
+				const member = pick(free, (candidate) => TEMPERS[candidate]!.curious + (0.5 + calls.water) * TEMPERS[candidate]!.water);
+				free.splice(free.indexOf(member), 1);
+				const temper = TEMPERS[member]!;
+				// Each does it as they are: the eager begin at once and are soon done, the patient
+				// begin late and hold long; the stronger and the more water-minded reach further.
 				one.sounding = true;
-				one.begins = time + between(0, 5);
-				one.lets = one.begins + between(14, 26);
-				one.out = between(5, 8);
+				one.begins = time + 5 * (1 - temper.eager) + between(0, 1);
+				one.lets = one.begins + 12 + 14 * (1 - temper.eager) + between(0, 3);
+				one.out = 5 + 3 * (1 - temper.eager);
 				one.back = between(4, 7);
 				u.uHead.value.setComponent(who, 0);
 				u.uTail.value.setComponent(who, 2);
+				u.uReach.value.setComponent(who, 28 + 34 * (CREW[member]! / CREW[1]!) * (0.6 + 0.4 * temper.water));
+				soundingSociable += temper.sociable / (rests < 0 ? 4 : 3);
 			});
-			togetherWanted = Math.random() < 0.5 ? 1 : 0;
+			// Whether they begin together is a matter of how sociable those sounding are.
+			togetherWanted = Math.random() < soundingSociable ? 1 : 0;
 			u.uTogether.value = togetherWanted;
 			togetherTurns = time + between(6, 11);
 			nextSounding = time + between(100, 220);
 		}
 		// Together, apart, or part-way: it changes as they go.
 		if (time > togetherTurns) {
-			togetherWanted = [0, 0.5, 1][Math.floor(Math.random() * 3)]!;
+			const mood = Math.random();
+			togetherWanted = mood < 0.7 * soundingSociable ? 1 : mood < 0.7 * soundingSociable + 0.3 ? 0.5 : 0;
 			togetherTurns = time + between(6, 11);
 		}
 		u.uTogether.value += (togetherWanted - u.uTogether.value) * Math.min(1, delta / 5);
@@ -1081,7 +1103,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 				part = "working";
 				linking = need >= LINK_FROM;
 				// Those not called for do not come in at all.
-				joins = joins.map((_, who) => (who === STRONGEST ? 0 : ORDER.indexOf(who) < workingFor(need) ? between(2, 5) : Infinity));
+				// (Within 2 to 5 seconds, as the owner set: the eager ones at the 2, the slow ones at the 5.)
+				joins = joins.map((_, who) => (who === STRONGEST ? 0 : ORDER.indexOf(who) < workingFor(need) ? 2 + 2.6 * (1 - TEMPERS[memberAt(who)]!.eager) + between(0, 0.4) : Infinity));
 				lasts = Math.max(...joins.filter(Number.isFinite)) + between(20, 25);
 			} else {
 				part = "stopped";
@@ -1108,27 +1131,88 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	const TRUE_STRENGTH = [STRONGEST_TO_THE_REST * REST.reduce((sum, one) => sum + one, 0), ...REST];
 	// As drawn, 0..1.
 	const CREW = TRUE_STRENGTH.map((strength, member) => (member === 0 ? 1 : 0.62 * strength));
+	// Temperaments (the owner asked for them: the twelve are people, and their powers will only
+	// look natural if they do not all behave alike). In CREW's order, strongest first. Each figure
+	// is 0..1 and is used by a rule further down; none is decoration.
+	//   air, water   how much of what the wind and pressure, or the sea, current and temperature,
+	//                are doing reaches them: who steps forward for which weather, who sounds
+	//   eager        how soon they come in after the strongest, and how readily they step forward
+	//   stamina      how long they keep a place at the front before they are relieved
+	//   steady       how still their tress lies (the restless one's filaments stray and wander)
+	//   sociable     whether, sounding, they would sooner lay their tress in with the others'
+	//   curious      how often they are among those who sound the water
+	// The strongest's attention to air, pressure, waves and the rest is 0.84: the owner had it
+	// brought down by 16%, so that not every small thing is looked into.
+	const TEMPERS = [
+		{ name: "the strongest", air: 0.84, water: 0.84, eager: 1, stamina: 1, steady: 1, sociable: 0.5, curious: 1 },
+		// Dutiful and even: holds a place longest, strays least, leaves the looking to others.
+		{ name: "Keel", air: 0.5, water: 0.55, eager: 0.6, stamina: 0.95, steady: 0.9, sociable: 0.7, curious: 0.2 },
+		// All air: first forward when the wind shifts, quick in, never still for long.
+		{ name: "Kite", air: 0.95, water: 0.2, eager: 0.9, stamina: 0.45, steady: 0.3, sociable: 0.4, curious: 0.7 },
+		// All water: slow to come in, patient, goes furthest under and stays longest.
+		{ name: "Fathom", air: 0.15, water: 0.95, eager: 0.25, stamina: 0.8, steady: 0.8, sociable: 0.35, curious: 0.95 },
+		// Hot and quick: in at once, burns through a turn, restless.
+		{ name: "Ember", air: 0.6, water: 0.35, eager: 1, stamina: 0.25, steady: 0.25, sociable: 0.55, curious: 0.45 },
+		// The one who joins things: works best laid in with others, even and unhurried.
+		{ name: "Loom", air: 0.45, water: 0.5, eager: 0.55, stamina: 0.7, steady: 0.75, sociable: 1, curious: 0.5 },
+		// Quiet and attentive, to pressure most of all: slow in, often sounding.
+		{ name: "Listener", air: 0.75, water: 0.6, eager: 0.2, stamina: 0.6, steady: 0.85, sociable: 0.3, curious: 0.9 },
+		// Wind again, but rougher than Kite: eager, tiring, unruly.
+		{ name: "Gale", air: 0.9, water: 0.3, eager: 0.85, stamina: 0.3, steady: 0.15, sociable: 0.5, curious: 0.35 },
+		// Stubborn water: holds a place a long time, keeps to themself.
+		{ name: "Reef", air: 0.2, water: 0.85, eager: 0.4, stamina: 0.9, steady: 0.85, sociable: 0.15, curious: 0.55 },
+		// For still weather: the steadiest of all, forward when little is happening, alone.
+		{ name: "Glass", air: 0.3, water: 0.4, eager: 0.3, stamina: 0.65, steady: 1, sociable: 0.2, curious: 0.4 },
+		// Young: into everything, quick, erratic, soon spent.
+		{ name: "Spark", air: 0.65, water: 0.65, eager: 0.95, stamina: 0.2, steady: 0.1, sociable: 0.75, curious: 0.85 },
+		// Slow and heavy: late in, hard to move once there, drawn to the water.
+		{ name: "Ballast", air: 0.1, water: 0.75, eager: 0.1, stamina: 0.85, steady: 0.95, sociable: 0.6, curious: 0.3 },
+		// A dreamer: wanders, follows whoever is near, curious about all of it.
+		{ name: "Drift", air: 0.55, water: 0.55, eager: 0.5, stamina: 0.4, steady: 0.2, sociable: 0.9, curious: 0.8 },
+	];
+	// One of them, more likely the more a weight favours them.
+	const pick = <T>(from: T[], weight: (one: T) => number) => {
+		const weights = from.map((one) => Math.max(0.01, weight(one)));
+		let at = Math.random() * weights.reduce((sum, one) => sum + one, 0);
+		for (let i = 0; i < from.length; i++) {
+			at -= weights[i]!;
+			if (at <= 0) return from[i]!;
+		}
+		return from[from.length - 1]!;
+	};
+	// How well the weather just now suits one of them: what it is doing in their element, their
+	// readiness, and, when little is happening, how steady they are.
+	type Calls = { air: number; water: number; need: number };
+	const suits = (member: number, calls: Calls) => {
+		const temper = TEMPERS[member]!;
+		return 0.25 + 0.5 * temper.eager + 2 * (calls.air * temper.air + calls.water * temper.water) + 0.8 * (1 - Math.max(calls.air, calls.water, calls.need)) * temper.steady;
+	};
 	// Who is at the front, as places in CREW, and how strong each seat's occupant is. Whoever is
 	// strongest of the four always sits second from the right; the rest sit by strength.
 	let atFront = [0, 3, 7, 10];
 	const seatStrength = [0.36, 0.51, 1, 0.26];
 	const SEATS_BY_STRENGTH = [STRONGEST, 1, 0, 3];
+	const memberAt = (seat: number) => atFront[SEATS_BY_STRENGTH.indexOf(seat)]!;
 	// While someone is changing places, their seat's weave is let go; the newcomer begins afresh.
 	const changingUntil = [0, 0, 0, 0];
 	let nextTurn = between(50, 110);
-	const takeTurns = (delta: number, time: number, linkedAll: boolean) => {
+	const takeTurns = (delta: number, time: number, linkedAll: boolean, calls: Calls) => {
 		// (Nobody changes places while all thirteen are linked.)
 		if (linkedAll) nextTurn = Math.max(nextTurn, time + 20);
 		if (time > nextTurn) {
-			nextTurn = time + between(70, 160);
-			// One of the four is relieved by one of the nine.
+			// One of the four is relieved by one of the nine. Who goes and who comes is a matter of
+			// temperament and of the weather: the one with least stamina, or least suited to what is
+			// happening, goes; the one it suits best is likeliest to come.
 			// (Never the strongest, who is always at the front: only ever below, or looking into something.)
 			const relieved = atFront.filter((member) => member !== 0);
-			const leaving = relieved[Math.floor(Math.random() * relieved.length)]!;
+			const leaving = pick(relieved, (member) => 1.2 - TEMPERS[member]!.stamina + 1 / (0.5 + suits(member, calls)));
 			const resting = CREW.map((_, member) => member).filter((member) => !atFront.includes(member));
-			const arriving = resting[Math.floor(Math.random() * resting.length)]!;
+			const arriving = pick(resting, (member) => suits(member, calls));
 			atFront = atFront.map((member) => (member === leaving ? arriving : member)).sort((a, b) => CREW[b]! - CREW[a]!);
 			changingUntil[SEATS_BY_STRENGTH[atFront.indexOf(arriving)]!] = time + 3;
+			// The next change comes sooner when those at the front tire quickly.
+			const lasting = atFront.filter((member) => member !== 0).reduce((sum, member) => sum + TEMPERS[member]!.stamina, 0) / 3;
+			nextTurn = time + between(60, 130) * (0.5 + lasting);
 		}
 		// (Eased, so that a seat's strength does not jump when its occupant changes.)
 		atFront.forEach((member, rank) => {
@@ -1149,7 +1233,10 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	let wasProbing = false;
 	let lookedInto: "air" | "water" | undefined;
 	let probesUntil = 0;
-	const tendOccurrence = (delta: number, time: number, { air, water }: { air: number; water: number }) => {
+	const tendOccurrence = (delta: number, time: number, noticed: { air: number; water: number }) => {
+		// (Only as much of it as the strongest attends to.)
+		const air = noticed.air * TEMPERS[0]!.air;
+		const water = noticed.water * TEMPERS[0]!.water;
 		const level = Math.max(air, water);
 		const kind = air >= water ? "air" : "water";
 		if (level < 0.3) {
@@ -1234,8 +1321,9 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		const linkedAll = gathering > 0.05;
 		const probing = tendOccurrence(delta, time, unusual);
 		tendScout(delta, time, probing === "air" ? 1 : scout * (1 - gathering), tomorrow, thermal, probing === "air");
-		takeTurns(delta, time, linkedAll);
-		tendSoundings(delta, time, thermal, showSoundings === true, linkedAll, probing === "water");
+		const calls = { air: unusual.air, water: unusual.water, need };
+		takeTurns(delta, time, linkedAll, calls);
+		tendSoundings(delta, time, thermal, showSoundings === true, linkedAll, probing === "water", calls);
 		// Slowing the boat is not the work of the four at the front. The weaker ones do it, with deep
 		// weaves close round the boat (drawn in the water: `deepWeave` in gerstner-waves.ts). So the
 		// weaving ahead goes on as it otherwise would, with its story, however the boat is held.
@@ -1354,6 +1442,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		// No more light than the work calls for. (A weave being cut keeps the light it had.)
 		uniforms.uStrength.value = (called ? strength : lastStrength) * (0.45 + 0.55 * Math.max(need, hold, control, gathering));
 		uniforms.uSoften.value = soften;
+		for (let seat = 0; seat < CHANNELLERS; seat++) uniforms.uRestless.value.setComponent(seat, 1 - TEMPERS[memberAt(seat)]!.steady);
 		uniforms.uWhite.value = white;
 		uniforms.uGain.value = gain;
 		uniforms.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(uniforms.uPixelRatio.value);

@@ -114,7 +114,7 @@ const liveFigures = computed(() => {
 		["channellers", `building ${Math.round(building(c) * 100)}% · called for ${Math.round(calling(c) * 100)}%`],
 		["pace", `carried ${carried(c, PLACE.bearing).toFixed(1)} km/h · needs ${PACE.toFixed(1)} · holding back ${Math.round(holdingBack(c, PLACE.bearing) * 100)}%`],
 		["storm", `linked on the waves ${Math.round(stormy(c) * 100)}%`],
-		["unusual", `air ${Math.round(unusual(c).air * 100)}% · water ${Math.round(unusual(c).water * 100)}% (the strongest looks into it past 50%)`],
+		["unusual", `air ${Math.round(unusual(c).air * 100)}% · water ${Math.round(unusual(c).water * 100)}% (the strongest attends to 84% of it, and looks into it when that passes 50%)`],
 		["strongest", `${Math.round((1 - strengthBelow(c, PLACE.bearing)) * 100)}% ahead (${calling(c) >= 0.6 ? "linked" : "not linked"}) · ${Math.round(strengthBelow(c, PLACE.bearing) * 100)}% below, round the boat`],
 		["tomorrow", `wind ${c.tomorrowWindSpeed.toFixed(0)} km/h from the ${compassPoint(c.tomorrowWindDirection)} · quiet enough to scout ${Math.round(quietEnoughToScout(c) * 100)}%`],
 		["air", thermal(c) > 0.1 ? `sea warmer by ${(c.seaTemperature - c.airTemperature).toFixed(1)} °C: thermals ${Math.round(thermal(c) * 100)}%` : thermal(c) < -0.1 ? `air warmer by ${(c.airTemperature - c.seaTemperature).toFixed(1)} °C: still, layered ${Math.round(-thermal(c) * 100)}%` : "sea and air alike: neither rising nor layered"],
