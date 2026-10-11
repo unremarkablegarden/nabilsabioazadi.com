@@ -67,7 +67,7 @@ const links: { label: string; href: string; title?: boolean; after?: string }[] 
 				<!-- The owner's portrait, cropped square for the layouts that show it as a disc or a
 				     square, and upright (four to five) for the others. -->
 				<img
-					class="picture"
+					class="picture inline"
 					:src="['panel', 'klein'].includes(layout) ? '/about/portrait-square.jpg' : '/about/portrait-tall.jpg'"
 					width="900"
 					:height="['panel', 'klein'].includes(layout) ? 900 : 1125"
@@ -92,6 +92,18 @@ const links: { label: string; href: string; title?: boolean; after?: string }[] 
 				</ul>
 			</nav>
 		</div>
+		<!-- The panel's disc. It lies across the panel's edge, so it is kept outside the panel's
+		     scrolling box: inside it, some browsers (Safari) cut the picture off at the box's edge.
+		     On a wide screen this is the picture shown and the one in the text above is hidden; on a
+		     narrow screen it is the other way about, so only one is ever seen or read out. -->
+		<img
+			v-if="layout === 'panel'"
+			class="picture disc"
+			src="/about/portrait-square.jpg"
+			width="900"
+			height="900"
+			alt="Nabil Sabio Azadi in black and white, seated at a table in a dark jacket, hands pressed together upright in front of the face so that one eye looks out past them. Along the edges of the hands are tattooed the words Long heal and Sun bearing."
+		/>
 	</main>
 </template>
 
@@ -314,7 +326,10 @@ a:focus-visible {
 	border-top: 1px solid color-mix(in srgb, currentColor 35%, transparent);
 	grid-column: 1 / -1;
 }
-[data-layout="panel"] .picture {
+[data-layout="panel"] .picture.inline {
+	display: none;
+}
+[data-layout="panel"] .picture.disc {
 	position: fixed;
 	z-index: 6;
 	top: calc(var(--bar) + (100vh - var(--bar)) / 2 - 8rem);
@@ -581,6 +596,12 @@ a:focus-visible {
 	}
 	.about[data-layout="poster"] .ground {
 		background: #f4f1e8;
+	}
+	.about[data-layout] .picture.disc {
+		display: none;
+	}
+	.about[data-layout="panel"] .picture.inline {
+		display: block;
 	}
 	.about[data-layout] .picture {
 		position: static;
