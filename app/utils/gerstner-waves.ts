@@ -237,6 +237,9 @@ export interface GerstnerUniforms {
 	// 0..1 how strongly their channelling feeds the sea and the wind along the flow.
 	channelFeed: THREE.IUniform<number>;
 	channelGate: THREE.IUniform<THREE.Vector4>;
+	channelHold: THREE.IUniform<number>;
+	channelCurrent: THREE.IUniform<number>;
+	channelBack: THREE.IUniform<number>;
 	channelSurge: THREE.IUniform<number>;
 	channelStream: THREE.IUniform<number>;
 	// The boat's electric lamps on the water round it, before tone mapping. 0 is unlit.
@@ -591,6 +594,9 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		channelSea: { value: new THREE.Vector2(0.3, 2) },
 		channelFeed: { value: 0 },
 		channelGate: { value: new THREE.Vector4(1, 1, 1, 1) },
+		channelHold: { value: 0 },
+		channelCurrent: { value: 0 },
+		channelBack: { value: 0 },
 		channelSurge: { value: 0 },
 		channelStream: { value: 0 },
 		boatLamp: { value: 0 },

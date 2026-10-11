@@ -108,6 +108,7 @@ const liveFigures = computed(() => {
 		["next 3 h", `wind ${c.windTrend >= 0 ? "+" : ""}${c.windTrend.toFixed(0)} km/h · waves ${c.waveTrend >= 0 ? "+" : ""}${c.waveTrend.toFixed(1)} m · pressure ${c.pressureTrend >= 0 ? "+" : ""}${c.pressureTrend.toFixed(1)} hPa`],
 		["picture", `sea ${Math.round(seaState(c) * 100)}% · sky ${Math.round(skyState(c) * 100)}% · storm ${Math.round(stormFury(c) * 100)}%`],
 		["channellers", `building ${Math.round(building(c) * 100)}% · called for ${Math.round(calling(c) * 100)}%`],
+		["pace", `carried ${carried(c, PLACE.bearing).toFixed(1)} km/h · needs ${PACE.toFixed(1)} · holding back ${Math.round(holdingBack(c, PLACE.bearing) * 100)}%`],
 	];
 });
 
@@ -370,6 +371,7 @@ onMounted(() => {
 	const strikeTo = new THREE.Vector3();
 	const spread = THREE.MathUtils.randFloatSpread;
 	let measuredSea = false;
+	let holdLevel = 0;
 	// Metres above the water on a measured sea. September looked down from 18 to 27.
 	const EYE_HEIGHT = 5;
 	const boltScreen = Array.from({ length: BOLT_POINTS }, () => ({ x: 0, y: 0 }));
@@ -551,7 +553,7 @@ onMounted(() => {
 		const liveRain = liveOnly ? rainAmount(liveOnly) : 0;
 		const rain = calmMotion ? 0 : Math.max(THREE.MathUtils.smoothstep(fury, 0.15, 0.6), liveRain) * alive;
 		// The weave, and what its knot does to the sea and the clouds around it.
-		const formed = knotFormed(moment.weave * (1 - darkness));
+		const formed = knotFormed(moment.weave * (1 - Math.max(darkness, holdLevel)));
 		knotReady = formed > 0.8;
 		// The bond: how far the channelling has taken hold of the storm's wind, air and fog.
 		const bond = bondLevel.value * formed * alive;
@@ -560,7 +562,7 @@ onMounted(() => {
 		weave.update({
 			time,
 			delta,
-			amount: moment.weave * (1 - darkness),
+			amount: moment.weave * (1 - Math.max(darkness, holdLevel)),
 			spread: fury + 2 * moment.white * moment.veil,
 			gain: 0.5 / steadyExposure,
 		});
@@ -569,18 +571,24 @@ onMounted(() => {
 		waveUniforms.channelWind.value.set(crosswind, gustiness);
 		// By the dial and the story there is no forecast to read, so the need goes with the weather set.
 		const need = liveOnly ? calling(liveOnly) : sea;
+		// When the sea and wind would carry the boat faster than the pilgrimage's pace, they hold it
+		// back, by day or night. It comes on and goes off gently.
+		const held = liveOnly ? holdingBack(liveOnly, PLACE.bearing) : 0;
+		holdLevel += (held - holdLevel) * Math.min(1, delta / 3);
 		const channelling = channellers.update({
 			time,
 			delta,
 			energy: sea,
 			need,
 			waveHeight: liveOnly ? liveOnly.waveHeight : lerp(0.5, 6, sea),
-			strength: darkness * alive,
+			hold: holdLevel,
+			current: liveOnly ? Math.sin(THREE.MathUtils.degToRad(liveOnly.currentDirection - PLACE.bearing)) * Math.min(1, liveOnly.currentSpeed / 3) : 0,
+			strength: Math.max(darkness, holdLevel) * alive,
 			gain: 0.3 / steadyExposure,
 		});
-		waveUniforms.channelFeed.value = channelling.working * (0.6 + 0.4 * channelling.surge) * need * darkness * alive;
+		waveUniforms.channelFeed.value = channelling.working * (0.6 + 0.4 * channelling.surge) * need * darkness * (1 - holdLevel) * alive;
 		// Driven hard, the flow lights the sea more.
-		waveUniforms.channelLight.value = (0.06 * (1 + 0.5 * channelling.surge) * (0.45 + 0.55 * need) * darkness * alive) / steadyExposure;
+		waveUniforms.channelLight.value = (0.06 * (1 + 0.5 * channelling.surge) * (0.45 + 0.55 * Math.max(need, holdLevel)) * Math.max(darkness, holdLevel * nightfall) * alive) / steadyExposure;
 		// Whenever there is no channelling at night, the boat's electric lamps are all the light there is near by.
 		waveUniforms.boatLamp.value = (0.012 * nightfall * (1 - channelling.working) * alive) / steadyExposure;
 		waveUniforms.weavePull.value = formed * (0.6 + 0.8 * fury);

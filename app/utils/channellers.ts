@@ -5,6 +5,12 @@
 // goes out low over the water, mounts into the air and dives down into the horizon, where it
 // vanishes; on the way it wanders, and the wind carries it a little.
 //
+// The voyage is a pilgrimage, to take until 1 July 2027 (the owner's). When the current and the
+// wind would carry the boat faster than that, the four hold it back, at any hour and whatever
+// the moon: they do not channel towards Hawai'i then, but lay their tresses out on the water to
+// either side like the lines of a sea anchor, in the sea's own blue, drawn the way the current
+// runs, with the light in them travelling slowly back towards the boat.
+//
 // They always work with the sea and the wind, never against them (the owner's rule): they feed
 // whatever those are already doing by the weather data. So the flow is fuller and faster the more
 // is going on, the wind takes its loose filaments with it, its light rises and falls with each
@@ -37,6 +43,9 @@ const METAL = 5;
 const BLUE = 0;
 const WHITE = 1;
 const GOLD = 2;
+// Besides the filaments each tress has a few veils: broad, soft-edged and very faint. They are
+// the glow that hangs in a tress between its filaments, the light the filaments shed on the air.
+const VEILS = 6;
 // Filaments to each channeller, and how many of them are gold.
 const FILAMENTS = 64;
 const GOLDEN = 14;
@@ -51,6 +60,8 @@ attribute vec4 aThread;
 attribute vec4 aSeed;
 // Brightness, how many lit stretches it has along its length, how fast they travel, and its element.
 attribute vec4 aKind;
+// 1 for a veil, 0 for a filament.
+attribute float aSoft;
 uniform float uStrength;
 uniform vec3 uTints[ 3 ];
 uniform vec3 uElements[ 6 ];
@@ -63,6 +74,7 @@ uniform float waveTime;
 varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
+varying float vSoft;
 ${ribbonShaderChunk}
 ${channelPathChunk}
 
@@ -108,7 +120,8 @@ vec3 threadPoint( float t ) {
 	float breath = 0.6 + 0.4 * sin( q * 3.3 - channelTime * 0.35 + who * 1.9 );
 	// A channeller who is giving more has a fuller tress.
 	// The more the sea and wind are doing, the more there is to feed, and the fuller the flow.
-	float width = ( 0.1 + 0.04 * along ) * ( 0.75 + 0.7 * channelSea.x ) * ( 1.0 + 0.4 * channelSurge ) * smoothstep( - 4.0, 8.0, ahead ) * breath * ( 0.55 + 0.7 * channelStrength( who ) ) * ( 1.0 - smoothstep( 0.6, 0.97, way ) );
+	// (Held back, a tress is opened out wide and thin over the water.)
+	float width = ( 0.1 + 0.04 * along ) * ( 1.0 + 1.8 * channelHold ) * ( 0.75 + 0.7 * channelSea.x ) * ( 1.0 + 0.4 * channelSurge ) * smoothstep( - 4.0, 8.0, ahead ) * breath * ( 0.55 + 0.7 * channelStrength( who ) ) * ( 1.0 - smoothstep( 0.6, 0.97, way ) );
 	// Its three strands pass over and under each other: a plait, loosely kept.
 	float phase = q * 6.0 - channelTime * 0.4 + aThread.y * 2.0944 + who * 0.7;
 	vec2 across = vec2( sin( phase ), 0.5 * sin( 2.0 * phase ) ) * 0.42;
@@ -116,15 +129,22 @@ vec3 threadPoint( float t ) {
 	float wind = aSeed.x * 6.28319 + q * ( 1.2 + 1.6 * aSeed.y ) - channelTime * 0.15;
 	across += aSeed.z * 0.5 * vec2( cos( wind ), sin( wind ) );
 	// And strays from it, some hardly at all and some a long way.
-	across += aSeed.w * 0.55 * vec2(
+	// (Less and less as the flow goes down to the horizon, where strays would only make a tangle.)
+	across += aSeed.w * 0.55 * ( 1.0 - 0.6 * channelHold ) * ( 1.0 - 0.85 * smoothstep( 0.3, 0.8, way ) ) * vec2(
 		drift( q * 2.3 + aSeed.x * 40.0 - channelTime * 0.22 ),
 		drift( q * 2.9 + aSeed.y * 40.0 + channelTime * 0.17 )
 	);
 	// The wind takes the loose ones with it.
 	across.x += channelWind.x * aSeed.w * 0.9;
-	vec2 p = channelBoat + vec2( channelLine( who, along ) + across.x * width, - ahead );
+	// They leave the channeller's two open hands spread like fingers, as loose wisps, and are
+	// only drawn into a tress a little way out.
+	float fromHands = channelApart( along ) * ( 1.0 - aSoft );
+	float hand = aSeed.x < 0.5 ? - 1.0 : 1.0;
+	vec2 loose = vec2( hand * 0.32 + ( aSeed.y - 0.5 ) * 0.5, ( fract( aSeed.x * 7.0 ) - 0.5 ) * 0.35 ) * fromHands;
+	vec2 p = channelBoat + vec2( channelLine( who, along ) + across.x * width + loose.x, - ahead );
 	// Out of raised hands, then down to run just clear of the water.
-	float low = max( 0.35, 1.3 + across.y * width * 0.7 ) + channelRise( who, along );
+	// Held back, it lies on the water itself.
+	float low = mix( max( 0.35, 1.3 + across.y * width * 0.7 + loose.y ), 0.15, channelHold * smoothstep( 4.0, 14.0, ahead ) ) + channelRise( who, along );
 	seaUnder = seaHeight( p );
 	float height = mix( cameraPosition.y - 1.2, seaUnder + low, smoothstep( - 2.0, 14.0, ahead ) );
 	return vec3( p.x, height, p.y );
@@ -141,16 +161,25 @@ void main() {
 	float ahead = max( aheadAt( aT ), 0.0 );
 	float q = log( ahead + 12.0 );
 	// Lit only in stretches, which run outward along it.
-	float lit = smoothstep( - 0.25, 0.3, drift( q * aKind.y - channelStream * aKind.z + aSeed.x * 91.0 ) );
+	float lit = smoothstep( - 0.25, 0.3, drift( q * aKind.y - ( channelStream - channelBack ) * aKind.z + aSeed.x * 91.0 ) );
 	// A channeller who is giving less has fewer filaments alight, and those fainter.
 	float strength = channelStrength( aThread.x );
 	lit *= withWaves * strength * ( 1.0 - smoothstep( strength * 1.1 - 0.12, strength * 1.1, aSeed.y ) );
+	// A veil does not come and go in stretches: it is a steady glow that breathes with the tress.
+	if ( aSoft > 0.5 ) lit = strength * ( 0.75 + 0.25 * withWaves );
+	// Where the four tresses have run together there are four times the filaments in one place,
+	// and each is drawn fainter, or the middle of the flow would burn out to plain white.
+	lit /= 1.0 + 2.8 * ( 1.0 - channelApart( ahead ) ) * ( 1.0 - channelHold );
+	// Held back, the weaving does not reach for the horizon: it is spent within a few hundred metres.
+	lit *= mix( 1.0, 1.0 - smoothstep( 50.0, 300.0, ahead ), channelHold );
 	int element = int( aKind.w + 0.5 );
 	// How far this stretch of the filament leans towards its element's colour just now.
 	float leaning = 0.5 + 0.5 * drift( q * 1.1 - channelStream * 0.12 + aSeed.y * 57.0 );
 	vTint = mix( uTints[ int( aThread.z + 0.5 ) ], mix( uBaseTone, uElements[ element ], 0.35 + 0.65 * leaning ), channelSurge );
 	// Metal is half seen through.
 	if ( element == ${METAL} ) lit *= 1.0 - 0.5 * channelSurge;
+	// Held back, it takes the sea's own deeper blue.
+	vTint = mix( vTint, vec3( 0.46, 0.62, 0.88 ), 0.6 * channelHold );
 	// Fainter all the way down the dive, and gone before the horizon: they must not gather
 	// into a light there.
 	// (Driven hard there are more filaments alight at once, so each is drawn a little fainter,
@@ -158,6 +187,7 @@ void main() {
 	vAlpha = uStrength * aKind.x * ( 1.0 - 0.4 * channelSurge ) * lit * ( 0.55 + 1.1 * channelPulse( aThread.x, ahead ) ) * smoothstep( 0.0, 0.05, aT )
 		* ( 1.0 - smoothstep( 0.7, 1.0, channelWay( ahead ) ) ) / ( 1.0 + ahead / 1500.0 );
 	vEdge = aSide;
+	vSoft = aSoft;
 }
 `;
 
@@ -166,10 +196,12 @@ uniform float uGain;
 varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
+varying float vSoft;
 
 void main() {
-	// A hard edge, softened by no more than it takes to stop it shimmering.
-	float edge = 1.0 - smoothstep( 0.55, 1.0, abs( vEdge ) );
+	// A filament has a hard edge, softened by no more than it takes to stop it shimmering.
+	// A veil has none: it is brightest along its middle and fades away to both sides.
+	float edge = mix( 1.0 - smoothstep( 0.55, 1.0, abs( vEdge ) ), pow( 1.0 - vEdge * vEdge, 2.0 ), vSoft );
 	gl_FragColor = vec4( vTint * uGain, edge * vAlpha );
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
@@ -204,6 +236,9 @@ export interface ChannellerState {
 	waveHeight: number;
 	// 0..1 how much the sea and wind call for from them.
 	need: number;
+	// 0..1 how much the boat has to be held back, and the current across the view (-1..1).
+	hold: number;
+	current: number;
 	// 0..1 how much they are at work: 0 while the sun or moon lights the sea.
 	strength: number;
 	// Multiplies the light so it holds its brightness at any exposure.
@@ -211,27 +246,29 @@ export interface ChannellerState {
 }
 
 export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea: GerstnerUniforms) {
-	const strips = CHANNELLERS * FILAMENTS;
+	const strips = CHANNELLERS * (FILAMENTS + VEILS);
 	const count = strips * (SEGMENTS + 1) * 2;
 	const along = new Float32Array(count);
 	const side = new Float32Array(count);
 	const thread = new Float32Array(count * 4);
 	const seed = new Float32Array(count * 4);
 	const kind = new Float32Array(count * 4);
+	const soft = new Float32Array(count);
 	let vertex = 0;
 	for (let who = 0; who < CHANNELLERS; who++) {
-		for (let filament = 0; filament < FILAMENTS; filament++) {
+		for (let filament = 0; filament < FILAMENTS + VEILS; filament++) {
+			const veil = filament >= FILAMENTS;
 			const gold = filament < GOLDEN;
 			// One blue-white filament in ten is a bright one, the glint on the tress.
 			const bright = !gold && Math.random() < 0.1;
-			const threadValues = [who, filament % 3, gold ? GOLD : Math.random() < 0.35 ? WHITE : BLUE, gold ? 0.8 : bright ? 1 : 0.6];
+			const threadValues = [who, filament % 3, gold ? GOLD : veil || Math.random() >= 0.35 ? BLUE : WHITE, veil ? 9 + 9 * Math.random() : gold ? 0.8 : bright ? 1 : 0.6];
 			// Most lie close in their strand; the gold ones stray far.
-			const seedValues = [Math.random(), Math.random(), Math.sqrt(Math.random()), gold ? 1.4 + 1.8 * Math.random() : Math.random() ** 3 * 1.6];
+			const seedValues = [Math.random(), veil ? 0 : Math.random(), veil ? 0.4 * Math.random() : Math.sqrt(Math.random()), veil ? 0.1 : gold ? 1.4 + 1.8 * Math.random() : Math.random() ** 3 * 1.6];
 			// Between them the four work every element; each has two that are most their own.
 			const element = Math.random() < 0.6 ? (who + (filament % 2) * 3) % 6 : Math.floor(Math.random() * 6);
 			const kindValues = gold
 				? [0.9, 9 + 8 * Math.random(), 1.6 + 1.4 * Math.random(), element]
-				: [bright ? 0.95 : 0.22 + 0.3 * Math.random(), 1.6 + 3 * Math.random(), 0.5 + 0.8 * Math.random(), element];
+				: [veil ? 0.05 : bright ? 0.95 : 0.22 + 0.3 * Math.random(), 1.6 + 3 * Math.random(), 0.5 + 0.8 * Math.random(), element];
 			for (let i = 0; i <= SEGMENTS; i++) {
 				for (const edge of [-1, 1]) {
 					along[vertex] = i / SEGMENTS;
@@ -239,6 +276,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 					thread.set(threadValues, vertex * 4);
 					seed.set(seedValues, vertex * 4);
 					kind.set(kindValues, vertex * 4);
+					soft[vertex] = veil ? 1 : 0;
 					vertex++;
 				}
 			}
@@ -252,6 +290,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	geometry.setAttribute("aThread", new THREE.BufferAttribute(thread, 4));
 	geometry.setAttribute("aSeed", new THREE.BufferAttribute(seed, 4));
 	geometry.setAttribute("aKind", new THREE.BufferAttribute(kind, 4));
+	geometry.setAttribute("aSoft", new THREE.BufferAttribute(soft, 1));
 	geometry.setIndex(stripIndices(strips, SEGMENTS));
 	const uniforms = {
 		uStrength: { value: 0 },
@@ -267,6 +306,9 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		channelWind: sea.channelWind,
 		channelSea: sea.channelSea,
 		channelGate: sea.channelGate,
+		channelHold: sea.channelHold,
+		channelCurrent: sea.channelCurrent,
+		channelBack: sea.channelBack,
 		channelSurge: sea.channelSurge,
 		channelStream: sea.channelStream,
 		waves: sea.waves,
@@ -327,10 +369,21 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		surge = ease(surge, part === "working" && linking && since >= Math.max(...joins) ? 1 : 0, part === "working" ? 1.6 : 0.4);
 	};
 
-	const update = ({ time, delta, energy, waveHeight, need, strength, gain }: ChannellerState) => {
+	const update = ({ time, delta, energy, waveHeight, need, hold, current, strength, gain }: ChannellerState) => {
 		mesh.visible = strength > 0.001;
 		// The story only runs on their nights, and starts from its beginning on each.
-		if (mesh.visible) tell(delta, need);
+		// Holding the boat back is not part of the story: it is steady work, for as long as the sea
+		// would carry them too fast, by as many of them as it takes. The story starts afresh after it.
+		const holding = hold > 0.02;
+		if (mesh.visible && holding) {
+			for (let who = 0; who < CHANNELLERS; who++) {
+				const working = ORDER.indexOf(who) < workingFor(0.2 + hold);
+				gate[who] += ((working ? 1 : 0) - gate[who]!) * Math.min(1, delta / 0.9);
+			}
+			surge += (0 - surge) * Math.min(1, delta / 0.4);
+			part = "opening";
+			since = 0;
+		} else if (mesh.visible) tell(delta, need);
 		else {
 			part = "opening";
 			since = 0;
@@ -344,11 +397,15 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		sea.channelSea.value.set(energy, waveHeight);
 		// What streams along the flow runs faster the more the sea and wind are doing, and three
 		// times as fast again when it is driven.
-		sea.channelStream.value += delta * (0.6 + 1.2 * energy) * (1 + 2 * surge);
+		sea.channelStream.value += delta * (0.6 + 1.2 * energy) * (1 + 2 * surge) * (1 - hold);
+		// Held back, what streams along the weaving runs the other way, in towards the boat, and slowly.
+		sea.channelBack.value += delta * 0.45 * hold;
+		sea.channelHold.value = hold;
+		sea.channelCurrent.value = current;
 		sea.channelBoat.value.set(camera.position.x, camera.position.z);
 		sea.channelTime.value = time;
 		// No more light than the work calls for.
-		uniforms.uStrength.value = strength * (0.45 + 0.55 * need);
+		uniforms.uStrength.value = strength * (0.45 + 0.55 * Math.max(need, hold));
 		uniforms.uGain.value = gain;
 		uniforms.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(uniforms.uPixelRatio.value);
 		// 0..1 how much channelling there is, and how hard it is driven.

@@ -17,6 +17,12 @@ uniform vec2 channelWind;
 // height of the waves in metres.
 uniform vec2 channelSea;
 uniform vec4 channelGate;
+// 0..1 how far they are holding the boat back and not channelling towards Hawai'i, the surface
+// current across the view (-1..1, to the right when positive), and a clock for what then runs
+// back along the weaving towards the boat.
+uniform float channelHold;
+uniform float channelCurrent;
+uniform float channelBack;
 uniform float channelSurge;
 uniform float channelStream;
 
@@ -45,6 +51,11 @@ float channelJoin() {
 	return 5.0 + 1.2 * sin( channelTime * 0.83 ) + 0.6 * sin( channelTime * 2.3 + 1.0 ) + 0.2 * sin( channelTime * 5.9 );
 }
 
+// 0..1 how far apart the four tresses still are at a distance ahead: 1 at the boat, 0 once joined.
+float channelApart( float ahead ) {
+	return 1.0 - smoothstep( 0.0, channelJoin(), ahead );
+}
+
 // Where the middle of that one great flow lies at a distance ahead, sideways of the line
 // straight ahead. It wanders as a river does, and the wind carries it: a little near the boat,
 // more the further it has gone, swaying with the gusts.
@@ -61,10 +72,14 @@ float channelFlow( float ahead ) {
 // flow within a few metres; inside it each still keeps a place of its own, winding slowly round
 // the others, the stronger ones nearer the middle.
 float channelLine( float k, float ahead ) {
-	float apart = 1.0 - smoothstep( 0.0, channelJoin(), ahead );
+	float apart = channelApart( ahead );
 	float turn = log( ahead + 12.0 ) * 2.2 * ( mod( k, 2.0 ) < 0.5 ? 1.0 : - 1.0 ) + k * 1.5708 - channelTime * 0.06;
 	float within = ( 0.5 + 0.04 * ahead ) * ( 1.25 - channelStrength( k ) ) * ( 1.0 - smoothstep( 0.6, 0.97, channelWay( ahead ) ) );
-	return ( k - 1.5 ) * 1.5 * apart + channelFlow( ahead ) + cos( turn ) * within * ( 1.0 - apart );
+	float towards = ( k - 1.5 ) * 1.5 * apart + channelFlow( ahead ) + cos( turn ) * within * ( 1.0 - apart );
+	// Holding the boat back they do not join. Each lays their tress out on the water to their own
+	// side, the four spread like the lines of a sea anchor, and the current draws them the way it runs.
+	float held = ( k - 1.5 ) * ( 1.5 + 0.3 * ahead ) + channelCurrent * ahead * ahead / ( 90.0 + ahead );
+	return mix( towards, held, channelHold );
 }
 
 // Metres the flow climbs above the water there. It runs low over the sea by the boat, mounts
@@ -73,11 +88,11 @@ float channelLine( float k, float ahead ) {
 float channelRise( float k, float ahead ) {
 	// The climb is quicker than the descent, which is long and shallow.
 	// Driven with their whole strength it does not climb: it keeps to the surface all the way.
-	return 0.06 * ( 1.0 - 0.92 * channelSurge ) * ahead * pow( sin( 3.14159 * pow( channelWay( ahead ), 0.7 ) ), 1.5 );
+	return 0.06 * ( 1.0 - 0.92 * channelSurge ) * ( 1.0 - channelHold ) * ahead * pow( sin( 3.14159 * pow( channelWay( ahead ), 0.7 ) ), 1.5 );
 }
 
 // A wave of brightness that travels out along a tress, 0..1.
 float channelPulse( float k, float ahead ) {
-	return pow( 0.5 + 0.5 * sin( log( ahead + 12.0 ) * 7.0 - channelStream * ( 1.3 + 0.25 * k ) + k * 0.9 ), 6.0 );
+	return pow( 0.5 + 0.5 * sin( log( ahead + 12.0 ) * 7.0 - ( channelStream - channelBack ) * ( 1.3 + 0.25 * k ) + k * 0.9 ), 6.0 );
 }
 `;

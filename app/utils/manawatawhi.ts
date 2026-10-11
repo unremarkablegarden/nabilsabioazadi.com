@@ -57,6 +57,9 @@ export function boatAt(date: Date) {
 	};
 }
 
+// The pace the pilgrimage keeps, in km/h: the whole way in the whole time. A little over one.
+export const PACE = (WHOLE_WAY * EARTH_RADIUS) / ((VOYAGE.arrives.getTime() - VOYAGE.leaves.getTime()) / 3_600_000);
+
 // Where the boat is for the picture being drawn. The sun, moon, stars and planets are worked
 // out for this place and the view faces this bearing. `sailTo` moves it; nothing else does.
 export const PLACE = boatAt(new Date());
@@ -483,6 +486,23 @@ export function building({ windTrend, waveTrend, pressureTrend }: SeaConditions)
 // steady or easing asks for little, however rough it is: a rough sea needs some tending, no more.
 export function calling(conditions: SeaConditions) {
 	return clamp01(0.85 * building(conditions) + 0.3 * seaState(conditions));
+}
+
+// How fast, in km/h, the sea and the wind would carry the boat towards Hawai'i if it were left
+// to them: the part of the surface current that runs along the boat's bearing, and the part of
+// the wind that blows along it, of which a small boat takes about three parts in a hundred.
+// Negative when they are setting it back.
+export function carried({ currentSpeed, currentDirection, windSpeed, windDirection }: SeaConditions, bearing: number) {
+	const along = (towards: number) => Math.cos((towards - bearing) * RADIANS);
+	return currentSpeed * along(currentDirection) + 0.03 * windSpeed * along(windDirection + 180);
+}
+
+// 0..1 how much the boat has to be held back. The voyage is a pilgrimage and is to take until
+// 1 July 2027 (the owner's): when the sea and wind would carry the boat faster than its pace
+// the channellers slow it, working with the current, more the faster it would go. Fully when
+// it would go at three times the pace.
+export function holdingBack(conditions: SeaConditions, bearing: number) {
+	return clamp01((carried(conditions, bearing) - PACE) / (2 * PACE));
 }
 
 const COMPASS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
