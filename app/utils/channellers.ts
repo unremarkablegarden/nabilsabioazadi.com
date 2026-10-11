@@ -51,6 +51,9 @@ const GOLD = 2;
 // Besides the filaments each tress has a few veils: broad, soft-edged and very faint. They are
 // the glow that hangs in a tress between its filaments, the light the filaments shed on the air.
 const VEILS = 6;
+// And each tress has halos: soft doubles of some of its filaments, lying almost but not quite
+// on them. They are the blur about a filament: light that has not settled where the filament is.
+const HALOS = 28;
 // Filaments to each channeller, and how many of them are gold.
 const FILAMENTS = 64;
 const GOLDEN = 14;
@@ -100,6 +103,24 @@ float seaHeight( vec2 p ) {
 	return height;
 }
 
+// A filament is energy sent out along a line, and it behaves as energy does: the further it
+// goes the more of it is lost. It spreads, it trembles (the heat of its going shakes it, more
+// and more), it dims and it cools from white towards blue. That is "spent", 0 at the boat and
+// rising with distance.
+float spent( float ahead ) {
+	return 1.0 - exp( - ahead / 260.0 );
+}
+
+// And yet it does what spent energy cannot. Along every tress run stretches where the filaments
+// draw together again, stop trembling and burn whiter and brighter than they left the hand: and
+// those stretches grow stronger the further out they travel, not weaker. They are taking in
+// energy that was never theirs: the sea's, the wind's. "gathered" is 0..1 how far a point is
+// inside such a stretch.
+float gathered( float who, float q ) {
+	float runs = sin( q * 4.2 - channelStream * ( 0.55 + 0.08 * who ) + who * 2.1 );
+	return smoothstep( 0.55, 0.95, runs );
+}
+
 // Smooth noise, -1..1: slow bends with no corners, unlike kink().
 float drift( float x ) {
 	float i = floor( x );
@@ -140,11 +161,22 @@ vec3 threadPoint( float t ) {
 		drift( q * 2.3 + aSeed.x * 40.0 - channelTime * 0.22 ),
 		drift( q * 2.9 + aSeed.y * 40.0 + channelTime * 0.17 )
 	);
+	// What is spent shows as trembling, finer and quicker than the wandering, and worse with
+	// distance; where the tress has gathered itself the trembling stops and the strays are drawn in.
+	float lost = spent( along );
+	float held = gathered( who, q ) * ( 0.5 + 0.5 * lost );
+	across += 0.16 * lost * ( 1.0 - held ) * vec2(
+		kink( q * 37.0 + aSeed.x * 211.0 - channelTime * 3.1 ),
+		kink( q * 41.0 + aSeed.y * 173.0 + channelTime * 2.7 )
+	);
+	across *= 1.0 - 0.55 * held;
+	// A weave cut loose and lingering has run together: its filaments lie almost on one line.
+	across *= 1.0 - 0.85 * channelPresence( who, along ).y;
 	// The wind takes the loose ones with it.
 	across.x += channelWind.x * aSeed.w * 0.9;
 	// They leave the channeller's two open hands spread like fingers, as loose wisps, and are
 	// only drawn into a tress a little way out.
-	float fromHands = channelApart( along ) * ( 1.0 - aSoft );
+	float fromHands = channelApart( along ) * ( aSoft > 0.9 ? 0.0 : 1.0 );
 	float hand = aSeed.x < 0.5 ? - 1.0 : 1.0;
 	vec2 loose = vec2( hand * 0.32 + ( aSeed.y - 0.5 ) * 0.5, ( fract( aSeed.x * 7.0 ) - 0.5 ) * 0.35 ) * fromHands;
 	vec2 p = channelBoat + vec2( channelLine( who, along ) + across.x * width + loose.x, - ahead );
@@ -167,7 +199,9 @@ void main() {
 	// (Far more so in a storm, when the waves are what they are working on.)
 	float withWaves = 1.0 + ( 0.7 + 0.3 * channelControl ) * clamp( seaUnder / max( 0.25 * channelSea.y, 0.1 ), - 1.0, 1.0 );
 	vec4 clipAhead = viewProjection * vec4( threadPoint( aT + 0.002 ), 1.0 );
-	gl_Position = ribbonPosition( clip, clipAhead, aSide, aThread.w );
+	// (Lingering, each filament is broad and soft: a blur, not a line.)
+	float lingering = channelPresence( aThread.x, aheadAt( aT ) ).y;
+	gl_Position = ribbonPosition( clip, clipAhead, aSide, aThread.w * ( 1.0 + 4.0 * lingering ) );
 
 	float ahead = max( aheadAt( aT ), 0.0 );
 	float q = log( ahead + 12.0 );
@@ -175,9 +209,15 @@ void main() {
 	float lit = smoothstep( - 0.25, 0.3, drift( q * aKind.y - ( channelStream - channelBack ) * aKind.z + aSeed.x * 91.0 ) );
 	// A channeller who is giving less has fewer filaments alight, and those fainter.
 	float strength = channelStrength( aThread.x );
+	// Spent: dimmer with distance. Gathered: brighter again, and more so the further out.
+	float lost = spent( ahead );
+	float held = gathered( aThread.x, q ) * ( 0.5 + 0.5 * lost );
+	lit *= ( 1.0 - 0.45 * lost ) * ( 1.0 + 1.5 * held );
+	// Only between the cut and where the weave has run out to (see channelShown).
+	lit *= channelShown( aThread.x, aheadAt( aT ) );
 	lit *= withWaves * strength * ( 1.0 - smoothstep( strength * 1.1 - 0.12, strength * 1.1, aSeed.y ) );
 	// A veil does not come and go in stretches: it is a steady glow that breathes with the tress.
-	if ( aSoft > 0.5 ) lit = strength * ( 0.75 + 0.25 * withWaves );
+	if ( aSoft > 0.9 ) lit = strength * ( 0.75 + 0.25 * withWaves );
 	// Where the four tresses have run together there are four times the filaments in one place,
 	// and each is drawn fainter, or the middle of the flow would burn out to plain white.
 	lit /= 1.0 + 2.8 * ( 1.0 - channelApart( ahead ) ) * ( 1.0 - channelHold );
@@ -189,6 +229,9 @@ void main() {
 	vTint = mix( uTints[ int( aThread.z + 0.5 ) ], mix( uBaseTone, uElements[ element ], 0.35 + 0.65 * leaning ), channelSurge );
 	// Metal is half seen through.
 	if ( element == ${METAL} ) lit *= 1.0 - 0.5 * channelSurge;
+	// Spent, it cools towards blue; gathered, it burns white.
+	vTint = mix( vTint, vec3( 0.42, 0.56, 0.9 ), 0.45 * lost * ( 1.0 - held ) );
+	vTint = mix( vTint, vec3( 1.0, 0.98, 0.94 ), 0.7 * held );
 	// Held back, it takes the sea's own deeper blue.
 	vTint = mix( vTint, vec3( 0.46, 0.62, 0.88 ), 0.6 * channelHold );
 	// Fainter all the way down the dive, and gone before the horizon: they must not gather
@@ -196,9 +239,9 @@ void main() {
 	// (Driven hard there are more filaments alight at once, so each is drawn a little fainter,
 	// or their colours would burn out to white where they lie thickest.)
 	vAlpha = uStrength * aKind.x * ( 1.0 - 0.4 * channelSurge ) * lit * ( 0.55 + 1.1 * channelPulse( aThread.x, ahead ) ) * smoothstep( 0.0, 0.05, aT )
-		* ( 1.0 - smoothstep( 0.7, 1.0, channelWay( ahead ) ) ) / ( 1.0 + ahead / 1500.0 );
+		* ( 1.0 - smoothstep( 0.7, 1.0, channelWay( ahead ) ) * ( 1.0 - 0.8 * lingering ) ) / ( 1.0 + ahead / 1500.0 ) / ( 1.0 + 2.0 * lingering );
 	vEdge = aSide;
-	vSoft = aSoft;
+	vSoft = max( aSoft, lingering );
 }
 `;
 
@@ -259,7 +302,7 @@ export interface ChannellerState {
 }
 
 export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea: GerstnerUniforms) {
-	const strips = CHANNELLERS * (FILAMENTS + VEILS);
+	const strips = CHANNELLERS * (FILAMENTS + VEILS + HALOS);
 	const count = strips * (SEGMENTS + 1) * 2;
 	const along = new Float32Array(count);
 	const side = new Float32Array(count);
@@ -269,8 +312,11 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	const soft = new Float32Array(count);
 	let vertex = 0;
 	for (let who = 0; who < CHANNELLERS; who++) {
-		for (let filament = 0; filament < FILAMENTS + VEILS; filament++) {
-			const veil = filament >= FILAMENTS;
+		// The filaments' own values, kept so that a halo can double one of them.
+		const made: number[][][] = [];
+		for (let filament = 0; filament < FILAMENTS + VEILS + HALOS; filament++) {
+			const veil = filament >= FILAMENTS && filament < FILAMENTS + VEILS;
+			const halo = filament >= FILAMENTS + VEILS;
 			const gold = filament < GOLDEN;
 			// One blue-white filament in ten is a bright one, the glint on the tress.
 			const bright = !gold && Math.random() < 0.1;
@@ -282,6 +328,15 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			const kindValues = gold
 				? [0.9, 9 + 8 * Math.random(), 1.6 + 1.4 * Math.random(), element]
 				: [veil ? 0.05 : bright ? 0.95 : 0.22 + 0.3 * Math.random(), 1.6 + 3 * Math.random(), 0.5 + 0.8 * Math.random(), element];
+			if (!veil && !halo) made.push([threadValues, seedValues, kindValues]);
+			// A halo takes a filament's values and shifts them a hair: nearly the same line, a
+			// little behind it, several pixels wide, soft and faint.
+			if (halo) {
+				const [ofThread, ofSeed, ofKind] = made[Math.floor(Math.random() * made.length)]!;
+				threadValues.splice(0, 4, ofThread![0]!, ofThread![1]!, ofThread![2]!, 4 + 4 * Math.random());
+				seedValues.splice(0, 4, ofSeed![0]! + 0.004, ofSeed![1]!, ofSeed![2]! * 1.06, ofSeed![3]!);
+				kindValues.splice(0, 4, ofKind![0]! * 0.3, ofKind![1]!, ofKind![2]! * 0.97, ofKind![3]!);
+			}
 			for (let i = 0; i <= SEGMENTS; i++) {
 				for (const edge of [-1, 1]) {
 					along[vertex] = i / SEGMENTS;
@@ -289,7 +344,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 					thread.set(threadValues, vertex * 4);
 					seed.set(seedValues, vertex * 4);
 					kind.set(kindValues, vertex * 4);
-					soft[vertex] = veil ? 1 : 0;
+					soft[vertex] = veil ? 1 : halo ? 0.75 : 0;
 					vertex++;
 				}
 			}
@@ -319,6 +374,9 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		channelWind: sea.channelWind,
 		channelSea: sea.channelSea,
 		channelGate: sea.channelGate,
+		channelHead: sea.channelHead,
+		channelTail: sea.channelTail,
+		channelLinger: sea.channelLinger,
 		channelControl: sea.channelControl,
 		channelHold: sea.channelHold,
 		channelCurrent: sea.channelCurrent,
@@ -355,6 +413,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	let joins = [0, 0, 0, 0];
 	const gate = [1, 1, 1, 1];
 	let surge = 0;
+	// Who the story, or the steady work, wants channelling at this moment.
+	const want = [true, true, true, true];
 	const tell = (delta: number, need: number) => {
 		since += delta;
 		// Before the pause they work as the weather calls for, each for themselves.
@@ -373,46 +433,121 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 				lasts = between(4, 9);
 			}
 		}
-		const ease = (value: number, towards: number, seconds: number) => value + (towards - value) * Math.min(1, delta / seconds);
-		for (let who = 0; who < CHANNELLERS; who++) {
-			const working = (part === "opening" || part === "working") && since >= joins[who]!;
-			// It is let go of at once and taken up again more slowly.
-			gate[who] = ease(gate[who]!, working ? 1 : 0, working ? 0.9 : 0.35);
-		}
+		for (let who = 0; who < CHANNELLERS; who++) want[who] = (part === "opening" || part === "working") && since >= joins[who]!;
 		// Their whole strength comes only when they link, and only once all four are in.
-		surge = ease(surge, part === "working" && linking && since >= Math.max(...joins) ? 1 : 0, part === "working" ? 1.6 : 0.4);
+		const driven = part === "working" && linking && since >= Math.max(...joins);
+		surge += ((driven ? 1 : 0) - surge) * Math.min(1, delta / (part === "working" ? 1.6 : 0.4));
+	};
+
+	// Each channeller's weaving. `head` is how far the weave now in their hands has run out from
+	// the boat. When they let go, that weave is cut at the boat and becomes one cut loose: `tail` is
+	// how far its cut end has travelled out (NONE when there is no such weave) and `linger` how far
+	// it has faded on the horizon. A weave is never wiped away where it lies (the owner's rule):
+	// cut loose, it goes on at its own pace, lingers far out, soft and run together, and fades slowly.
+	const weaving = [false, false, false, false];
+	const head = [0, 0, 0, 0];
+	const NONE = 2;
+	const tail = [NONE, NONE, NONE, NONE];
+	const linger = [0, 0, 0, 0];
+	// Seconds for a weave to run out from the boat to its far end.
+	const RUNS_OUT_IN = 2.6;
+	// How fast a cut end travels, as a share of the weave's length a second (in a moderate sea):
+	// the pace of what streams along the weave, so that it is seen leaving, not snatched away.
+	const CUT_TRAVELS = 0.055;
+	// How far along the cut end is when the loose weave begins to linger and fade, and for how many seconds.
+	const LINGERS_FROM = 0.84;
+	const LINGERS_FOR = 26;
+	// Past the far end of a thread, so that a weave fully run out is whole.
+	const ALL = 1.1;
+	// True until they have been seen at work once: the page opens on weaving already under way.
+	let opening = true;
+	// The brightness the weaving last had, kept while a cut is travelling.
+	let lastStrength = 0;
+
+	// Where the middle of the joined flow is, in the world, at a distance ahead of the boat: the
+	// same as channelFlow and channelRise in the shader, worked out here for the air simulation,
+	// which needs to know where the flow lies on the screen.
+	const flowPoint = (ahead: number, target: THREE.Vector3) => {
+		const t = sea.channelTime.value;
+		const q = Math.log(ahead + 12);
+		const way = Math.min(1, Math.max(0, Math.log(Math.max(ahead, 40) / 40) / Math.log(3300 / 40)));
+		const wander = 0.075 * Math.sin(q * 1.25 - t * 0.06 + 0.6) + 0.03 * Math.sin(q * 2.6 + t * 0.09 + 2) + 0.012 * Math.sin(q * 5.1 - t * 0.2);
+		const wind = sea.channelWind.value;
+		const gust = 1 + 0.4 * wind.y * Math.sin(t * 0.5 - q * 1.5) + 0.2 * wind.y * Math.sin(t * 1.3 - q * 3.1);
+		const side = ahead * (wander + wind.x * (0.04 + 0.12 * way) * gust) * THREE.MathUtils.smoothstep(ahead, 0, 30);
+		const rise = 0.06 * (1 - 0.92 * surge) * (1 - sea.channelHold.value) * ahead * Math.sin(Math.PI * way ** 0.7) ** 1.5;
+		return target.set(camera.position.x + side, 1.3 + rise, camera.position.z - ahead);
 	};
 
 	const update = ({ time, delta, energy, waveHeight, need, hold, current, control, strength, gain }: ChannellerState) => {
-		mesh.visible = strength > 0.001;
 		// The story only runs on their nights, and starts from its beginning on each.
 		// Holding the boat back is not part of the story: it is steady work, for as long as the sea
 		// would carry them too fast, by as many of them as it takes. The story starts afresh after it.
 		// Nor is a storm: then all four are linked for as long as it lasts, and work on the waves.
-		const holding = hold > 0.02;
-		if (mesh.visible && control > 0.05) {
-			for (let who = 0; who < CHANNELLERS; who++) gate[who] += (1 - gate[who]!) * Math.min(1, delta / 0.9);
+		const called = strength > 0.12;
+		if (called && control > 0.05) {
+			want.fill(true);
 			surge += (1 - surge) * Math.min(1, delta / 1.6);
 			part = "opening";
 			since = 0;
-		} else if (mesh.visible && holding) {
-			for (let who = 0; who < CHANNELLERS; who++) {
-				const working = ORDER.indexOf(who) < workingFor(0.2 + hold);
-				gate[who] += ((working ? 1 : 0) - gate[who]!) * Math.min(1, delta / 0.9);
-			}
+		} else if (called && hold > 0.02) {
+			for (let who = 0; who < CHANNELLERS; who++) want[who] = ORDER.indexOf(who) < workingFor(0.2 + hold);
 			surge += (0 - surge) * Math.min(1, delta / 0.4);
 			part = "opening";
 			since = 0;
-		} else if (mesh.visible) tell(delta, need);
+		} else if (called) tell(delta, need);
 		else {
+			// Nothing calls for them (day has come, or the sea has eased): whatever is still out is cut off.
+			want.fill(false);
 			part = "opening";
 			since = 0;
 			lasts = between(3, 5);
-			gate.fill(1);
-			surge = 0;
+			surge += (0 - surge) * Math.min(1, delta / 0.4);
 			linking = false;
 		}
+		for (let who = 0; who < CHANNELLERS; who++) {
+			if (want[who] && !weaving[who]) {
+				weaving[who] = true;
+				head[who] = opening ? ALL : 0;
+			} else if (!want[who] && weaving[who]) {
+				// Let go: what was in hand is cut at the boat and is on its own from here.
+				weaving[who] = false;
+				head[who] = 0;
+				tail[who] = 0;
+				linger[who] = 0;
+			}
+			if (weaving[who]) {
+				head[who] = Math.min(ALL, head[who]! + delta / RUNS_OUT_IN);
+				// A new weave that reaches the one cut loose before it takes it up again.
+				if (tail[who]! < NONE && head[who]! >= tail[who]! - 0.06) {
+					tail[who] = NONE;
+					linger[who] = 0;
+				}
+			}
+			if (tail[who]! < NONE) {
+				if (tail[who]! < LINGERS_FROM) tail[who] = tail[who]! + delta * CUT_TRAVELS * (0.6 + 1.2 * energy);
+				else {
+					tail[who] = tail[who]! + delta * 0.008;
+					linger[who] = linger[who]! + delta / LINGERS_FOR;
+					if (linger[who]! >= 1) {
+						tail[who] = NONE;
+						linger[who] = 0;
+					}
+				}
+			}
+			// While any of a weave is left, in hand or loose, it keeps its full form.
+			gate[who] = weaving[who] || tail[who]! < NONE ? 1 : 0;
+		}
+		const any = gate.some((there) => there > 0);
+		if (called) {
+			opening = false;
+			lastStrength = strength;
+		} else if (!any) opening = true;
+		mesh.visible = any;
 		sea.channelGate.value.fromArray(gate);
+		sea.channelHead.value.fromArray(head);
+		sea.channelTail.value.fromArray(tail);
+		sea.channelLinger.value.fromArray(linger);
 		sea.channelSurge.value = surge;
 		sea.channelSea.value.set(energy, waveHeight);
 		// What streams along the flow runs faster the more the sea and wind are doing, and three
@@ -425,12 +560,15 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		sea.channelCurrent.value = current;
 		sea.channelBoat.value.set(camera.position.x, camera.position.z);
 		sea.channelTime.value = time;
-		// No more light than the work calls for.
-		uniforms.uStrength.value = strength * (0.45 + 0.55 * Math.max(need, hold, control));
+		// No more light than the work calls for. (A weave being cut keeps the light it had.)
+		uniforms.uStrength.value = (called ? strength : lastStrength) * (0.45 + 0.55 * Math.max(need, hold, control));
 		uniforms.uGain.value = gain;
 		uniforms.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(uniforms.uPixelRatio.value);
 		// 0..1 how much channelling there is, and how hard it is driven.
-		return { working: mesh.visible ? Math.max(...gate) : 0, surge };
+		// How strongly the flow is taking the air with it: only where it is one flow (not held back
+		// in four), and with the force it is driven by.
+		const pull = weaving.some(Boolean) ? Math.max(...gate) * (called ? strength : lastStrength) * (0.5 + 0.5 * Math.max(need, control)) * (1 - hold) : 0;
+		return { working: any ? 1 : 0, surge, pull, flowPoint };
 	};
 
 	return { update };

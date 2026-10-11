@@ -65,3 +65,8 @@
 .grecaptcha-badge {
 	visibility: hidden;
 }
+
+/* What shows for the moment before the ocean is drawn: night, not a white flash. */
+html {
+	background: #05090e;
+}

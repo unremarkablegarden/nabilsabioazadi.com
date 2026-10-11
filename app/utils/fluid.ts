@@ -34,6 +34,8 @@ const DYE_SIZE = 512;
 const PRESSURE_ITERATIONS = [16, 10, 6];
 // The bolt is handed over as this many points along its length.
 export const BOLT_POINTS = 8;
+// Points along the channellers' flow, for the air it takes with it.
+export const FLOW_POINTS = 7;
 
 // Distance from a pixel to the bolt, with the screen's shape allowed for.
 const boltShaderChunk = /* glsl */ `
@@ -83,6 +85,8 @@ uniform float uWind;
 uniform float uCross;
 uniform float uBond;
 uniform float uCharge;
+uniform vec2 uFlow[ ${FLOW_POINTS} ];
+uniform float uFlowPull;
 uniform vec2 uKnot;
 uniform vec2 uHorizon;
 uniform vec2 uPointer;
@@ -120,6 +124,25 @@ void main() {
 	float along = clamp( dot( vUv - foot, run ) / dot( run, run ), 0.0, 1.0 );
 	vec2 off = ( vUv - ( foot + run * along ) ) * vec2( uAspect, 1.0 );
 	velocity += normalize( run ) * uCharge * 1.5 * exp( - dot( off, off ) / 0.004 ) * uDelta;
+
+	// The channellers' flow takes hold of energy that was not its own. The air beside it is drawn
+	// in towards it from both sides, and once close is carried along with it: what was drifting
+	// with the wind is caught up in the weaving's purpose.
+	if ( uFlowPull > 0.0 ) {
+		for ( int i = 0; i < ${FLOW_POINTS - 1}; i ++ ) {
+			vec2 a = uFlow[ i ];
+			vec2 ab = uFlow[ i + 1 ] - a;
+			float along = clamp( dot( vUv - a, ab ) / max( dot( ab, ab ), 1e-6 ), 0.0, 1.0 );
+			vec2 off = ( vUv - ( a + ab * along ) ) * vec2( uAspect, 1.0 );
+			float away = dot( off, off );
+			vec2 onward = normalize( ab * vec2( uAspect, 1.0 ) + 1e-6 );
+			// Less and less towards the far end, so that what it carries is not flung on past the
+			// horizon into the sky.
+			float hold = 1.0 - 0.9 * ( float( i ) + along ) / float( ${FLOW_POINTS - 1} );
+			velocity += onward * uFlowPull * 0.9 * hold * exp( - away / 0.0025 ) * uDelta;
+			velocity -= normalize( off + 1e-6 ) * vec2( 1.0 / uAspect, 1.0 ) * uFlowPull * 0.22 * exp( - away / 0.03 ) * ( 1.0 - exp( - away / 0.0012 ) ) * uDelta;
+		}
+	}
 
 	// Pointer: drags the air along with it.
 	vec2 fromPointer = ( vUv - uPointer ) * vec2( uAspect, 1.0 );
@@ -213,6 +236,8 @@ uniform float uTime;
 uniform float uAspect;
 uniform float uFog;
 uniform float uAir;
+uniform vec2 uFlow[ ${FLOW_POINTS} ];
+uniform float uFlowPull;
 uniform float uBond;
 uniform float uStrike;
 uniform float uVapour;
@@ -265,6 +290,19 @@ void main() {
 	vec2 place = vec2( hash( cell + tick + 3.1 ), hash( cell + tick + 9.7 ) );
 	float speck = step( 0.985, hash( cell + tick ) ) * ( 1.0 - smoothstep( 0.0, 0.07, length( fract( grid ) - place ) ) );
 	dye.g = min( 1.5, dye.g + speck * uAir );
+	// Near the channellers' flow the air shows more, as it is drawn in: the blur about the filaments.
+	if ( uFlowPull > 0.0 ) {
+		float nearFlow = 0.0;
+		for ( int i = 0; i < ${FLOW_POINTS - 1}; i ++ ) {
+			vec2 a = uFlow[ i ];
+			vec2 ab = uFlow[ i + 1 ] - a;
+			float along = clamp( dot( vUv - a, ab ) / max( dot( ab, ab ), 1e-6 ), 0.0, 1.0 );
+			vec2 off = ( vUv - ( a + ab * along ) ) * vec2( uAspect, 1.0 );
+			nearFlow = max( nearFlow, exp( - dot( off, off ) / 0.012 ) * ( 1.0 - 0.9 * ( float( i ) + along ) / float( ${FLOW_POINTS - 1} ) ) );
+		}
+		float mote = step( 0.955, hash( cell + tick + 5.3 ) ) * ( 1.0 - smoothstep( 0.0, 0.09, length( fract( grid ) - place ) ) );
+		dye.g = min( 1.5, dye.g + mote * nearFlow * uFlowPull * 0.9 );
+	}
 
 	gl_FragColor = dye;
 }
@@ -301,6 +339,10 @@ export interface FluidFrame {
 	crosswind: number;
 	bond: number;
 	charge: number;
+	// The channellers' flow: FLOW_POINTS screen positions along it from the boat outward, and
+	// 0..1 how strongly it draws the air in and along.
+	flow: { x: number; y: number }[];
+	flowPull: number;
 	// Screen positions, 0..1 from the top left.
 	knot: { x: number; y: number };
 	horizon: { x: number; y: number };
@@ -350,6 +392,7 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 		uHorizon: { value: new THREE.Vector2(0.5, 0.5) },
 		uInstability: { value: 0 },
 		uBolt: { value: Array.from({ length: BOLT_POINTS }, () => new THREE.Vector2()) },
+		uFlow: { value: Array.from({ length: FLOW_POINTS }, () => new THREE.Vector2()) },
 	};
 	const advect = pass(advectShader, { ...shared, uVelocity: { value: null }, uSource: { value: null }, uDecay: { value: new THREE.Vector4() } });
 	const force = pass(forceShader, {
@@ -360,6 +403,7 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 		uWind: { value: 0 },
 		uCross: { value: 0 },
 		uCharge: { value: 0 },
+		uFlowPull: { value: 0 },
 		uPointer: { value: new THREE.Vector2(0.5, 0.5) },
 		uPointerVelocity: { value: new THREE.Vector2() },
 	});
@@ -368,7 +412,7 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 	const divergencePass = pass(divergenceShader, { ...shared, uVelocity: { value: null } });
 	const pressurePass = pass(pressureShader, { ...shared, uPressure: { value: null }, uDivergence: { value: null } });
 	const gradient = pass(gradientShader, { ...shared, uPressure: { value: null }, uVelocity: { value: null } });
-	const source = pass(sourceShader, { ...shared, uDye: { value: null }, uFog: { value: 0 }, uAir: { value: 0 }, uStrike: { value: 0 }, uVapour: { value: 1 } });
+	const source = pass(sourceShader, { ...shared, uDye: { value: null }, uFog: { value: 0 }, uAir: { value: 0 }, uFlowPull: { value: 0 }, uStrike: { value: 0 }, uVapour: { value: 1 } });
 
 	const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
 	quad.frustumCulled = false;
@@ -411,7 +455,7 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 
 	const step = (frame: FluidFrame) => {
 		// With no fog, no air and no lightning, and what was there faded, the whole thing rests.
-		idle = frame.fog > 0 || frame.air > 0 || frame.strike > 0 ? 0 : idle + frame.delta;
+		idle = frame.fog > 0 || frame.air > 0 || frame.strike > 0 || frame.flowPull > 0 ? 0 : idle + frame.delta;
 		display.visible = idle < 6;
 		if (!display.visible) return;
 		// A long pause (a hidden tab) must not become one huge step.
@@ -426,6 +470,7 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 		shared.uHorizon.value.set(frame.horizon.x, 1 - frame.horizon.y);
 		shared.uInstability.value = frame.instability;
 		shared.uBolt.value.forEach((point, i) => point.set(frame.bolt[i]!.x, 1 - frame.bolt[i]!.y));
+		shared.uFlow.value.forEach((point, i) => point.set(frame.flow[i]!.x, 1 - frame.flow[i]!.y));
 
 		advect.uniforms.uVelocity!.value = velocity.read.texture;
 		advect.uniforms.uSource!.value = velocity.read.texture;
@@ -440,6 +485,8 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 		force.uniforms.uWind!.value = frame.wind;
 		force.uniforms.uCross!.value = frame.crosswind;
 		force.uniforms.uCharge!.value = frame.charge;
+		force.uniforms.uFlowPull!.value = frame.flowPull;
+		source.uniforms.uFlowPull!.value = frame.flowPull;
 		force.uniforms.uPointer!.value.set(pointerX, pointerY);
 		force.uniforms.uPointerVelocity!.value.set(pointerX - lastPointer.x, pointerY - lastPointer.y).divideScalar(delta).clampLength(0, 1.5);
 		lastPointer.set(pointerX, pointerY);

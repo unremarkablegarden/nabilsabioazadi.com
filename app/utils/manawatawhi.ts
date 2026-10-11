@@ -427,6 +427,72 @@ export async function fetchSeaConditions(at: { latitude: number; longitude: numb
 	return conditions;
 }
 
+// What the sea and sky are usually like where the boat is: a guess to draw from for the moment
+// before the real figures arrive, so that the picture can open at once and move over to them
+// instead of starting from nothing. Rough figures by latitude: the westerlies and long
+// south-westerly swell of the seas north of Aotearoa, the steady trade winds of the tropics
+// (south-easterly south of the equator, north-easterly north of it), the light airs of the
+// doldrums between.
+export function typicalConditions(boat: { latitude: number }): SeaConditions {
+	const south = boat.latitude < 0;
+	const belt = Math.abs(boat.latitude) < 5 ? "doldrums" : Math.abs(boat.latitude) < 26 ? "trades" : "westerlies";
+	const wind = belt === "westerlies" ? { speed: 22, from: 260 } : belt === "trades" ? { speed: 24, from: south ? 120 : 60 } : { speed: 9, from: 90 };
+	const warmth = 27.5 - 0.42 * Math.max(0, Math.abs(boat.latitude) - 8);
+	return {
+		observedAt: "",
+		waveHeight: belt === "doldrums" ? 1.4 : 2.1,
+		waveDirection: belt === "westerlies" ? 225 : wind.from,
+		wavePeriod: 10,
+		swellHeight: belt === "westerlies" ? 1.7 : 1.2,
+		swellDirection: south ? 215 : 330,
+		swellPeriod: 12,
+		secondSwellHeight: 0.6,
+		secondSwellDirection: south ? 270 : 60,
+		secondSwellPeriod: 7,
+		windWaveHeight: belt === "doldrums" ? 0.2 : belt === "trades" ? 1.3 : 0.8,
+		windWaveDirection: wind.from,
+		windWavePeriod: belt === "doldrums" ? 2 : 5,
+		currentSpeed: 0.5,
+		currentDirection: 270,
+		tide: 0,
+		seaTemperature: warmth + 0.5,
+		windSpeed: wind.speed,
+		windGusts: wind.speed * 1.4,
+		windDirection: wind.from,
+		cloudCover: 55,
+		cloudLow: 30,
+		cloudMid: 20,
+		cloudHigh: 30,
+		precipitation: 0,
+		visibility: 25_000,
+		weatherCode: 2,
+		cape: 0,
+		pressure: 1015,
+		airTemperature: warmth,
+		humidity: 80,
+		windTrend: 0,
+		waveTrend: 0,
+		pressureTrend: 0,
+		doubt: {},
+	};
+}
+
+// One set of conditions moved part of the way (0..1) towards another: every figure in step,
+// and the compass directions the short way round. For bringing the picture over smoothly from
+// what it was drawn from to what it should now be drawn from.
+export function towardsConditions(from: SeaConditions, to: SeaConditions, share: number): SeaConditions {
+	const moved = { ...to } as Record<string, unknown>;
+	for (const [key, target] of Object.entries(to)) {
+		const start = (from as unknown as Record<string, unknown>)[key];
+		if (typeof target !== "number" || typeof start !== "number") continue;
+		// The weather code is a label, not a quantity: it changes over at the half-way point.
+		if (key === "weatherCode") moved[key] = share < 0.5 ? start : target;
+		else if (key.endsWith("Direction")) moved[key] = (start + ((((target - start) % 360) + 540) % 360 - 180) * share + 360) % 360;
+		else moved[key] = start + (target - start) * share;
+	}
+	return moved as unknown as SeaConditions;
+}
+
 // Sea state 0 (calm) .. 1 (storm), from the larger of wave height and wind.
 // 6 m seas or a 75 km/h wind count as a full storm.
 export function seaState({ waveHeight, windSpeed, windGusts }: SeaConditions) {

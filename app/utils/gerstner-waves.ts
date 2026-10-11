@@ -237,6 +237,9 @@ export interface GerstnerUniforms {
 	// 0..1 how strongly their channelling feeds the sea and the wind along the flow.
 	channelFeed: THREE.IUniform<number>;
 	channelGate: THREE.IUniform<THREE.Vector4>;
+	channelHead: THREE.IUniform<THREE.Vector4>;
+	channelTail: THREE.IUniform<THREE.Vector4>;
+	channelLinger: THREE.IUniform<THREE.Vector4>;
 	channelControl: THREE.IUniform<number>;
 	channelHold: THREE.IUniform<number>;
 	channelCurrent: THREE.IUniform<number>;
@@ -535,7 +538,7 @@ const fragmentFoam = /* glsl */ `
 				float reach = 0.9 + 0.03 * out_ + 0.6 * climbed;
 				float near = exp( - off * off / ( reach * reach ) ) + 0.16 * exp( - off * off / ( 49.0 * reach * reach ) );
 				float facing = clamp( dot( surfaceNormal, normalize( vec3( - off, 1.3 + 0.02 * out_ + climbed, 0.0 ) ) ), 0.0, 1.0 );
-				lit += near * ( 0.25 + 0.75 * facing * facing ) * ( 0.55 + 0.75 * channelPulse( k, out_ ) ) * channelStrength( k ) / ( 1.0 + climbed / 12.0 );
+				lit += near * ( 0.25 + 0.75 * facing * facing ) * ( 0.55 + 0.75 * channelPulse( k, out_ ) ) * channelStrength( k ) * channelShown( k, out_ ) / ( 1.0 + climbed / 12.0 );
 			}
 			lit *= smoothstep( - 6.0, 5.0, ahead ) / ( 1.0 + out_ / 500.0 );
 			outgoingLight += vec3( 0.74, 0.92, 1.0 ) * lit * channelLight * ( 0.3 + 0.7 * ( 1.0 - reflectance ) + 1.5 * foamMask );
@@ -595,6 +598,9 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		channelSea: { value: new THREE.Vector2(0.3, 2) },
 		channelFeed: { value: 0 },
 		channelGate: { value: new THREE.Vector4(1, 1, 1, 1) },
+		channelHead: { value: new THREE.Vector4() },
+		channelTail: { value: new THREE.Vector4(2, 2, 2, 2) },
+		channelLinger: { value: new THREE.Vector4() },
 		channelControl: { value: 0 },
 		channelHold: { value: 0 },
 		channelCurrent: { value: 0 },

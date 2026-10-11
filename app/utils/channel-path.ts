@@ -28,6 +28,43 @@ uniform float channelBack;
 uniform float channelSurge;
 uniform float channelStream;
 
+// A weave is begun at its source, the boat, and runs out from there. When it ends it is cut off
+// at the source (the owner's rule) and is not wiped away: it has power enough of its own to go
+// on. What has been cut loose keeps travelling out at the pace it was already going, the cut
+// following it, and when it is far out it lingers low on the horizon, its filaments run together
+// into one soft blurred form, and fades there slowly. For each of the four: how far their present
+// weave has run out from the boat; how far the cut has travelled along the one let go (past the
+// end of the thread when there is none); and 0..1 how far that one has faded.
+uniform vec4 channelHead;
+uniform vec4 channelTail;
+uniform vec4 channelLinger;
+
+float channelOf( vec4 four, float k ) {
+	return k < 0.5 ? four.x : k < 1.5 ? four.y : k < 2.5 ? four.z : four.w;
+}
+
+// How far along a weave's length a distance ahead of the boat is, 0..1: the thread's own measure.
+float channelAlong( float ahead ) {
+	return log( ( max( ahead, - 4.9 ) + 5.0 ) / 3.0 ) / log( 1100.0 );
+}
+
+// For channeller k at a distance ahead: x is 0..1 how much weave is there; y is 0..1 how far
+// what is there is a weave cut loose and lingering (soft, run together) rather than one in hand.
+vec2 channelPresence( float k, float ahead ) {
+	float along = channelAlong( ahead );
+	float head = channelOf( channelHead, k );
+	float tail = channelOf( channelTail, k );
+	float linger = channelOf( channelLinger, k );
+	float inHand = 1.0 - smoothstep( head - 0.04, head, along );
+	// The cut is not a clean edge: the loose end thins away over some length behind it.
+	float loose = tail < 1.09 ? smoothstep( tail - 0.16, tail, along ) : 0.0;
+	return vec2( max( inHand, loose * pow( 1.0 - linger, 1.5 ) ), loose * linger * ( 1.0 - inHand ) );
+}
+
+float channelShown( float k, float ahead ) {
+	return channelPresence( k, ahead ).x;
+}
+
 // How far along its way the weaving is, 0..1: 0 while it still runs low by the boat, 1 where it
 // meets the horizon. Counted in shares of distance, as it looks to the eye.
 float channelWay( float ahead ) {
@@ -76,7 +113,8 @@ float channelFlow( float ahead ) {
 float channelLine( float k, float ahead ) {
 	float apart = channelApart( ahead );
 	float turn = log( ahead + 12.0 ) * 2.2 * ( mod( k, 2.0 ) < 0.5 ? 1.0 : - 1.0 ) + k * 1.5708 - channelTime * 0.06;
-	float within = ( 0.5 + 0.04 * ahead ) * ( 1.25 - channelStrength( k ) ) * ( 1.0 - smoothstep( 0.6, 0.97, channelWay( ahead ) ) );
+	float within = ( 0.5 + 0.04 * ahead ) * ( 1.25 - channelStrength( k ) ) * ( 1.0 - smoothstep( 0.6, 0.97, channelWay( ahead ) ) )
+		* ( 1.0 - 0.85 * channelPresence( k, ahead ).y );
 	float towards = ( k - 1.5 ) * 1.5 * apart + channelFlow( ahead ) + cos( turn ) * within * ( 1.0 - apart );
 	// Holding the boat back they do not join. Each lays their tress out on the water to their own
 	// side, the four spread like the lines of a sea anchor, and the current draws them the way it runs.

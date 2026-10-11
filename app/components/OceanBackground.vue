@@ -76,6 +76,10 @@ const followLive = ref(true);
 // ?look=september keeps it. Otherwise the sun and moon are where they really are.
 const stagedLight = ref(false);
 const live = computed(() => (followLive.value ? conditions.value : undefined));
+// The server fetches the conditions too and sends the page out with them already in it, so the
+// first sea a visitor sees is the real one. (Where there is no server the page asks for itself.)
+const { data: served } = useFetch<SeaConditions>("/api/conditions", { key: "sea-conditions-served" });
+if (served.value && !conditions.value) conditions.value = served.value;
 const seaAmount = computed(() => (live.value ? seaState(live.value) : weather.value));
 const skyAmount = computed(() => (live.value ? skyState(live.value) : weather.value));
 const wavesLabel = computed(
@@ -153,8 +157,9 @@ onMounted(() => {
 	const fog = new THREE.FogExp2(0x000000, 0);
 	scene.fog = fog;
 	const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 20000);
-	// Height is set with the sea state, to stay above the crests.
-	camera.position.set(0, 18, 100);
+	// It starts at the height of the boat's deck, where the live picture keeps it. (It used to
+	// start at September's 18 m and sink to the boat in the first second: the "duck" on loading.)
+	camera.position.set(0, 5, 100);
 	camera.rotation.order = "YXZ";
 	// Layer 1 holds what only this camera should see, not the water's mirror camera.
 	const SCREEN_LAYER = 1;
@@ -356,12 +361,52 @@ onMounted(() => {
 	// For trying weather that is not there today: ?pretend=waveHeight:6,windSpeed:70,windGusts:95
 	// replaces those live figures (names as in SeaConditions).
 	const pretend = Object.fromEntries((query.get("pretend") ?? "").split(",").filter(Boolean).map((pair) => [pair.split(":")[0], Number(pair.split(":")[1])]));
+	// The conditions come from the site's own server, which keeps one fresh copy for everyone;
+	// failing that (no server, or a pretended day, which means a different place) straight from
+	// Open-Meteo. The last real figures are also kept in the visitor's browser for next time.
+	const REMEMBERED = "sea-conditions";
 	const loadConditions = () =>
-		fetchSeaConditions(boatAt(pretendDate.value ?? new Date()))
-			.then((result) => (conditions.value = { ...result, ...pretend }))
+		(pretendDate.value ? Promise.reject() : $fetch<SeaConditions>("/api/conditions"))
+			.catch(() => fetchSeaConditions(boatAt(pretendDate.value ?? new Date())))
+			.then((result) => {
+				conditions.value = { ...result, ...pretend };
+				try {
+					localStorage.setItem(REMEMBERED, JSON.stringify({ at: Date.now(), conditions: result }));
+				} catch {
+					// A browser that will not keep it simply starts from a guess next time.
+				}
+			})
 			.catch(() => {});
-	loadConditions();
+	if (conditions.value && Object.keys(pretend).length) conditions.value = { ...conditions.value, ...pretend };
+	// Asked for again only if the page did not arrive with them, or they are for another day.
+	if (!conditions.value || pretendDate.value) loadConditions();
 	const conditionsInterval = setInterval(loadConditions, 15 * 60_000);
+	// What the picture is drawn from. It never waits and never jumps. It starts from the best
+	// figures to hand: the real ones if the page arrived with them; else the ones this browser
+	// saw last, if they are less than six hours old; else what the sea there is usually like.
+	// Whenever better figures come, it moves over to them over a few seconds.
+	const startingPoint = () => {
+		try {
+			const kept = JSON.parse(localStorage.getItem(REMEMBERED) ?? "null") as { at: number; conditions: SeaConditions } | null;
+			if (kept && Date.now() - kept.at < 6 * 3_600_000 && !pretendDate.value) return kept.conditions;
+		} catch {
+			// Nothing usable was kept.
+		}
+		return typicalConditions(boatAt(pretendDate.value ?? new Date()));
+	};
+	let drawnFrom: SeaConditions = conditions.value ?? startingPoint();
+	// The first frames are drawn unseen, and the picture then comes up quickly: not a wait for
+	// anything, only so that the very first frame does not snap on.
+	let revealed = false;
+	let framesDrawn = 0;
+	el.style.opacity = "0";
+	const reveal = () => {
+		if (revealed) return;
+		revealed = true;
+		el.style.transition = "opacity 0.5s ease";
+		el.style.opacity = "1";
+	};
+	const revealAnyway = setTimeout(reveal, 1500);
 
 	const overlay = createStormOverlay(overlayCanvas.value!);
 	const fluid = createFluid(renderer, scene, SCREEN_LAYER);
@@ -377,6 +422,10 @@ onMounted(() => {
 	// Metres above the water on a measured sea. September looked down from 18 to 27.
 	const EYE_HEIGHT = 5;
 	const boltScreen = Array.from({ length: BOLT_POINTS }, () => ({ x: 0, y: 0 }));
+	// Where the channellers' flow lies on the screen, for the air it takes with it.
+	const flowScreen = Array.from({ length: FLOW_POINTS }, () => ({ x: 0.5, y: 1 }));
+	const FLOW_DISTANCES = [8, 20, 45, 100, 220, 500, 1200];
+	const flowWorld = new THREE.Vector3();
 	// Watches the frame rate and gives the fluid less work if the machine is struggling
 	// (0 full, 2 lightest), then more again once it has kept up for a while.
 	let quality = 0;
@@ -449,6 +498,12 @@ onMounted(() => {
 
 	const timer = new THREE.Timer();
 	let drawnOnce = false;
+	// A visitor who starts paused sees one still frame. When the live figures arrive they are
+	// given one more, drawn from them.
+	const stopWatching = watch(conditions, () => (drawnOnce = false));
+	// How quickly the eye follows the height it should be at. Before the picture is shown, and for
+	// a single still frame, it is simply put there.
+	const follow = (rate: number) => (revealed && !motionPaused.value ? rate : 1);
 	renderer.setAnimationLoop(() => {
 		// The timer is still updated while paused, so that motion resumes without a jump in speed.
 		timer.update();
@@ -461,7 +516,11 @@ onMounted(() => {
 		const time = timer.getElapsed();
 		const delta = timer.getDelta();
 		watchFrameRate(delta);
-		const air = ambientAir(live.value);
+		// The figures the picture is drawn from move towards the latest real ones, or towards the
+		// usual sea while there are none yet. (At once for a single still frame.)
+		drawnFrom = towardsConditions(drawnFrom, conditions.value ?? drawnFrom, motionPaused.value ? 1 : 1 - Math.exp(-delta / 1.5));
+		const drawn = followLive.value ? drawnFrom : undefined;
+		const air = ambientAir(drawn);
 		// By hand, the story stands still and its white-out and stillness are left out.
 		let moment: StormMoment;
 		if (followStory.value) {
@@ -470,16 +529,16 @@ onMounted(() => {
 			weaveLevel.value = moment.weave;
 			stormLevel.value = moment.fury;
 		} else {
-			if (live.value) stormLevel.value = stormFury(live.value);
+			if (drawn) stormLevel.value = stormFury(drawn);
 			moment = { weave: weaveLevel.value, fury: stormLevel.value, stillness: 0, veil: 0, white: 0 };
 		}
 		// The story and the sliders make their own weather; only the live picture waits for real thunder.
-		const liveOnly = followStory.value ? undefined : live.value;
+		const liveOnly = followStory.value ? undefined : drawn;
 		const { fury } = moment;
 		const alive = 1 - moment.stillness;
 		// The weaving moves the sea before the weather does: the waves rise with the weave, and the storm takes them further.
-		const sea = lerp(seaAmount.value, 1, Math.max(fury, 0.7 * THREE.MathUtils.smoothstep(moment.weave, 0.1, 0.9)));
-		const sky = lerp(skyAmount.value, 1, fury);
+		const sea = lerp(drawn ? seaState(drawn) : weather.value, 1, Math.max(fury, 0.7 * THREE.MathUtils.smoothstep(moment.weave, 0.1, 0.9)));
+		const sky = lerp(drawn ? skyState(drawn) : weather.value, 1, fury);
 		updateEnvironment([hour.value, sea, sky]);
 
 		// The live sea is drawn to measure: each swell and the wind's waves at their real height,
@@ -523,10 +582,10 @@ onMounted(() => {
 			// On a measured sea the viewer is on a small boat: eyes EYE_HEIGHT above the water, and
 			// carried up and down by the very waves that are drawn.
 			const surface = measuredSeaHeight(waveUniforms, camera.position.x, camera.position.z, time);
-			camera.position.y += (EYE_HEIGHT + surface - camera.position.y) * 0.2;
+			camera.position.y += (EYE_HEIGHT + surface - camera.position.y) * follow(0.2);
 		} else {
 			const swell = giantWaveHeight(camera.position.x, camera.position.z, time, surge);
-			camera.position.y += (cameraHeight + swell + heave - camera.position.y) * 0.05;
+			camera.position.y += (cameraHeight + swell + heave - camera.position.y) * follow(0.05);
 		}
 		camera.rotation.z = sway * (0.06 * Math.sin(time * 0.33) + 0.025 * Math.sin(time * 0.83 + 0.7));
 		camera.rotation.y += (-pointer.x * maxYaw - camera.rotation.y) * 0.03;
@@ -593,6 +652,10 @@ onMounted(() => {
 			// More light by day, when it has a bright sea to show against.
 			gain: (0.3 + 0.6 * daylight) / steadyExposure,
 		});
+		FLOW_DISTANCES.forEach((ahead, i) => {
+			channelling.flowPoint(ahead, flowWorld);
+			toScreen(flowWorld.x, flowWorld.y, flowWorld.z, flowScreen[i]!);
+		});
 		waveUniforms.channelFeed.value = channelling.working * (0.6 + 0.4 * channelling.surge) * need * darkness * (1 - holdLevel) * (1 - controlLevel) * alive;
 		// Driven hard, the flow lights the sea more.
 		waveUniforms.channelLight.value = (0.06 * (1 + 0.5 * channelling.surge) * (0.45 + 0.55 * Math.max(need, holdLevel)) * Math.max(darkness, Math.max(holdLevel, controlLevel) * nightfall) * alive) / steadyExposure;
@@ -641,7 +704,11 @@ onMounted(() => {
 			quality,
 			bond,
 			// The threads drag the air after them while they race for the knot, and a little once they are laid.
-			charge: (Math.sin(Math.PI * Math.min(1, moment.weave / 0.5)) + 0.25 * formed) * alive,
+			// (Not while the channellers are at work: the old weave is put away then, and its draught
+			// would carry the air they have gathered up into the sky.)
+			charge: (Math.sin(Math.PI * Math.min(1, moment.weave / 0.5)) + 0.25 * formed) * (1 - Math.max(darkness, holdLevel, controlLevel)) * alive,
+			flow: flowScreen,
+			flowPull: calmMotion ? 0 : channelling.pull,
 			knot: knotScreen,
 			horizon: horizonScreen,
 			pointer: pointerScreen,
@@ -653,6 +720,8 @@ onMounted(() => {
 		waveUniforms.waveTime.value = time;
 		skyUniforms.time.value += delta * lerp(1, 4, sky) * (1 + 2 * fury);
 		renderer.render(scene, camera);
+		// Shown once it has been drawn a few times in the form it will keep.
+		if (!revealed && ++framesDrawn > 2) reveal();
 	});
 
 	const onResize = () => {
@@ -668,6 +737,8 @@ onMounted(() => {
 		window.removeEventListener("pointermove", onPointerMove);
 		clearInterval(clockInterval);
 		clearInterval(conditionsInterval);
+		clearTimeout(revealAnyway);
+		stopWatching();
 		fluid.dispose();
 		renderer.setAnimationLoop(null);
 		renderer.dispose();
