@@ -5,8 +5,13 @@
 // fields and buttons are at least 44px tall with a visible focus ring, and all of it is on an
 // opaque ground.
 //
-// THE FORM DOES NOT SEND ANYTHING YET. Where messages should go is for the owner to decide;
-// until then it says so plainly instead of pretending.
+// How it sends (the owner's and Olle's choice: plain email, no sending service). Pressing Send
+// opens the visitor's own email program with the letter already written in it, addressed to the
+// owner; the visitor sends it themselves. Nothing passes through the site, and nothing is stored.
+// The owner's address is protected from the programs that harvest addresses off web pages: it is
+// nowhere in the page as written. It is kept here backwards and in pieces, and is only put
+// together in the visitor's browser at the moment they press Send. (A person who presses Send
+// sees it, as they must to write to it.)
 defineProps<{ layout: string }>();
 
 // As on the About page: this is a panel over the picture. It steps aside while the menu is
@@ -24,8 +29,19 @@ const notice = ref("");
 // the whole site can change language, this is the one place to connect it.
 const words = computed(() => LETTER_WORDS[useRoute().query.lang as string] ?? LETTER_WORDS.en!);
 const sentence = computed(() => letterSentence(words.value));
+const PIECES = ["moc.idazaoibaslibana", "oiduts"];
+const address = () => PIECES.map((piece) => [...piece].reverse().join("")).reverse().join(String.fromCharCode(64));
+// Shown after Send, for anyone whose email program did not open.
+const shownAddress = ref("");
 const send = () => {
-	notice.value = words.value.notConnected;
+	const w = words.value;
+	// The letter as written on the page, in the page's language.
+	const sentence = w.sentence.replace("{name}", letter.name).replace("{email}", letter.email);
+	const body = [w.greeting, "", sentence, "", letter.message, "", w.signoff, letter.name].join("\n");
+	const to = address();
+	window.location.href = `mailto:${to}?subject=${encodeURIComponent(w.subject.replace("{name}", letter.name))}&body=${encodeURIComponent(body)}`;
+	notice.value = w.opened;
+	shownAddress.value = to;
 };
 </script>
 
@@ -54,7 +70,10 @@ const send = () => {
 				<p class="close">{{ words.signoff }}</p>
 				<input v-model="letter.website" class="trap" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
 				<button type="submit" class="send">{{ words.send }}</button>
-				<p id="contact-status" class="status" role="status">{{ notice }}</p>
+				<p id="contact-status" class="status" role="status">
+					{{ notice }}
+					<template v-if="shownAddress">{{ words.orWriteTo }} <a :href="`mailto:${shownAddress}`">{{ shownAddress }}</a>.</template>
+				</p>
 			</form>
 
 			<!-- The others: a heading, then label and field in rows. -->
@@ -83,7 +102,10 @@ const send = () => {
 					<span />
 					<div>
 						<button type="submit" class="send">Send</button>
-						<p id="contact-status" class="status" role="status">{{ notice }}</p>
+						<p id="contact-status" class="status" role="status">
+					{{ notice }}
+					<template v-if="shownAddress">{{ words.orWriteTo }} <a :href="`mailto:${shownAddress}`">{{ shownAddress }}</a>.</template>
+				</p>
 					</div>
 				</div>
 			</form>
@@ -213,6 +235,11 @@ textarea {
 .send:focus-visible {
 	background: var(--ink);
 	color: var(--ground, var(--green));
+}
+/* The address, once shown, is a link: underlined, in the ink. */
+.status a {
+	text-decoration: underline;
+	text-underline-offset: 0.2em;
 }
 .status {
 	min-height: 1.75rem;

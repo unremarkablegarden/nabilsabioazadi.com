@@ -21,7 +21,12 @@ export interface LetterWords {
 	signoff: string;
 	send: string;
 	close: string;
-	notConnected: string;
+	// The subject line of the email, with {name} for the writer's name.
+	subject: string;
+	// Said once the visitor's own email program has been asked to open with the letter in it.
+	opened: string;
+	// Said beside the address, for anyone whose email program did not open.
+	orWriteTo: string;
 }
 
 export const LETTER_WORDS: Record<string, LetterWords> = {
@@ -37,7 +42,9 @@ export const LETTER_WORDS: Record<string, LetterWords> = {
 		signoff: "With thanks,",
 		send: "Send",
 		close: "Close",
-		notConnected: "This form is not connected yet, so your message was not sent anywhere.",
+		subject: "A letter from {name}",
+		opened: "Your email program should now be open with your letter in it, ready for you to send.",
+		orWriteTo: "If it did not open, write to",
 	},
 	fr: {
 		lang: "fr",
@@ -51,7 +58,9 @@ export const LETTER_WORDS: Record<string, LetterWords> = {
 		signoff: "Avec mes remerciements,",
 		send: "Envoyer",
 		close: "Fermer",
-		notConnected: "Ce formulaire n’est pas encore relié : votre message n’a été envoyé nulle part.",
+		subject: "Une lettre de {name}",
+		opened: "Votre messagerie devrait maintenant être ouverte, avec votre lettre prête à être envoyée.",
+		orWriteTo: "Si elle ne s’est pas ouverte, écrivez à",
 	},
 	ja: {
 		lang: "ja",
@@ -65,7 +74,9 @@ export const LETTER_WORDS: Record<string, LetterWords> = {
 		signoff: "よろしくお願いいたします。",
 		send: "送信",
 		close: "閉じる",
-		notConnected: "このフォームはまだ接続されていないため、メッセージは送信されていません。",
+		subject: "{name} からの手紙",
+		opened: "メールソフトが開き、お手紙がそのまま送信できる状態になっているはずです。",
+		orWriteTo: "開かない場合は、こちらまでお送りください：",
 	},
 };
 
