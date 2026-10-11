@@ -675,6 +675,8 @@ onMounted(() => {
 			gathering,
 			// Softest in full day, and still soft through twilight.
 			soften: Math.max(daylight, gathering),
+			// Enough to stand whiter than a day sky; less at night, where little is needed to read as white.
+			white: lerp(0.5, 3.5, daylight) / steadyExposure,
 			unusual: liveOnly ? unusual(liveOnly) : NOTHING_UNUSUAL,
 			below: liveOnly ? strengthBelow(liveOnly, PLACE.bearing) : 0,
 			// On a quiet night of theirs one of them scouts: not in a storm, nor while the boat is

@@ -94,6 +94,7 @@ varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
 varying float vSoft;
+varying float vWhite;
 ${ribbonShaderChunk}
 ${channelPathChunk}
 
@@ -214,7 +215,7 @@ void main() {
 	vec4 clipAhead = viewProjection * vec4( threadPoint( aT + 0.002 ), 1.0 );
 	// (Lingering, each filament is broad and soft: a blur, not a line.)
 	float lingering = channelPresence( aThread.x, aheadAt( aT ) ).y;
-	gl_Position = ribbonPosition( clip, clipAhead, aSide, aThread.w * ( 1.0 + 4.0 * lingering + 3.0 * uSoften ) );
+	gl_Position = ribbonPosition( clip, clipAhead, aSide, aThread.w * ( 1.0 + 4.0 * lingering + 3.0 * uSoften * ( 1.0 - aSoft ) ) );
 
 	float ahead = max( aheadAt( aT ), 0.0 );
 	float q = log( ahead + 12.0 );
@@ -264,23 +265,41 @@ void main() {
 		* ( 1.0 - smoothstep( 0.7, 1.0, channelWay( ahead ) ) * ( 1.0 - 0.8 * lingering ) ) / ( 1.0 + ahead / 1500.0 ) / ( 1.0 + 2.0 * lingering ) / ( 1.0 + 1.6 * uSoften );
 	vEdge = aSide;
 	vSoft = max( aSoft, max( lingering, 0.9 * uSoften ) );
+	// The strongest's own weaves show white against anything. By day they are not thinned away
+	// with the rest, or there would be nothing to turn the sky white with.
+	vWhite = aThread.x > ${STRONGEST - 0.5} && aThread.x < ${STRONGEST + 0.5} ? 1.0 : 0.0;
+	vAlpha *= mix( 1.0, 1.0 + 0.7 * uSoften, vWhite * ( 1.0 - aSoft ) );
 }
 `;
 
 const fragmentShader = /* glsl */ `
 uniform float uGain;
+uniform float uSoften;
+uniform float uWhite;
 varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
 varying float vSoft;
+varying float vWhite;
 
 void main() {
 	// A filament has a hard edge, softened by no more than it takes to stop it shimmering.
 	// A veil has none: it is brightest along its middle and fades away to both sides.
 	float edge = mix( 1.0 - smoothstep( 0.55, 1.0, abs( vEdge ) ), pow( 1.0 - vEdge * vEdge, 2.0 ), vSoft );
-	gl_FragColor = vec4( vTint * uGain, edge * vAlpha );
+	float amount = clamp( edge * vAlpha, 0.0, 1.0 );
+	gl_FragColor = vec4( vTint * uGain, 1.0 );
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
+	// A weave is light, and is added to what is behind it; so against a bright sky it cannot be
+	// seen. The strongest's own weaves are another matter (the owner's): they always become
+	// white, or a coloured white, against any other colour. So they are not added: they turn
+	// what is behind them towards white, which shows on a day sky as it does on a night sea.
+	// (The colour in it is only for the dark. Against a light sky any colour at all would read as
+	// grey, darker than what is behind it; there it is plain white.)
+	vec3 pale = mix( vec3( 1.0 ), vTint / max( max( vTint.r, vTint.g ), max( vTint.b, 0.001 ) ), 0.18 * ( 1.0 - uSoften ) );
+	// (What is written here is still scene light, mapped to the screen afterwards with the day's or
+	// night's exposure; uWhite is the amount of light that comes out as white under it.)
+	gl_FragColor = vec4( mix( gl_FragColor.rgb, pale * uWhite, vWhite ) * amount, amount * vWhite );
 }
 `;
 
@@ -291,9 +310,9 @@ void main() {
 // How they work in that time depends on what the sea and wind call for (`need`, from the weather
 // data), because force that is not needed is not used, and neither is linking:
 //   little         the strongest works alone, lightly
-//   some           one or two of the others work beside her, each for themselves
+//   some           one or two of the others work beside the strongest, each for themselves
 //   a good deal    all four work, still each for themselves
-//   much           the others link with her one by one within 2 to 5 seconds, and linked they
+//   much           the others link with the strongest one by one within 2 to 5 seconds, and linked they
 //                  drive the flow hard along the surface of the sea in all the elements' colours
 const between = (low: number, high: number) => low + Math.random() * (high - low);
 const STRONGEST = 2;
@@ -347,6 +366,8 @@ uniform vec2 uLean;
 // the sky is (see uSoften in the main weaving).
 uniform float uSeat;
 uniform float uSoften;
+// 1 when it is the strongest's own weave.
+uniform float uOwn;
 // The real surface current across the view, and the real wind across it now (both -1..1, to
 // the right when positive): see channel-path.ts.
 uniform float channelCurrent;
@@ -359,6 +380,7 @@ varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
 varying float vSoft;
+varying float vWhite;
 ${ribbonShaderChunk}
 
 float drift( float x ) {
@@ -467,7 +489,7 @@ void main() {
 	float loose = uTail < 1.09 ? smoothstep( uTail - 0.2, uTail, aT ) : 0.0;
 	float inHand = 1.0 - smoothstep( uHead - 0.05, uHead, aT );
 	float lingering = loose * uFade * ( 1.0 - inHand );
-	gl_Position = ribbonPosition( clip, clipAhead, aSide, aKind.w * ( 1.0 + 3.0 * lingering + 3.0 * uSoften ) );
+	gl_Position = ribbonPosition( clip, clipAhead, aSide, aKind.w * ( 1.0 + 3.0 * lingering + 3.0 * uSoften * ( 1.0 - aSoft ) ) );
 
 	// The light in it runs downward: what is sensed comes back to the one who sent it.
 	float lit = smoothstep( - 0.2, 0.35, drift( aT * aKind.y + uTime * aKind.z + aSeed.x * 91.0 ) );
@@ -480,6 +502,10 @@ void main() {
 	vAlpha = uStrength * aKind.x * lit * there * mix( 0.16, 0.6, scoutSpread() * smoothstep( 0.3, 0.6, scoutRise( aT ) ) ) * smoothstep( 0.0, 0.06, aT ) * ( 1.0 - smoothstep( 0.62, 0.98, aT ) ) / ( 1.0 + 1.5 * lingering ) / ( 1.0 + 1.6 * uSoften );
 	vEdge = aSide;
 	vSoft = max( aSoft, max( lingering, 0.9 * uSoften ) );
+	// The strongest's own weaves show white against anything. By day they are not thinned away
+	// with the rest, or there would be nothing to turn the sky white with.
+	vWhite = uOwn;
+	vAlpha *= mix( 1.0, 1.0 + 0.7 * uSoften, vWhite * ( 1.0 - aSoft ) );
 }
 `;
 
@@ -518,6 +544,8 @@ uniform float uStrength;
 uniform vec4 uHead;
 uniform vec4 uTail;
 uniform float uSoften;
+// 1 when the strongest is sounding alone: that tress is their own weave.
+uniform float uOwn;
 // 0..1 how far they are doing it together just now.
 uniform float uTogether;
 uniform float uThermal;
@@ -526,6 +554,7 @@ varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
 varying float vSoft;
+varying float vWhite;
 ${ribbonShaderChunk}
 
 float drift( float x ) {
@@ -630,6 +659,10 @@ void main() {
 	vAlpha = uStrength * aKind.x * lit * inHand * kept * away / ( 1.0 + 1.5 * loose ) / ( 1.0 + 1.6 * uSoften );
 	vEdge = aSide;
 	vSoft = max( loose, 0.9 * uSoften );
+	// The strongest's own weaves show white against anything. By day they are not thinned away
+	// with the rest, or there would be nothing to turn the sky white with.
+	vWhite = uOwn * step( ${STRONGEST - 0.5}, who ) * step( who, ${STRONGEST + 0.5} );
+	vAlpha *= mix( 1.0, 1.0 + 0.7 * uSoften, vWhite );
 }
 `;
 
@@ -660,6 +693,8 @@ export interface ChannellerState {
 	gathering: number;
 	// 0..1 how light the sky is (see uSoften).
 	soften: number;
+	// How much scene light comes out as white on the screen just now (see uWhite).
+	white: number;
 	// 0..1 how far something out of the ordinary is happening in the air and in the water (`unusual`).
 	unusual: { air: number; water: number };
 	// 0..1 how much of the strongest's strength the sea asks for below, round the boat, and not ahead.
@@ -736,6 +771,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	const uniforms = {
 		uStrength: { value: 0 },
 		uSoften: { value: 0 },
+		uWhite: { value: 1 },
 		uGain: { value: 1 },
 		uTints: { value: TINTS },
 		uElements: { value: ELEMENTS },
@@ -772,7 +808,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			transparent: true,
 			depthWrite: false,
 			side: THREE.DoubleSide,
-			blending: THREE.AdditiveBlending,
+			blending: THREE.NormalBlending,
+			premultipliedAlpha: true,
 		}),
 	);
 	mesh.frustumCulled = false;
@@ -829,7 +866,9 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uFade: { value: 0 },
 		uLean: { value: new THREE.Vector2() },
 		uSeat: { value: 2.25 },
+		uOwn: { value: 0 },
 		uSoften: uniforms.uSoften,
+		uWhite: uniforms.uWhite,
 		uThermal: { value: 0 },
 		channelCurrent: sea.channelCurrent,
 		channelWind: sea.channelWind,
@@ -845,7 +884,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			transparent: true,
 			depthWrite: false,
 			side: THREE.DoubleSide,
-			blending: THREE.AdditiveBlending,
+			blending: THREE.NormalBlending,
+			premultipliedAlpha: true,
 		}),
 	);
 	scoutMesh.frustumCulled = false;
@@ -863,6 +903,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			u.uHead.value = 0;
 			// The night scout sits at the far right. The strongest, looking into something, is second from the right.
 			u.uSeat.value = byStrongest ? 0.75 : 2.25;
+			u.uOwn.value = byStrongest ? 1 : 0;
 		} else if (wanted < 0.15 && scouting) {
 			scouting = false;
 			u.uHead.value = 0;
@@ -931,6 +972,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uStrength: { value: 1 },
 		uGain: uniforms.uGain,
 		uSoften: uniforms.uSoften,
+		uWhite: uniforms.uWhite,
+		uOwn: { value: 0 },
 		uHead: { value: new THREE.Vector4(0, 0, 0, 0) },
 		uTail: { value: new THREE.Vector4(2, 2, 2, 2) },
 		uTogether: { value: 0 },
@@ -948,7 +991,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			transparent: true,
 			depthWrite: false,
 			side: THREE.DoubleSide,
-			blending: THREE.AdditiveBlending,
+			blending: THREE.NormalBlending,
+			premultipliedAlpha: true,
 		}),
 	);
 	soundingMesh.frustumCulled = false;
@@ -964,15 +1008,17 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	let togetherTurns = 0;
 	const tendSoundings = (delta: number, time: number, thermal: number, always: boolean, linkedAll: boolean, strongestAlone: boolean) => {
 		const u = soundingUniforms;
-		// The strongest, looking into something in the water, sounds it alone, and for as long as she looks.
-		const hers = sounders[STRONGEST]!;
-		if (strongestAlone && !hers.sounding) {
+		// The strongest, looking into something in the water, sounds it alone, and for as long as the looking lasts.
+		const own = sounders[STRONGEST]!;
+		if (strongestAlone && !own.sounding) {
 			sounders.forEach((one) => (one.lets = Math.min(one.lets, time)));
-			Object.assign(hers, { sounding: true, begins: time, lets: Infinity, out: 4, back: 5 });
+			Object.assign(own, { sounding: true, begins: time, lets: Infinity, out: 4, back: 5 });
 			u.uHead.value.setComponent(STRONGEST, 0);
 			u.uTail.value.setComponent(STRONGEST, 2);
 			togetherWanted = 0;
-		} else if (!strongestAlone && hers.lets === Infinity) hers.lets = time;
+			u.uOwn.value = 1;
+		} else if (!strongestAlone && own.lets === Infinity) own.lets = time;
+		if (!own.sounding) u.uOwn.value = 0;
 		// (Not while all thirteen are linked: whoever is sounding then lets go and joins.)
 		if (linkedAll && !always && !strongestAlone) {
 			nextSounding = Math.max(nextSounding, time + 30);
@@ -1052,10 +1098,11 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	// any one time and the other nine rest or work elsewhere, and they take turns. Their strengths:
 	// The strongest is immensely stronger than the rest (the owner's, never to be forgotten): 1.8
 	// times as strong as the other twelve put together. A tress cannot be drawn to that scale, or
-	// the others' would not be seen at all beside hers; so the others are drawn at about six tenths
+	// the others' would not be seen at all beside the strongest's; so the others are drawn at about six tenths
 	// of what they were, clearly the lesser, and the true measure is kept in the rules instead:
-	// she is the first to look into anything out of the ordinary and the first to work with it,
-	// she begins the story alone, and what she gives below is taken from the whole flow ahead.
+	// the strongest is the first to look into anything out of the ordinary and the first to work
+	// with it, begins the story alone, and what the strongest gives below is taken from the whole
+	// flow ahead. (The strongest is the owner: no "she" or "he" here.)
 	const STRONGEST_TO_THE_REST = 1.8;
 	const REST = [0.95, 0.9, 0.82, 0.78, 0.7, 0.64, 0.58, 0.52, 0.47, 0.42, 0.38, 0.34];
 	const TRUE_STRENGTH = [STRONGEST_TO_THE_REST * REST.reduce((sum, one) => sum + one, 0), ...REST];
@@ -1075,7 +1122,9 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		if (time > nextTurn) {
 			nextTurn = time + between(70, 160);
 			// One of the four is relieved by one of the nine.
-			const leaving = atFront[Math.floor(Math.random() * atFront.length)]!;
+			// (Never the strongest, who is always at the front: only ever below, or looking into something.)
+			const relieved = atFront.filter((member) => member !== 0);
+			const leaving = relieved[Math.floor(Math.random() * relieved.length)]!;
 			const resting = CREW.map((_, member) => member).filter((member) => !atFront.includes(member));
 			const arriving = resting[Math.floor(Math.random() * resting.length)]!;
 			atFront = atFront.map((member) => (member === leaving ? arriving : member)).sort((a, b) => CREW[b]! - CREW[a]!);
@@ -1091,9 +1140,9 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	};
 
 	// Anything out of the ordinary in the wind, the waves or the weather (`unusual`, from the data):
-	// the strongest is the first to look into it (the owner's). She lets her own tress go and sends
-	// an investigative weave, up into the air (the scout's weave, from her seat) or down into the
-	// water (a sounding, alone), whichever it is in, for ten to sixteen seconds. Then she channels
+	// the strongest is the first to look into it (the owner's). The strongest lets their own tress go and sends
+	// an investigative weave, up into the air (the scout's weave, from their seat) or down into the
+	// water (a sounding, alone), whichever it is in, for ten to sixteen seconds. Then the strongest channels
 	// with it: see `update`. It happens once for each occurrence, and again if it passes from the
 	// air to the water or back.
 	let responding = false;
@@ -1137,7 +1186,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		// then, whatever the share, for the pilgrimage's sake.
 		const share = visiting ? 1 : below;
 		masters += (share - masters) * Math.min(1, delta / (share > masters ? 5 : 8));
-		// The strongest leaves her seat at the front only when most of her strength is below.
+		// The strongest leaves the seat at the front only when most of their strength is below.
 		return masters > 0.6;
 	};
 
@@ -1181,7 +1230,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		return target.set(camera.position.x + side, 1.3 + rise, camera.position.z - ahead);
 	};
 
-	const update = ({ time, delta, energy, waveHeight, need, hold: slowing, current, control, scout, showMasters, showSoundings, gathering, soften, unusual, below, tomorrow, thermal, strength, gain }: ChannellerState) => {
+	const update = ({ time, delta, energy, waveHeight, need, hold: slowing, current, control, scout, showMasters, showSoundings, gathering, soften, white, unusual, below, tomorrow, thermal, strength, gain }: ChannellerState) => {
 		const linkedAll = gathering > 0.05;
 		const probing = tendOccurrence(delta, time, unusual);
 		tendScout(delta, time, probing === "air" ? 1 : scout * (1 - gathering), tomorrow, thermal, probing === "air");
@@ -1205,8 +1254,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		if (answering) strength = Math.max(strength, 0.8);
 		const called = strength > 0.12;
 		if (wasProbing && !probing && called) {
-			// She has found what it is, and now channels with it: she begins alone, at once, and the
-			// others come in after her as the sea and wind call for (the story's own second part).
+			// The strongest has found what it is, and now channels with it: beginning alone, at once, and the
+			// others come in afterwards as the sea and wind call for (the story's own second part).
 			part = "stopped";
 			since = 0;
 			lasts = 0;
@@ -1242,7 +1291,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		}
 		for (let who = 0; who < CHANNELLERS; who++) {
 			if (time < changingUntil[who]!) want[who] = false;
-			// The strongest is looking into something: her own tress is not out.
+			// The strongest is looking into something: their own tress is not out.
 			if (who === STRONGEST && probing) want[who] = false;
 			// The strongest is at the deep weaving, not at the front.
 			if (who === STRONGEST && mastersBelow) want[who] = false;
@@ -1305,6 +1354,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		// No more light than the work calls for. (A weave being cut keeps the light it had.)
 		uniforms.uStrength.value = (called ? strength : lastStrength) * (0.45 + 0.55 * Math.max(need, hold, control, gathering));
 		uniforms.uSoften.value = soften;
+		uniforms.uWhite.value = white;
 		uniforms.uGain.value = gain;
 		uniforms.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(uniforms.uPixelRatio.value);
 		// 0..1 how much channelling there is, and how hard it is driven.
