@@ -23,8 +23,8 @@ logs
 .env.*
 !.env.example
 
-# Licensed typefaces: used locally, not to be published in this public repository
-public/fonts/licensed/
+# The licensed typefaces in public/fonts/licensed/ are in the repository at the owner's
+# instruction (11 October 2026): the owner holds the licences. They were kept out before.
 
 # A stray duplicate of the project that the desktop app copied in; kept, per the never-delete rule, but not tracked
 .trash/site/

@@ -19,13 +19,12 @@ this version's.
 
   then open http://localhost:3000.
 
-## Three things that are not in git and must not be lost
+## Three things to know about what is and is not in git
 
-1. **Licensed typefaces**, in `public/fonts/licensed/` (git-ignored on purpose: the repository
-   is public). Eight files: Helvetica Neue LT Com (Light, Roman, Medium, Bold), Lyon Text
-   (Regular, Regular Italic), Lyon Display (Light, Light Italic). They were copied from
-   `Dropbox/+ Studio/NSA* Design Team Folder/Branding Design/Fonts/`. Putting them on the live
-   site needs web-font licences. This is still an open question.
+1. **Licensed typefaces**, in `public/fonts/licensed/`. Eight files: Helvetica Neue LT Com (Light,
+   Roman, Medium, Bold), Lyon Text (Regular, Regular Italic), Lyon Display (Light, Light Italic),
+   copied from `Dropbox/+ Studio/NSA* Design Team Folder/Branding Design/Fonts/`. They are now in
+   git: the owner holds the licences and had them committed on 11 October 2026.
 2. **Node.js and Bun** were installed for this project in `~/.local/node` and `~/.bun`.
 3. **The Prismic article type** exists only as a file here (`customtypes/article/index.json`).
 
