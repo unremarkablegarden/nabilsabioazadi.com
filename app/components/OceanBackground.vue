@@ -275,7 +275,10 @@ onMounted(() => {
 	// 0..1 how far night has fallen.
 	let nightfall = 0;
 	// 0..1 how far it is dawn or dusk: then all thirteen channellers link.
-	let gathering = 0;
+	let gathering = -1;
+	let skyLight = 0;
+	let gatheringNow = 0;
+	let skyLightNow = 0;
 	// The moment shown, and 0..1 how far the stars are out at it.
 	let shownMoment = new Date();
 	let starsOut = 0;
@@ -305,7 +308,13 @@ onMounted(() => {
 		nightfall = staged ? 0 : night;
 		// Dawn and dusk (the owner's): from the sun 9 degrees under the horizon to 8 degrees over it,
 		// about an hour and a half each, there is most qi in the air, and they all link to draw on it.
-		gathering = staged ? 0 : THREE.MathUtils.smoothstep(sunElevation, -9, -5) * (1 - THREE.MathUtils.smoothstep(sunElevation, 3, 8));
+		// (The clock moves the sun once a minute, so both of these are eased, or the weaving would
+		// change in steps: the owner saw it "suddenly get blurrier" at first light.)
+		gatheringNow = staged ? 0 : THREE.MathUtils.smoothstep(sunElevation, -9, -5) * (1 - THREE.MathUtils.smoothstep(sunElevation, 3, 8));
+		// 0..1 how light the sky itself is. It is still dark when they first link before dawn, and
+		// only a light sky calls for soft filaments.
+		skyLightNow = staged ? 1 : THREE.MathUtils.smoothstep(sunElevation, -6, 3);
+
 		// Stars need a dark sky: they are drowned by a bright moon and hidden by cloud. (The cloud
 		// here dims them all alike; it cannot yet hide the ones behind each cloud.)
 		starsOut = staged ? 0 : night * (1 - 0.6 * moonlight) * (1 - sky ** 0.8);
@@ -664,6 +673,10 @@ onMounted(() => {
 		controlLevel += (storm - controlLevel) * Math.min(1, delta / 3);
 		const held = liveOnly ? holdingBack(liveOnly, PLACE.bearing) * (1 - controlLevel) : 0;
 		holdLevel += (held - holdLevel) * Math.min(1, delta / 3);
+		// (Eased over half a minute; as the page opens they are simply what the hour makes them.)
+		if (gathering < 0) [gathering, skyLight] = [gatheringNow, skyLightNow];
+		gathering += (gatheringNow - gathering) * Math.min(1, delta / 25);
+		skyLight += (skyLightNow - skyLight) * Math.min(1, delta / 25);
 		const channelling = channellers.update({
 			time,
 			delta,
@@ -675,8 +688,8 @@ onMounted(() => {
 			showMasters: query.get("show") === "masters",
 			showSoundings: query.get("show") === "soundings",
 			gathering,
-			// Softest in full day, and still soft through twilight.
-			soften: Math.max(daylight, gathering),
+			// Soft against a light sky, fine against a dark one.
+			soften: skyLight,
 			// Enough to stand whiter than a day sky; less at night, where little is needed to read as white.
 			white: lerp(0.5, 3.5, daylight) / steadyExposure,
 			unusual: liveOnly ? unusual(liveOnly) : NOTHING_UNUSUAL,
