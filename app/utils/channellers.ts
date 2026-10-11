@@ -87,6 +87,10 @@ uniform float uSoften;
 // For each seat, 0..1 how restless its occupant is (their temperament): a restless one's
 // filaments stray further and wander quicker; a steady one's lie close and still.
 uniform vec4 uRestless;
+// 0..1 how far it is day. By day a weave is not seen as light (see the fragment shader), and
+// what they weave is akasha, air and water: for each seat, the element its occupant is weaving.
+uniform float uDay;
+uniform vec4 uSeatElement;
 uniform vec3 uTints[ 3 ];
 uniform vec3 uElements[ 6 ];
 uniform vec3 uBaseTone;
@@ -100,6 +104,8 @@ varying float vAlpha;
 varying float vEdge;
 varying float vSoft;
 varying float vWhite;
+varying float vWide;
+varying float vShade;
 ${ribbonShaderChunk}
 ${channelPathChunk}
 
@@ -165,7 +171,9 @@ vec3 threadPoint( float t ) {
 	// The more the sea and wind are doing, the more there is to feed, and the fuller the flow.
 	// (Held back, a tress is opened out wide and thin over the water.)
 	// (In a storm the linked flow is thrown wide over the waves ahead.)
-	float width = ( 0.1 + 0.04 * along ) * ( 1.0 + 1.8 * channelHold ) * ( 1.0 + 1.4 * channelControl ) * ( 0.75 + 0.7 * channelSea.x ) * ( 1.0 + 0.4 * channelSurge ) * smoothstep( - 4.0, 8.0, ahead ) * breath * ( 0.55 + 0.7 * channelStrength( who ) ) * ( 1.0 - smoothstep( 0.6, 0.97, way ) );
+	float width = ( 0.1 + 0.04 * along ) * ( 1.0 + 1.8 * channelHold ) * ( 1.0 + 1.4 * channelControl ) * ( 0.75 + 0.7 * channelSea.x ) * ( 1.0 + 0.4 * channelSurge ) * smoothstep( - 4.0, 8.0, ahead ) * breath * ( 0.55 + 0.7 * channelStrength( who ) ) * ( 1.0 - smoothstep( 0.6, 0.97, way ) )
+		// (Each for themselves by day, a tress lies open and loose on the sea, not drawn tight.)
+		* ( 1.0 + 0.5 * ( 1.0 - channelLink ) );
 	// Its three strands pass over and under each other: a plait, loosely kept.
 	float phase = q * 6.0 - channelTime * 0.4 + aThread.y * 2.0944 + who * 0.7;
 	vec2 across = vec2( sin( phase ), 0.5 * sin( 2.0 * phase ) ) * 0.42;
@@ -177,17 +185,20 @@ vec3 threadPoint( float t ) {
 	// (In the trial, a strong channeller's tress is taut: its filaments hardly stray.)
 	float skill = channelOf( channelOwn, who ) * channelLoss;
 	float restless = channelOf( uRestless, who );
-	across += aSeed.w * 0.55 * ( 0.55 + 1.1 * restless ) * ( 1.0 - 0.75 * skill ) * ( 1.0 - 0.6 * channelHold ) * ( 1.0 - 0.85 * smoothstep( 0.3, 0.8, way ) ) * vec2(
+	// (Each for themselves, the tresses are kept close: four clean lines over the sea, like strings.)
+	across += ( 1.0 - 0.6 * ( 1.0 - channelLink ) ) * aSeed.w * 0.55 * ( 0.55 + 1.1 * restless ) * ( 1.0 - 0.75 * skill ) * ( 1.0 - 0.6 * channelHold ) * ( 1.0 - 0.85 * smoothstep( 0.3, 0.8, way ) ) * vec2(
 		drift( q * 2.3 + aSeed.x * 40.0 - channelTime * ( 0.14 + 0.2 * restless ) ),
 		drift( q * 2.9 + aSeed.y * 40.0 + channelTime * ( 0.11 + 0.16 * restless ) )
 	);
-	// What is spent shows as trembling, finer and quicker than the wandering, and worse with
-	// distance; where the tress has gathered itself the trembling stops and the strays are drawn in.
+	// What is spent shows as a loosening, finer than the wandering, and more with distance; where
+	// the tress has gathered itself it stops and the strays are drawn in.
+	// (It used to tremble in sharp corners. The owner saw electricity in that, which is the
+	// opposite of what they are about: nothing in a weave has a corner now.)
 	float lost = spent( along );
 	float held = gathered( who, q ) * ( 0.5 + 0.5 * lost );
 	across += 0.16 * lost * ( 1.0 - held ) * ( 1.0 - 0.8 * skill ) * vec2(
-		kink( q * 37.0 + aSeed.x * 211.0 - channelTime * 3.1 ),
-		kink( q * 41.0 + aSeed.y * 173.0 + channelTime * 2.7 )
+		drift( q * 11.0 + aSeed.x * 211.0 - channelTime * 0.9 ),
+		drift( q * 13.0 + aSeed.y * 173.0 + channelTime * 0.8 )
 	);
 	across *= 1.0 - 0.55 * held;
 	// A weave cut loose and lingering has run together: its filaments lie almost on one line.
@@ -224,14 +235,24 @@ void main() {
 	vec4 clipAhead = viewProjection * vec4( threadPoint( aT + 0.002 ), 1.0 );
 	// (Lingering, each filament is broad and soft: a blur, not a line.)
 	float lingering = channelPresence( aThread.x, aheadAt( aT ) ).y;
-	gl_Position = ribbonPosition( clip, clipAhead, aSide, aThread.w * ( 1.0 + 4.0 * lingering + 3.0 * soften * ( 1.0 - aSoft ) ) );
+	// (By day each filament has room beside it for its shade: see the fragment shader.)
+	vWide = 1.0 + 2.0 * uDay * soften * ( 1.0 - aSoft );
+	vShade = uDay * soften;
+	// (A hair of colour needs a pixel and a half to be seen at all; a hair of light does not.)
+	float body = mix( 1.0, max( 1.0, 2.5 / uPixelRatio ), uDay * ( 1.0 - aSoft ) );
+	gl_Position = ribbonPosition( clip, clipAhead, aSide, body * vWide * aThread.w * ( 1.0 + 4.0 * lingering + 3.0 * soften * ( 1.0 - aSoft ) ) );
 
 	float ahead = max( aheadAt( aT ), 0.0 );
 	float q = log( ahead + 12.0 );
 	// Lit only in stretches, which run outward along it.
 	float lit = smoothstep( - 0.25, 0.3, drift( q * aKind.y - ( channelStream - channelBack ) * aKind.z + aSeed.x * 91.0 ) );
+	// (By day, long unbroken lines: colour in short dashes looks like scratches on the sea.)
+	lit = mix( lit, 1.0, 0.35 * uDay );
 	// A channeller who is giving less has fewer filaments alight, and those fainter.
 	float strength = channelStrength( aThread.x );
+	// (By day even the least of them, at the ebb of their effort, lays a weave that can be seen:
+	// colour has no faint glow to fall back on.)
+	strength = mix( strength, max( strength, 0.3 * channelOf( channelGate, aThread.x ) ), uDay );
 	// Spent: dimmer with distance. Gathered: brighter again, and more so the further out.
 	float lost = spent( ahead );
 	float held = gathered( aThread.x, q ) * ( 0.5 + 0.5 * lost );
@@ -244,7 +265,8 @@ void main() {
 	// weave is cut, what was in it is let go at once: a brief flare at the cut end.
 	float own_ = channelOf( channelOwn, aThread.x );
 	float leak = 0.16 + 1.7 * ( 1.0 - own_ ) * ( 1.0 - own_ );
-	lit *= mix( 1.0, leak * ( 1.0 - 0.45 * channelSurge ), channelLoss );
+	// (By day there is no light to lose: a weave of colour is as plain linked as apart.)
+	lit *= mix( 1.0, leak * ( 1.0 - 0.45 * channelSurge ), channelLoss * ( 1.0 - uDay ) );
 	float cutAt = channelOf( channelTail, aThread.x );
 	if ( cutAt < 1.09 ) lit *= 1.0 + 4.0 * channelLoss * exp( - pow( ( channelAlong( aheadAt( aT ) ) - cutAt ) / 0.035, 2.0 ) ) * ( 1.0 - channelOf( channelLinger, aThread.x ) );
 	lit *= withWaves * strength * ( 1.0 - smoothstep( strength * 1.1 - 0.12, strength * 1.1, aSeed.y ) );
@@ -252,13 +274,19 @@ void main() {
 	if ( aSoft > 0.9 ) lit = strength * ( 0.75 + 0.25 * withWaves );
 	// Where the four tresses have run together there are four times the filaments in one place,
 	// and each is drawn fainter, or the middle of the flow would burn out to plain white.
-	lit /= 1.0 + 2.8 * ( 1.0 - channelApart( ahead ) ) * ( 1.0 - channelHold );
+	lit /= 1.0 + 2.8 * ( 1.0 - channelApart( ahead ) ) * ( 1.0 - channelHold ) * ( 1.0 - 0.45 * uDay );
 	// Held back, the weaving does not reach for the horizon: it is spent within a few hundred metres.
 	lit *= mix( 1.0, 1.0 - smoothstep( 50.0, 300.0, ahead ), channelHold );
 	int element = int( aKind.w + 0.5 );
+	// By day they weave akasha, air and water, for the good of the sea and the sky (the owner's):
+	// each their own while they work apart, all three together in the flow when they link.
+	if ( uDay > 0.5 ) {
+		int third = element - 3 * ( element / 3 );
+		element = channelLink > 0.5 ? ( third == 0 ? 0 : third == 1 ? 1 : 4 ) : int( channelOf( uSeatElement, aThread.x ) + 0.5 );
+	}
 	// How far this stretch of the filament leans towards its element's colour just now.
 	float leaning = 0.5 + 0.5 * drift( q * 1.1 - channelStream * 0.12 + aSeed.y * 57.0 );
-	vTint = mix( uTints[ int( aThread.z + 0.5 ) ], mix( uBaseTone, uElements[ element ], 0.35 + 0.65 * leaning ), channelSurge );
+	vTint = mix( uTints[ int( aThread.z + 0.5 ) ], mix( uBaseTone, uElements[ element ], 0.35 + 0.65 * leaning ), max( channelSurge, 0.85 * uDay ) );
 	// Metal is half seen through.
 	if ( element == ${METAL} ) lit *= 1.0 - 0.5 * channelSurge;
 	// Spent, it cools towards blue; gathered, it burns white.
@@ -266,6 +294,11 @@ void main() {
 	vTint = mix( vTint, vec3( 1.0, 0.98, 0.94 ), 0.7 * held );
 	// Held back, it takes the sea's own deeper blue.
 	vTint = mix( vTint, vec3( 0.46, 0.62, 0.88 ), 0.6 * channelHold );
+	// By day, seen as colour and not as light, each element has a colour that holds against a
+	// pale sea and sky: water the green-blue of clear shallows, air the blue of the high sky,
+	// akasha a warm pearl.
+	vec3 byDay = element == 4 ? vec3( 0.2, 0.74, 0.76 ) : element == 1 ? vec3( 0.42, 0.62, 1.0 ) : vec3( 1.0, 0.95, 0.85 );
+	vTint = mix( vTint, mix( byDay, vTint, 0.25 + 0.3 * leaning ), uDay );
 	// Fainter all the way down the dive, and gone before the horizon: they must not gather
 	// into a light there.
 	// (Driven hard there are more filaments alight at once, so each is drawn a little fainter,
@@ -278,23 +311,40 @@ void main() {
 	// with the rest, or there would be nothing to turn the sky white with.
 	vWhite = aThread.x > ${STRONGEST - 0.5} && aThread.x < ${STRONGEST + 0.5} ? 1.0 : 0.0;
 	vAlpha *= mix( 1.0, 1.0 + 0.7 * soften, vWhite * ( 1.0 - aSoft ) );
+	// By day the others' weaves are colour, not light, and colour needs more of itself to be seen.
+	vAlpha *= mix( 1.0, ${DAY_BODY}, uDay * ( 1.0 - vWhite ) );
+	// By day it is gone well before the horizon: pale colour gathering there shows as glints.
+	vAlpha *= 1.0 - uDay * smoothstep( 0.3, 0.7, channelWay( ahead ) );
+	// (Not the veils: a broad veil of colour lies on the day sea as a stain.)
+	vAlpha *= 1.0 - 0.8 * uDay * step( 0.9, aSoft );
 }
 `;
+
+// By day: how much more of itself a weave of colour needs than one of light, how deep that
+// colour is against white, and how strong the shade beside each filament.
+const DAY_BODY = "1.8";
+const DAY_TONE = "0.6";
+const DAY_SHADE = "0.7";
 
 const fragmentShader = /* glsl */ `
 uniform float uGain;
 uniform float uSoften;
 uniform float uWhite;
+uniform float uDay;
 varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
 varying float vSoft;
 varying float vWhite;
+varying float vWide;
+varying float vShade;
 
 void main() {
 	// A filament has a hard edge, softened by no more than it takes to stop it shimmering.
 	// A veil has none: it is brightest along its middle and fades away to both sides.
-	float edge = mix( 1.0 - smoothstep( 0.55, 1.0, abs( vEdge ) ), pow( 1.0 - vEdge * vEdge, 2.0 ), vSoft );
+	// (The filament itself is the middle of its ribbon; by day the ribbon is wider than it.)
+	float across = abs( vEdge ) * vWide;
+	float edge = mix( 1.0 - smoothstep( 0.55, 1.0, across ), pow( max( 1.0 - across * across, 0.0 ), 2.0 ), vSoft );
 	float amount = clamp( edge * vAlpha, 0.0, 1.0 );
 	gl_FragColor = vec4( vTint * uGain, 1.0 );
 	#include <tonemapping_fragment>
@@ -308,7 +358,22 @@ void main() {
 	vec3 pale = mix( vec3( 1.0 ), vTint / max( max( vTint.r, vTint.g ), max( vTint.b, 0.001 ) ), 0.18 * ( 1.0 - uSoften ) );
 	// (What is written here is still scene light, mapped to the screen afterwards with the day's or
 	// night's exposure; uWhite is the amount of light that comes out as white under it.)
-	gl_FragColor = vec4( mix( gl_FragColor.rgb, pale * uWhite, vWhite ) * amount, amount * vWhite );
+	// By day nobody's weaving can be seen as light: the sun's drowns it. So by day the others'
+	// weaves are seen as colour laid on what is behind them: their element's own, pale as silk,
+	// never quite white (white is the strongest's alone). On the sea they lie over water their
+	// own work has cleared and deepened (channelBalm in gerstner-waves.ts), and show against that.
+	vec3 hue = vTint / max( max( vTint.r, vTint.g ), max( vTint.b, 0.001 ) );
+	vec3 body = mix( mix( vec3( 1.0 ), hue * hue, ${DAY_TONE} ) * 0.94, pale, vWhite ) * uWhite;
+	float solid = max( vWhite, uDay );
+	vec3 colour = mix( gl_FragColor.rgb, body, solid ) * amount;
+	float cover = amount * solid;
+	// Against the day sky there is no such help, and pale on pale is nothing. There each filament
+	// has a shade beside it, soft and blue, wider than itself: the air about a weave gives a
+	// little of its light to it.
+	float shade = vShade * ${DAY_SHADE} * clamp( vAlpha, 0.0, 1.0 ) * pow( max( 1.0 - vEdge * vEdge, 0.0 ), 1.5 ) * ( 1.0 - cover );
+	colour += vec3( 0.16, 0.3, 0.62 ) * 0.5 * uWhite * shade;
+	cover += shade;
+	gl_FragColor = vec4( colour, cover );
 }
 `;
 
@@ -375,6 +440,9 @@ uniform vec2 uLean;
 // the sky is (see uSoften in the main weaving).
 uniform float uSeat;
 uniform float uSoften;
+uniform float uDay;
+varying float vWide;
+varying float vShade;
 // 1 when it is the strongest's own weave.
 uniform float uOwn;
 // The real surface current across the view, and the real wind across it now (both -1..1, to
@@ -462,8 +530,9 @@ vec3 scoutPoint( float t ) {
 	float still = max( - uThermal, 0.0 );
 	// (Wider in a thermal, which mixes it; and flattened into a ribbon in still air.)
 	p.xy += aSeed.z * vec2( cos( wind ), ( 0.5 - 0.35 * still ) * sin( wind ) ) * ( 0.3 + 2.2 * smoothstep( 0.0, 0.2, t ) + 9.0 * ( 1.0 + 1.2 * warm ) * scoutRise( t ) * scoutRise( t ) );
-	// Heated air shimmers: in a thermal the filaments quiver, quicker and finer than their wandering.
-	p.xy += warm * scoutRise( t ) * 1.8 * vec2( kink( t * 60.0 + aSeed.x * 97.0 - uTime * 4.0 ), kink( t * 67.0 + aSeed.y * 89.0 + uTime * 3.6 ) );
+	// Heated air shimmers: in a thermal the filaments waver, finer than their wandering. (Smoothly:
+	// a quiver with corners in it read as lightning, which no weave of theirs is.)
+	p.xy += warm * scoutRise( t ) * 1.2 * vec2( drift( t * 17.0 + aSeed.x * 97.0 - uTime * 1.1 ), drift( t * 19.0 + aSeed.y * 89.0 + uTime * 0.9 ) );
 	p.y = max( p.y, 0.5 );
 	// Only then, having found the air's current, does it disperse: each company goes to hunt its
 	// own quarter of the night, keeping together, questing about as it goes.
@@ -501,7 +570,9 @@ void main() {
 	float loose = uTail < 1.09 ? smoothstep( uTail - 0.2, uTail, aT ) : 0.0;
 	float inHand = 1.0 - smoothstep( uHead - 0.05, uHead, aT );
 	float lingering = loose * uFade * ( 1.0 - inHand );
-	gl_Position = ribbonPosition( clip, clipAhead, aSide, aKind.w * ( 1.0 + 3.0 * lingering + 3.0 * soften * ( 1.0 - aSoft ) ) );
+	vWide = 1.0 + 2.0 * uDay * soften * ( 1.0 - aSoft );
+	vShade = uDay * soften;
+	gl_Position = ribbonPosition( clip, clipAhead, aSide, vWide * aKind.w * ( 1.0 + 3.0 * lingering + 3.0 * soften * ( 1.0 - aSoft ) ) );
 
 	// The light in it runs downward: what is sensed comes back to the one who sent it.
 	float lit = smoothstep( - 0.2, 0.35, drift( aT * aKind.y + uTime * aKind.z + aSeed.x * 91.0 ) );
@@ -518,6 +589,8 @@ void main() {
 	// with the rest, or there would be nothing to turn the sky white with.
 	vWhite = uOwn;
 	vAlpha *= mix( 1.0, 1.0 + 0.7 * soften, vWhite * ( 1.0 - aSoft ) );
+	// (Seeking into the day sky it is hardly there: nothing of theirs may hang bright in the sky.)
+	vAlpha *= 1.0 - 0.55 * uDay * ( 1.0 - vWhite );
 }
 `;
 
@@ -558,6 +631,9 @@ uniform vec4 uTail;
 // How far out each one's tress goes, in metres: the stronger and the more water-minded, the further.
 uniform vec4 uReach;
 uniform float uSoften;
+uniform float uDay;
+varying float vWide;
+varying float vShade;
 // 1 when the strongest is sounding alone: that tress is their own weave.
 uniform float uOwn;
 // 0..1 how far they are doing it together just now.
@@ -604,7 +680,7 @@ vec3 soundingStem( float t, float who ) {
 	float arc = sin( 3.14159 * t );
 	float aside = reach * ( 0.16 + 0.1 * hash1( who * 2.3 ) ) * sin( 6.28319 * t ) * ( hash1( who * 4.9 ) < 0.5 ? 1.0 : - 1.0 );
 	// Under water it quests about.
-	aside += under * 3.0 * drift( t * 5.0 + uTime * 0.07 + who * 13.0 );
+	aside += under * 1.6 * drift( t * 2.5 + uTime * 0.05 + who * 13.0 );
 	vec2 level = vec2( ( who - 1.5 ) * 1.5, 0.0 ) * ( 1.0 - arc ) + out_ * reach * arc + across * aside;
 	// The current carries it, further the longer it has been under, and it is drawn back against
 	// the current as it comes home.
@@ -616,7 +692,7 @@ vec3 soundingStem( float t, float who ) {
 	// Low over the sea, not arched high; and shallow under it, where the real waves cover and
 	// uncover it. Warm water lifts it; cold lets it lie deeper.
 	float air = 1.0 + 0.6 * arc + 0.5 * drift( t * 3.0 + who * 5.0 + uTime * 0.05 );
-	float depth = 0.45 + 0.5 * still - 0.25 * warm + 0.3 * drift( t * 7.0 + uTime * 0.09 + who * 3.0 );
+	float depth = 0.45 + 0.5 * still - 0.25 * warm + 0.3 * drift( t * 3.0 + uTime * 0.06 + who * 3.0 );
 	vec3 p = vec3( level.x + across.x * wound.x, mix( air + wound.y, - depth, under ), level.y + across.y * wound.x );
 	// It leaves from, and returns to, hands held a little below the eye.
 	p.y = mix( cameraPosition.y - 1.2, p.y, smoothstep( 0.0, 0.16, t ) * smoothstep( 1.0, 0.84, t ) );
@@ -636,13 +712,14 @@ vec3 soundingPoint( float t ) {
 	// Three strands passing over and under: a plait. Close in the air. In the water it slackens,
 	// more in warm water, which mixes it; cold water draws it tight.
 	float slack = 1.0 + under * ( 0.8 + 1.6 * warm - 0.5 * still );
-	float phase = t * 40.0 - uTime * 0.4 + aBraid.y * 2.0944;
-	vec2 off = vec2( sin( phase ), 0.5 * sin( 2.0 * phase ) ) * 0.26 * slack;
+	// (A long, slow plait: wound tight and often it looked like a scribble on the sea.)
+	float phase = t * 16.0 - uTime * 0.25 + aBraid.y * 2.0944;
+	vec2 off = vec2( sin( phase ), 0.5 * sin( 2.0 * phase ) ) * 0.2 * slack;
 	// Each filament a little off its strand's line, and looser under water.
 	float turn = aBraid.z * 41.0 + t * ( 6.0 + 5.0 * aBraid.z ) - uTime * 0.15;
 	off += aKind.w * vec2( cos( turn ), sin( turn ) ) * ( 0.07 + 0.4 * under * ( 0.6 + warm ) );
 	// Warm water shimmers.
-	off += warm * under * 0.12 * vec2( kink( t * 70.0 + aBraid.z * 97.0 - uTime * 3.0 ), kink( t * 77.0 + aBraid.z * 89.0 + uTime * 2.6 ) );
+	off += warm * under * 0.12 * vec2( drift( t * 20.0 + aBraid.z * 97.0 - uTime * 0.9 ), drift( t * 23.0 + aBraid.z * 89.0 + uTime * 0.8 ) );
 	off *= ends;
 	p.xz += across * off.x;
 	p.y += off.y;
@@ -664,7 +741,9 @@ void main() {
 	float cut = tail < 1.5 ? 1.0 : 0.0;
 	float kept = mix( 1.0, smoothstep( tail - 0.1, tail + 0.02, aT ), cut );
 	float loose = cut * ( 1.0 - smoothstep( tail, tail + 0.3, aT ) );
-	gl_Position = ribbonPosition( clip, clipAhead, aSide, aBraid.w * ( 1.0 + 2.5 * loose + 3.0 * soften ) );
+	vWide = 1.0 + 2.0 * uDay * soften;
+	vShade = uDay * soften;
+	gl_Position = ribbonPosition( clip, clipAhead, aSide, mix( 1.0, max( 1.0, 2.5 / uPixelRatio ), uDay ) * vWide * aBraid.w * ( 1.0 + 2.5 * loose + 3.0 * soften ) );
 	// What is felt runs along it towards the hands.
 	float lit = smoothstep( - 0.25, 0.4, drift( aT * aKind.y - uTime * aKind.z + aBraid.z * 91.0 ) );
 	// Going out it is the pale of any weave. Coming back it leans to the water's warmth or cold.
@@ -680,6 +759,8 @@ void main() {
 	// with the rest, or there would be nothing to turn the sky white with.
 	vWhite = uOwn * step( ${STRONGEST - 0.5}, who ) * step( who, ${STRONGEST + 0.5} );
 	vAlpha *= mix( 1.0, 1.0 + 0.7 * soften, vWhite );
+	// (A sounding is a light touch, by day as by night.)
+	vAlpha *= 1.0 - 0.7 * uDay;
 }
 `;
 
@@ -710,6 +791,11 @@ export interface ChannellerState {
 	gathering: number;
 	// 0..1 how light the sky is (see uSoften).
 	soften: number;
+	// 0..1 how far they are tending the sea and the air, each in their own way, linking every so
+	// often (see `tend`): at every hour but dawn and dusk.
+	tending: number;
+	// 0..1 how far it is day: then their weaving is seen as colour, not as light.
+	day: number;
 	// How much scene light comes out as white on the screen just now (see uWhite).
 	white: number;
 	// 0..1 how far something out of the ordinary is happening in the air and in the water (`unusual`).
@@ -789,6 +875,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uStrength: { value: 0 },
 		uSoften: { value: 0 },
 		uWhite: { value: 1 },
+		uDay: { value: 0 },
+		uSeatElement: { value: new THREE.Vector4() },
 		uGain: { value: 1 },
 		uRestless: { value: new THREE.Vector4() },
 		uTints: { value: TINTS },
@@ -812,6 +900,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		channelBack: sea.channelBack,
 		channelSurge: sea.channelSurge,
 		channelStream: sea.channelStream,
+		channelLink: sea.channelLink,
+		channelInto: sea.channelInto,
 		waves: sea.waves,
 		waveSteepness: sea.waveSteepness,
 		waveScale: sea.waveScale,
@@ -886,6 +976,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uSeat: { value: 2.25 },
 		uOwn: { value: 0 },
 		uSoften: uniforms.uSoften,
+		uDay: uniforms.uDay,
 		uWhite: uniforms.uWhite,
 		uThermal: { value: 0 },
 		channelCurrent: sea.channelCurrent,
@@ -990,6 +1081,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uStrength: { value: 1 },
 		uGain: uniforms.uGain,
 		uSoften: uniforms.uSoften,
+		uDay: uniforms.uDay,
 		uWhite: uniforms.uWhite,
 		uOwn: { value: 0 },
 		uReach: { value: new THREE.Vector4(40, 50, 60, 45) },
@@ -1022,7 +1114,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	// while they feel, and lets it go at the hands in their own time, the cut following round.
 	// While it lasts they drift between working together and apart. Then a rest of a minute or three.
 	const sounders = Array.from({ length: SOUNDERS }, () => ({ begins: 0, lets: 0, out: 6, back: 5, sounding: false }));
-	let nextSounding = between(18, 45);
+	// (Now and then the page opens just as a sounding is about to begin.)
+	let nextSounding = Math.random() < 0.3 ? between(1, 6) : between(18, 45);
 	let togetherWanted = 0;
 	let togetherTurns = 0;
 	let soundingSociable = 0.5;
@@ -1128,6 +1221,55 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		surge += ((driven ? 1 : 0) - surge) * Math.min(1, delta / (part === "working" ? 1.6 : 0.4));
 	};
 
+	// By day (the owner's): they are on a pilgrimage, and what they channel into the ocean and the
+	// air is for its well-being. Each of those at the front tends it in their own way, with a
+	// weave of akasha, of air or of water, going their own way over the sea ahead: the one of water
+	// lies along the surface, the one of air climbs. And every 12 to 22 seconds they link and
+	// combine what they have, never twice running in the same way:
+	//   water    all of them, driven along the surface into the sea
+	//   sky      all of them, lightly, so that the one flow climbs into the air
+	//   few      two or three of them only; the others let their weaves go and begin again after
+	// How a visit opens is a matter of chance: they may be linked, about to link, or far from it,
+	// and one of them may be resting.
+	type Way = "water" | "sky" | "few";
+	const WAYS: Way[] = ["water", "sky", "few"];
+	let way: Way = WAYS[Math.floor(Math.random() * 3)]!;
+	let linked = Math.random() < 0.35;
+	let linkTurns = linked ? between(2, 7) : between(1, 16);
+	let tended = 0;
+	// Seats that are not weaving just now: resting between links, or left out of this one.
+	let sitsOut: number[] = Math.random() < 0.4 ? [[0, 1, 3][Math.floor(Math.random() * 3)]!] : [];
+	let link = 1;
+	const others = () => [0, 1, 3].sort(() => Math.random() - 0.5);
+	// (All of it unhurried, the owner's "elegant, Odyssey-like": they come together and part as
+	// a crew's oars do, in long even strokes.)
+	const tend = (delta: number, linkNow: boolean) => {
+		tended += delta;
+		if (linkNow && !linked) tended = linkTurns;
+		if (tended >= linkTurns) {
+			tended = 0;
+			linked = !linked;
+			if (linked) {
+				// Linked for 5 to 8 seconds of each 12 to 22.
+				linkTurns = between(5, 8);
+				way = linkNow ? "water" : WAYS.filter((one) => one !== way)[Math.floor(Math.random() * 2)]!;
+				sitsOut = way === "few" ? others().slice(0, Math.random() < 0.5 ? 1 : 2) : [];
+			} else {
+				linkTurns = between(12, 22) - linkTurns;
+				// Parted, one of them may rest until the next link.
+				sitsOut = Math.random() < 0.35 ? others().slice(0, 1) : [];
+			}
+		}
+		for (let who = 0; who < CHANNELLERS; who++) want[who] = !sitsOut.includes(who);
+		const driven = !linked ? 0 : way === "water" ? 0.75 : way === "sky" ? 0.18 : 0.45;
+		surge += (driven - surge) * Math.min(1, delta / 3.5);
+		link += ((linked ? 1 : 0) - link) * Math.min(1, delta / (linked ? 2.6 : 4.5));
+	};
+	// Now and then by day one of them seeks into the sky, to understand the wind (the owner's):
+	// for half a minute or so, and at the opening of some visits.
+	let skyFrom = Math.random() < 0.3 ? 0 : between(20, 80);
+	let skyUntil = 0;
+
 	// There are thirteen channellers on the boat, not four (the owner's): four are at the front at
 	// any one time and the other nine rest or work elsewhere, and they take turns. Their strengths:
 	// The strongest is immensely stronger than the rest (the owner's, never to be forgotten): 1.8
@@ -1200,13 +1342,15 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	};
 	// Who is at the front, as places in CREW, and how strong each seat's occupant is. Whoever is
 	// strongest of the four always sits second from the right; the rest sit by strength.
-	let atFront = [0, 3, 7, 10];
-	const seatStrength = [0.36, 0.51, 1, 0.26];
+	// (Who of the twelve is beside the strongest as the page opens is different every time: there
+	// are thirteen of them, and the owner saw the same opening on every visit.)
+	let atFront = [0, ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].sort(() => Math.random() - 0.5).slice(0, 3).sort((a, b) => a - b)];
+	const seatStrength = [CREW[atFront[2]!]!, CREW[atFront[1]!]!, 1, CREW[atFront[3]!]!];
 	const SEATS_BY_STRENGTH = [STRONGEST, 1, 0, 3];
 	const memberAt = (seat: number) => atFront[SEATS_BY_STRENGTH.indexOf(seat)]!;
 	// While someone is changing places, their seat's weave is let go; the newcomer begins afresh.
 	const changingUntil = [0, 0, 0, 0];
-	let nextTurn = between(50, 110);
+	let nextTurn = between(20, 110);
 	const takeTurns = (delta: number, time: number, linkedAll: boolean, calls: Calls) => {
 		// (Nobody changes places while all thirteen are linked.)
 		if (linkedAll) nextTurn = Math.max(nextTurn, time + 20);
@@ -1328,10 +1472,17 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		return target.set(camera.position.x + side, 1.3 + rise, camera.position.z - ahead);
 	};
 
-	const update = ({ time, delta, energy, waveHeight, need, hold: slowing, current, control, scout, showMasters, showSoundings, gathering, soften, white, unusual, below, tomorrow, thermal, strength, gain }: ChannellerState) => {
-		const linkedAll = gathering > 0.05;
+	const update = ({ time, delta, energy, waveHeight, need, hold: slowing, current, control, scout, showMasters, showSoundings, gathering, soften, tending, day, white, unusual, below, tomorrow, thermal, strength, gain }: ChannellerState) => {
+		// (`byDay` is from when this was only done by day. It is now every hour but dawn and dusk.)
+		const byDay = tending > 0.5 && control <= 0.05;
+		const linkedAll = gathering > 0.05 && !byDay;
 		const probing = tendOccurrence(delta, time, unusual);
-		tendScout(delta, time, probing === "air" ? 1 : scout * (1 - gathering), tomorrow, thermal, probing === "air");
+		if (byDay && day > 0.5 && time > skyFrom) {
+			skyUntil = time + between(25, 40);
+			skyFrom = skyUntil + between(50, 120);
+		}
+		const seeking = byDay && day > 0.5 && time < skyUntil ? 0.7 : 0;
+		tendScout(delta, time, probing === "air" ? 1 : Math.max(scout * (1 - gathering), seeking), tomorrow, thermal, probing === "air");
 		const calls = { air: unusual.air, water: unusual.water, need };
 		takeTurns(delta, time, linkedAll, calls);
 		tendSoundings(delta, time, thermal, showSoundings === true, linkedAll, probing === "water", calls);
@@ -1351,8 +1502,11 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		// is still looking into it, nobody begins anything on its account.
 		const answering = responding && !probing;
 		if (answering) strength = Math.max(strength, 0.8);
+		if (byDay) strength = Math.max(strength, 0.75 * tending);
 		const called = strength > 0.12;
-		if (wasProbing && !probing && called) {
+		// By day, when the strongest has found what it is, they all link on it at once.
+		const found = wasProbing && !probing;
+		if (found && called && !byDay) {
 			// The strongest has found what it is, and now channels with it: beginning alone, at once, and the
 			// others come in afterwards as the sea and wind call for (the story's own second part).
 			part = "stopped";
@@ -1361,7 +1515,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			surge = 0;
 		}
 		wasProbing = probing !== undefined;
-		if (called && linkedAll && control <= 0.05) {
+		if (called && byDay) tend(delta, found);
+		else if (called && linkedAll && control <= 0.05) {
 			// Dawn or dusk: all linked, drawing on what is in the air. It is not force for the sea's
 			// sake, so the flow is not driven harder than the sea and wind call for.
 			want.fill(true);
@@ -1396,7 +1551,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			if (who === STRONGEST && mastersBelow) want[who] = false;
 			if (want[who] && !weaving[who]) {
 				weaving[who] = true;
-				head[who] = opening ? ALL : 0;
+				// (As the page opens, most weaves are already out; one or another is only just begun.)
+				head[who] = !opening ? 0 : Math.random() < 0.65 ? ALL : between(0, 0.5);
 			} else if (!want[who] && weaving[who]) {
 				// Let go: what was in hand is cut at the boat and is on its own from here.
 				weaving[who] = false;
@@ -1439,6 +1595,18 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		sea.channelLinger.value.fromArray(linger);
 		// What the strongest give below is not given ahead: the linked flow is driven that much less hard.
 		sea.channelSurge.value = surge * (1 - masters);
+		// At any other hour they are one flow, as they always were.
+		if (!byDay) link += (1 - link) * Math.min(1, delta / 1.5);
+		sea.channelLink.value = link;
+		for (let seat = 0; seat < CHANNELLERS; seat++) {
+			// What each weaves by day is in their temperament: the air-minded air, the water-minded
+			// water, those between the two akasha; and the strongest akasha, which is nearest white.
+			const temper = TEMPERS[memberAt(seat)]!;
+			const lean = seat === STRONGEST ? 0.5 : temper.air / (temper.air + temper.water);
+			sea.channelInto.value.setComponent(seat, lean);
+			uniforms.uSeatElement.value.setComponent(seat, lean > 0.58 ? 1 : lean < 0.42 ? 4 : 0);
+		}
+		uniforms.uDay.value = day;
 		sea.channelSea.value.set(energy, waveHeight);
 		// What streams along the flow runs faster the more the sea and wind are doing, and three
 		// times as fast again when it is driven.

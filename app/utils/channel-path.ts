@@ -32,6 +32,13 @@ uniform float channelCurrent;
 uniform float channelBack;
 uniform float channelSurge;
 uniform float channelStream;
+// 0..1 how far the four have run their tresses together into one flow. By night they always
+// have. By day each tends the sea and the air in their own way, and they only come together
+// every so often (the owner's): see tend in channellers.ts.
+uniform float channelLink;
+// For each seat, where its occupant's own weave goes when they are not linked: 0 into the water
+// (it lies along the surface), 1 into the air (it climbs), between the two for akasha.
+uniform vec4 channelInto;
 
 // A weave is begun at its source, the boat, and runs out from there. When it ends it is cut off
 // at the source (the owner's rule) and is not wiped away: it has power enough of its own to go
@@ -91,8 +98,10 @@ float channelStrength( float k ) {
 
 // Metres ahead of the boat at which the four tresses have become a single flow: between about
 // 3 and 7, never the same from one second to the next.
+// (Not linked, they do not join until far out: as they link, the place where they meet runs in
+// towards the boat, and as they part it runs out again.)
 float channelJoin() {
-	return 5.0 + 1.2 * sin( channelTime * 0.83 ) + 0.6 * sin( channelTime * 2.3 + 1.0 ) + 0.2 * sin( channelTime * 5.9 );
+	return ( 5.0 + 1.2 * sin( channelTime * 0.83 ) + 0.6 * sin( channelTime * 2.3 + 1.0 ) + 0.2 * sin( channelTime * 5.9 ) ) * pow( 140.0, 1.0 - channelLink );
 }
 
 // 0..1 how far apart the four tresses still are at a distance ahead: 1 at the boat, 0 once joined.
@@ -120,7 +129,12 @@ float channelLine( float k, float ahead ) {
 	float turn = log( ahead + 12.0 ) * 2.2 * ( mod( k, 2.0 ) < 0.5 ? 1.0 : - 1.0 ) + k * 1.5708 - channelTime * 0.06;
 	float within = ( 0.5 + 0.04 * ahead ) * ( 1.25 - channelStrength( k ) ) * ( 1.0 - smoothstep( 0.6, 0.97, channelWay( ahead ) ) )
 		* ( 1.0 - 0.85 * channelPresence( k, ahead ).y );
-	float towards = ( k - 1.5 ) * 1.5 * apart + channelFlow( ahead ) + cos( turn ) * within * ( 1.0 - apart );
+	// Not linked, each goes their own way over the sea ahead, and that way wanders.
+	// They fan out evenly, like the strings of a lyre, and the whole fan breathes slowly wider and
+	// closer; each bends a little as it goes, in one long curve, as anything laid on moving water does.
+	float own = ( k - 1.5 ) * ( 0.12 + 0.03 * sin( channelTime * 0.045 ) )
+		+ 0.035 * sin( log( ahead + 12.0 ) * 1.6 + k * 1.7 - channelTime * 0.05 );
+	float towards = ( k - 1.5 ) * 1.5 * apart + own * ahead * apart * ( 1.0 - channelLink ) + channelFlow( ahead ) + cos( turn ) * within * ( 1.0 - apart );
 	// Holding the boat back they do not join. Each lays their tress out on the water to their own
 	// side, the four spread like the lines of a sea anchor, and the current draws them the way it runs.
 	float held = ( k - 1.5 ) * ( 1.5 + 0.3 * ahead ) + channelCurrent * ahead * ahead / ( 90.0 + ahead );
@@ -133,7 +147,9 @@ float channelLine( float k, float ahead ) {
 float channelRise( float k, float ahead ) {
 	// The climb is quicker than the descent, which is long and shallow.
 	// Driven with their whole strength it does not climb: it keeps to the surface all the way.
-	return 0.06 * ( 1.0 - 0.92 * channelSurge ) * ( 1.0 - channelHold ) * ahead * pow( sin( 3.14159 * pow( channelWay( ahead ), 0.7 ) ), 1.5 );
+	// Each for themselves, a weave meant for the water lies along it and one meant for the air climbs.
+	return 0.06 * ( 1.0 - 0.92 * channelSurge ) * ( 1.0 - channelHold ) * ahead * pow( sin( 3.14159 * pow( channelWay( ahead ), 0.7 ) ), 1.5 )
+		* mix( 0.12 + 1.6 * channelOf( channelInto, k ), 1.0, channelLink );
 }
 
 // A wave of brightness that travels out along a tress, 0..1.

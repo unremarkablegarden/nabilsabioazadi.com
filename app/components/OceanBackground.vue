@@ -20,6 +20,10 @@ const SEPTEMBER = { hour: 11.05, weather: 0.08, weave: 0.11, storm: 0.69, bond: 
 // The weave (the channelling) and the storm (the weather) are separate things, both 0..1.
 // The story sets them. Moving either dev slider stops the story and sets them by hand.
 const followStory = ref(false);
+// September's weave to the knot in the sky is put away (its threads read as lightning striking the
+// sea, and the owner's channellers are healers). It shows in September's look, in the story, and
+// when its own dev slider is moved.
+const weaveByHand = ref(false);
 const weaveLevel = ref(OPENING.weave);
 const stormLevel = ref(OPENING.storm);
 // 0..1 how far the channelling takes hold of the weather once the knot has formed. At 0 the fog,
@@ -279,6 +283,13 @@ onMounted(() => {
 	let skyLight = 0;
 	let gatheringNow = 0;
 	let skyLightNow = 0;
+	// 0..1 how far they are tending the sea and the air, each in their own way, linking every so
+	// often: always (the owner's: moon or no moon), but for dawn and dusk, when all thirteen link.
+	let tending = -1;
+	let tendingNow = 0;
+	// 0..1 how far it is day: then their weaving is seen as colour and not as light.
+	let dayNow = 0;
+	let day = -1;
 	// The moment shown, and 0..1 how far the stars are out at it.
 	let shownMoment = new Date();
 	let starsOut = 0;
@@ -314,6 +325,9 @@ onMounted(() => {
 		// 0..1 how light the sky itself is. It is still dark when they first link before dawn, and
 		// only a light sky calls for soft filaments.
 		skyLightNow = staged ? 1 : THREE.MathUtils.smoothstep(sunElevation, -6, 3);
+		// Tending takes over from the linking of dawn as that ends, and hands back to dusk's the same way.
+		tendingNow = staged ? 0 : 1 - gatheringNow;
+		dayNow = staged ? 0 : THREE.MathUtils.smoothstep(sunElevation, 3, 8);
 
 		// Stars need a dark sky: they are drowned by a bright moon and hidden by cloud. (The cloud
 		// here dims them all alike; it cannot yet hide the ones behind each cloud.)
@@ -648,7 +662,8 @@ onMounted(() => {
 		const liveRain = liveOnly ? rainAmount(liveOnly) : 0;
 		const rain = calmMotion ? 0 : Math.max(THREE.MathUtils.smoothstep(fury, 0.15, 0.6), liveRain) * alive;
 		// The weave, and what its knot does to the sea and the clouds around it.
-		const formed = knotFormed(moment.weave * (1 - Math.max(darkness, controlLevel, gathering)));
+		const oldWeave = stagedLight.value || followStory.value || weaveByHand.value ? moment.weave * (1 - Math.max(darkness, controlLevel, gathering)) : 0;
+		const formed = knotFormed(oldWeave);
 		knotReady = formed > 0.8;
 		// The bond: how far the channelling has taken hold of the storm's wind, air and fog.
 		const bond = bondLevel.value * formed * alive;
@@ -657,7 +672,7 @@ onMounted(() => {
 		weave.update({
 			time,
 			delta,
-			amount: moment.weave * (1 - Math.max(darkness, controlLevel, gathering)),
+			amount: oldWeave,
 			spread: fury + 2 * moment.white * moment.veil,
 			gain: 0.5 / steadyExposure,
 		});
@@ -677,6 +692,12 @@ onMounted(() => {
 		if (gathering < 0) [gathering, skyLight] = [gatheringNow, skyLightNow];
 		gathering += (gatheringNow - gathering) * Math.min(1, delta / 25);
 		skyLight += (skyLightNow - skyLight) * Math.min(1, delta / 25);
+		// (Not while September's weave is out: that is another telling.)
+		const tendingWanted = oldWeave > 0 || followStory.value ? 0 : tendingNow;
+		if (tending < 0) tending = tendingWanted;
+		tending += (tendingWanted - tending) * Math.min(1, delta / 25);
+		if (day < 0) day = dayNow;
+		day += (dayNow - day) * Math.min(1, delta / 25);
 		const channelling = channellers.update({
 			time,
 			delta,
@@ -690,6 +711,8 @@ onMounted(() => {
 			gathering,
 			// Soft against a light sky, fine against a dark one.
 			soften: skyLight,
+			tending: tending * alive,
+			day,
 			// Enough to stand whiter than a day sky; less at night, where little is needed to read as white.
 			white: lerp(0.5, 3.5, daylight) / steadyExposure,
 			unusual: liveOnly ? unusual(liveOnly) : NOTHING_UNUSUAL,
@@ -713,10 +736,11 @@ onMounted(() => {
 		waveUniforms.deepWeave.value = (0.3 * Math.max(holdLevel, 0.6 * channelling.masters) * alive) / steadyExposure;
 		waveUniforms.deepMaster.value = channelling.masters;
 		waveUniforms.channelLoss.value = lightIsLoss;
+		waveUniforms.channelBalm.value = 0.9 * channelling.working * tending * day * alive;
 		waveUniforms.channelFeed.value = channelling.working * (0.6 + 0.4 * channelling.surge) * need * darkness * (1 - controlLevel) * alive;
 		// Driven hard, the flow lights the sea more.
 		// (In the trial the flow sheds far less light on the sea.)
-		waveUniforms.channelLight.value = (1 - 0.7 * lightIsLoss) * (0.06 * (1 + 0.5 * channelling.surge) * (0.45 + 0.55 * need) * Math.max(darkness, controlLevel * nightfall) * alive) / steadyExposure;
+		waveUniforms.channelLight.value = (1 - 0.7 * lightIsLoss) * (0.06 * (1 + 0.5 * channelling.surge) * (0.45 + 0.55 * need) * Math.max(darkness, controlLevel * nightfall, 0.6 * tending * nightfall) * alive) / steadyExposure;
 		// Whenever there is no channelling at night, the boat's electric lamps are all the light there is near by.
 		// (Twelve per cent brighter than it first was, at the owner's request.)
 		// (The lamps do not snap on and off with the weaving, which made the water at the bottom of
@@ -770,7 +794,7 @@ onMounted(() => {
 			// The threads drag the air after them while they race for the knot, and a little once they are laid.
 			// (Not while the channellers are at work: the old weave is put away then, and its draught
 			// would carry the air they have gathered up into the sky.)
-			charge: (Math.sin(Math.PI * Math.min(1, moment.weave / 0.5)) + 0.25 * formed) * (1 - Math.max(darkness, controlLevel, gathering)) * alive,
+			charge: oldWeave > 0 ? (Math.sin(Math.PI * Math.min(1, moment.weave / 0.5)) + 0.25 * formed) * (1 - Math.max(darkness, controlLevel, gathering)) * alive : 0,
 			flow: flowScreen,
 			flowPull: calmMotion ? 0 : channelling.pull,
 			knot: knotScreen,
@@ -877,7 +901,7 @@ onBeforeUnmount(() => dispose?.());
 				min="0"
 				max="1"
 				step="0.001"
-				@input="followStory = false"
+				@input="followStory = false; weaveByHand = true"
 			/>
 			<span>{{ Math.round(weaveLevel * 100) }}%</span>
 

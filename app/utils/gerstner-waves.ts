@@ -252,6 +252,11 @@ export interface GerstnerUniforms {
 	channelBack: THREE.IUniform<number>;
 	channelSurge: THREE.IUniform<number>;
 	channelStream: THREE.IUniform<number>;
+	// By day: how far the four are linked, and where each one's own weave goes (channel-path.ts).
+	channelLink: THREE.IUniform<number>;
+	channelInto: THREE.IUniform<THREE.Vector4>;
+	// 0..1 how far the water shows the good their weaving does it by day: clearer where a weave lies.
+	channelBalm: THREE.IUniform<number>;
 	// The boat's electric lamps on the water round it, before tone mapping. 0 is unlit.
 	boatLamp: THREE.IUniform<number>;
 	channelLight: THREE.IUniform<number>;
@@ -446,6 +451,7 @@ uniform vec2 weaveCentre;
 uniform float freshFlow;
 uniform float internalWaves;
 uniform float channelLight;
+uniform float channelBalm;
 uniform float boatLamp;
 uniform float deepWeave;
 uniform float deepMaster;
@@ -547,11 +553,12 @@ const fragmentFoam = /* glsl */ `
 	// the water: bright in a band beneath it, fainter in a wide pool about it, and coming from the
 	// side, so the faces of the waves that are turned to it show and the far faces stay dark.
 	// Water gives light back from within where it is not acting as a mirror; foam gives back most.
-	if ( channelLight > 0.0 ) {
+	if ( channelLight > 0.0 || channelBalm > 0.0 ) {
 		float ahead = channelBoat.y - worldPosition.z;
 		if ( ahead > - 6.0 ) {
 			float out_ = max( ahead, 0.0 );
 			float lit = 0.0;
+			float tended = 0.0;
 			for ( int i = 0; i < ${CHANNELLERS}; i ++ ) {
 				float k = float( i );
 				float off = worldPosition.x - channelBoat.x - channelLine( k, out_ );
@@ -561,7 +568,14 @@ const fragmentFoam = /* glsl */ `
 				float near = exp( - off * off / ( reach * reach ) ) + 0.16 * exp( - off * off / ( 49.0 * reach * reach ) );
 				float facing = clamp( dot( surfaceNormal, normalize( vec3( - off, 1.3 + 0.02 * out_ + climbed, 0.0 ) ) ), 0.0, 1.0 );
 				lit += near * ( 0.25 + 0.75 * facing * facing ) * ( 0.55 + 0.75 * channelPulse( k, out_ ) ) * channelStrength( k ) * channelShown( k, out_ ) / ( 1.0 + climbed / 12.0 );
+				// (A wider reach than its light: what is done to the water spreads in it.)
+				tended += exp( - off * off / ( 25.0 * reach * reach ) ) * channelStrength( k ) * channelShown( k, out_ ) / ( 1.0 + climbed / 5.0 );
 			}
+			// By day there is no light of theirs to see on the sea. What shows is the good it does
+			// (the owner's: they channel into the ocean for its well-being): where a weave lies along
+			// the water, the water is a little clearer and greener-blue, as over clean sand.
+			tended = min( tended, 1.0 ) * channelBalm * smoothstep( 2.0, 14.0, ahead ) * ( 1.0 - smoothstep( 0.55, 0.9, channelWay( out_ ) ) );
+			outgoingLight *= mix( vec3( 1.0 ), vec3( 0.5, 1.2, 1.12 ), tended * ( 1.0 - foamMask ) * ( 1.0 - 0.6 * reflectance ) );
 			lit *= smoothstep( - 6.0, 5.0, ahead ) / ( 1.0 + out_ / 500.0 );
 			outgoingLight += vec3( 0.74, 0.92, 1.0 ) * lit * channelLight * ( 0.3 + 0.7 * ( 1.0 - reflectance ) + 1.5 * foamMask );
 		}
@@ -709,6 +723,9 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		channelBack: { value: 0 },
 		channelSurge: { value: 0 },
 		channelStream: { value: 0 },
+		channelLink: { value: 1 },
+		channelInto: { value: new THREE.Vector4(0.5, 0.5, 0.5, 0.5) },
+		channelBalm: { value: 0 },
 		boatLamp: { value: 0 },
 		channelLight: { value: 0 },
 		foam: { value: 0 },

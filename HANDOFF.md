@@ -38,6 +38,26 @@ entries on the channellers there before touching the weaving.
 All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerstner-waves.ts`,
 `app/utils/manawatawhi.ts` and `app/components/OceanBackground.vue`. The README explains each.
 
+- **They are pilgrims, and what they channel is for the well-being of the ocean and the air**
+  (the owner, 12 October, on seeing lightning-like wires: "They are not trying to electrocute the
+  air or water!"). Nothing in a weave may be jagged, flicker or strike. September's weave to the
+  knot in the sky was what looked like lightning; it now shows only at `/?look=september`, in the
+  story ("play"), or when its dev slider is moved.
+- **They are always tending, moon or no moon** (the owner, 12 October), and it is to be elegant,
+  "Odyssey-like": read here as unhurried, long clean lines, the four fanned like a lyre's
+  strings, coming together and parting like a crew's oars. Only dawn and dusk (all thirteen
+  linked) and storms are otherwise. The old night story (`tell`) is no longer reached, and the
+  boat's lamps never come on now, since some weave is always out.
+- **How they tend** (`tend` in `channellers.ts`): each of the four at the
+  front tends the sea in their own way with a weave of akasha, air or water (by temperament),
+  going their own bending way over the sea; every 12 to 22 seconds they link for 5 to 8 seconds,
+  in one of three ways (all driven into the water; all lightly, climbing into the air; only two
+  or three of them). By day (sun over about 8°) weaves are drawn as pale colour, not light, and
+  the water clears to a green-blue where a weave lies (`channelBalm`); now and then one seeks
+  into the day sky. By night they are light, as before.
+- **No two visits open alike**: who of the twelve is at the front, whether they are linked, who
+  is resting, how far each weave has run, and whether a sounding or a seeking is about to begin
+  are all drawn by chance as the page opens.
 - **The strongest channeller is the owner.** Never write "she/her" or "he/him" of the strongest:
   say "the strongest", "they", or "you/yours" to the owner. The owner also says "master weaver".
 - **The strongest is immensely stronger**: taken as 1.8 times the other twelve put together (the
@@ -77,16 +97,18 @@ All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerst
 
 ## Unfinished, in the order the owner last cared about
 
-1. **Daytime**: only the strongest's weaves show by day, and against the near-white midday sky
-   even those are faint. The owner has not said how other daytime weaving should look.
+1. **Tending** (reworked 12 October, see the rules above). Still wrong: by day the parted weaves
+   are sometimes too faint to see on an ordinary (1x) screen and the linked flow is bold white;
+   all four look white, their element colours hardly show; soundings by day and under a moon
+   stand out of the water as small hoops; never watched in motion.
 2. **Dusk**: the strongest's white weave is bold there; ask whether it is too much.
 3. **The linked flow at high need is very bright**, against "strong weaves do not equal brightness".
 4. **No visible drawing-in of qi** at dawn and dusk; the owner may want one.
 5. **Temperaments are untested by eye**, and give no element-colour leaning nor any say in who
    weaves deep round the boat.
 6. **Soundings read as wisps, not obvious plaits.**
-7. **September's old threads** still show by full day outside dawn and dusk (thin wires to a point
-   above the horizon). Suggested, not done: put them away except at `/?look=september`.
+7. **September's old threads**: put away (12 October), except at `/?look=september`, in the story
+   and by the dev slider.
 8. Older flaws: heavy overcast too dark and brown; clouds dim all stars alike.
 
 ## Things only the owner can do
