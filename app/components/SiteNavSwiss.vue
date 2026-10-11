@@ -131,10 +131,11 @@ const join = async () => {
 	}
 	sending.value = true;
 	notice.value = "Sending…";
-	const joined = await joinNewsletter(email.value).catch(() => false);
+	const result = await joinNewsletter(email.value).catch((error) => ({ joined: false, why: String(error?.message ?? error) }));
 	sending.value = false;
-	notice.value = joined ? NEWSLETTER_WELCOME : "That did not go through, and your address was not saved. Please try again in a moment.";
-	if (joined) email.value = "";
+	// If it fails, the reason Kit gave is shown too: it tells the visitor (and the owner) what to put right.
+	notice.value = result.joined ? NEWSLETTER_WELCOME : `That did not go through, and your address was not saved.${result.why ? ` (${result.why})` : ""} Please try again in a moment.`;
+	if (result.joined) email.value = "";
 };
 
 // Writing and Art wait until there is work to show; their pages are still in the project.

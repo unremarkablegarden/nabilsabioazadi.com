@@ -1,8 +1,10 @@
 // The newsletter is a form on Kit (kit.com), the owner's mailing service. These are that form's
 // public details, taken from the embed code Kit gives for it: nothing here is secret.
-const KIT_FORM = "https://app.kit.com/forms/10029826/subscriptions";
+// (The owner's second form, made on 11 October 2026 when sign-ups to the first, 10029826, were
+// not arriving. Its invisible captcha is off.)
+const KIT_FORM = "https://app.kit.com/forms/10030693/subscriptions";
 // The owner's own words for a successful sign-up, as set on the form in Kit.
-export const NEWSLETTER_WELCOME = "Churr! Lessgo! We'll stay in touch.";
+export const NEWSLETTER_WELCOME = "Churr! Lessgo! We’ll stay in touch.";
 
 // Whether the form on Kit has its "invisible captcha" switched on. The owner would sooner not
 // bring Google's script to the site (it is also blocked by some visitors' browsers, who then
@@ -45,17 +47,22 @@ export function prepareNewsletter() {
 	return loading;
 }
 
-// Sends an address to the form, as Kit's own embed does. Resolves to true if Kit took it.
-export async function joinNewsletter(email: string) {
+// Sends an address to the form, as Kit's own embed script does: the same fields and the same
+// header. Resolves to whether Kit took it and, if it did not, Kit's own words for why.
+export async function joinNewsletter(email: string): Promise<{ joined: boolean; why?: string }> {
 	const captcha = await prepareNewsletter();
 	const fields = new FormData();
 	fields.set("email_address", email);
-	if (captcha) fields.set("token", await captcha.execute(CAPTCHA_KEY, { action: "formsubmit" }));
-	fields.set("host", window.location.origin + window.location.pathname);
-	fields.set("referrer", "");
-	const response = await fetch(KIT_FORM, { method: "POST", body: fields, headers: { Accept: "application/json" } });
-	if (!response.ok) return false;
-	// Kit answers 200 even when it refuses an address; its reply says which.
-	const reply = (await response.json().catch(() => ({}))) as { status?: string };
-	return reply.status !== "failed";
+	fields.set("token", captcha ? await captcha.execute(CAPTCHA_KEY, { action: "formsubmit" }) : "");
+	fields.set("referrer", document.referrer);
+	fields.set("host", window.location.href);
+	fields.set("search", window.location.search);
+	fields.set("user", "");
+	fields.set("ckjs_version", "6");
+	const response = await fetch(KIT_FORM, { method: "POST", body: fields, headers: { Accept: "application/json", "X-CKJS-Version": "6" } });
+	if (!response.ok) return { joined: false, why: `Kit answered ${response.status}` };
+	// Kit answers 200 even when it refuses an address; its reply says which, and why.
+	const reply = (await response.json().catch(() => ({}))) as { status?: string; errors?: { messages?: string[] } };
+	if (reply.status === "failed") return { joined: false, why: reply.errors?.messages?.join(" ") };
+	return { joined: true };
 }
