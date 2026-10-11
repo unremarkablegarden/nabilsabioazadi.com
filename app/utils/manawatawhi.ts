@@ -593,6 +593,17 @@ export function thermal({ seaTemperature, airTemperature }: SeaConditions) {
 	return Math.min(1, Math.max(-1, (seaTemperature - airTemperature) / 3));
 }
 
+// Where the strongest channellers put their strength, 0..1: 0 is all of it ahead, into the
+// weaving towards Hawai'i (where, if the weather calls for enough, they link); 1 is all of it
+// below, into the deep weaving round the boat that slows it. It is decided by which the sea is
+// asking for more: how hard the boat has to be held back, against how much the weather ahead
+// calls for. With nothing to hold back it is 0, whatever the weather.
+export function strengthBelow(conditions: SeaConditions, bearing: number) {
+	const hold = holdingBack(conditions, bearing);
+	if (hold <= 0.02) return 0;
+	return clamp01(hold / (hold + calling(conditions) + 0.05));
+}
+
 // 0..1 whether it is a night for scouting: quiet enough that the work on the sea does not need
 // everyone. Fully in light airs (under 12 km/h), not at all in a fresh breeze (22 and over).
 export function quietEnoughToScout({ windSpeed }: SeaConditions) {

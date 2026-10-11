@@ -114,6 +114,7 @@ const liveFigures = computed(() => {
 		["channellers", `building ${Math.round(building(c) * 100)}% · called for ${Math.round(calling(c) * 100)}%`],
 		["pace", `carried ${carried(c, PLACE.bearing).toFixed(1)} km/h · needs ${PACE.toFixed(1)} · holding back ${Math.round(holdingBack(c, PLACE.bearing) * 100)}%`],
 		["storm", `linked on the waves ${Math.round(stormy(c) * 100)}%`],
+		["strongest", `${Math.round((1 - strengthBelow(c, PLACE.bearing)) * 100)}% ahead (${calling(c) >= 0.6 ? "linked" : "not linked"}) · ${Math.round(strengthBelow(c, PLACE.bearing) * 100)}% below, round the boat`],
 		["tomorrow", `wind ${c.tomorrowWindSpeed.toFixed(0)} km/h from the ${compassPoint(c.tomorrowWindDirection)} · quiet enough to scout ${Math.round(quietEnoughToScout(c) * 100)}%`],
 		["air", thermal(c) > 0.1 ? `sea warmer by ${(c.seaTemperature - c.airTemperature).toFixed(1)} °C: thermals ${Math.round(thermal(c) * 100)}%` : thermal(c) < -0.1 ? `air warmer by ${(c.airTemperature - c.seaTemperature).toFixed(1)} °C: still, layered ${Math.round(-thermal(c) * 100)}%` : "sea and air alike: neither rising nor layered"],
 	];
@@ -359,6 +360,11 @@ onMounted(() => {
 	// For seeing another day: ?date=2026-10-26 (a full moon) or ?date=2027-03-01 (the boat near the
 	// equator). The sun, moon and stars are that day's and the boat is where it will be; the
 	// weather is today's forecast for that spot.
+	// A trial the owner is weighing: ?light=loss treats light as what a weave wastes, not its strength.
+	// 0 is light as strength (how it was first built), 1 is light purely as loss. The owner wants
+	// something between the two: half-way unless ?light= gives another amount (0..1, or "loss" for 1).
+	const asked = query.get("light");
+	const lightIsLoss = asked === "loss" ? 1 : asked !== null && asked !== "" && Number.isFinite(Number(asked)) ? Math.min(1, Math.max(0, Number(asked))) : 0.5;
 	if (query.get("date")) pretendDate.value = new Date(`${query.get("date")}T00:00:00Z`);
 	// For trying weather that is not there today: ?pretend=waveHeight:6,windSpeed:70,windGusts:95
 	// replaces those live figures (names as in SeaConditions).
@@ -624,7 +630,7 @@ onMounted(() => {
 		const liveRain = liveOnly ? rainAmount(liveOnly) : 0;
 		const rain = calmMotion ? 0 : Math.max(THREE.MathUtils.smoothstep(fury, 0.15, 0.6), liveRain) * alive;
 		// The weave, and what its knot does to the sea and the clouds around it.
-		const formed = knotFormed(moment.weave * (1 - Math.max(darkness, holdLevel, controlLevel)));
+		const formed = knotFormed(moment.weave * (1 - Math.max(darkness, controlLevel)));
 		knotReady = formed > 0.8;
 		// The bond: how far the channelling has taken hold of the storm's wind, air and fog.
 		const bond = bondLevel.value * formed * alive;
@@ -633,7 +639,7 @@ onMounted(() => {
 		weave.update({
 			time,
 			delta,
-			amount: moment.weave * (1 - Math.max(darkness, holdLevel, controlLevel)),
+			amount: moment.weave * (1 - Math.max(darkness, controlLevel)),
 			spread: fury + 2 * moment.white * moment.veil,
 			gain: 0.5 / steadyExposure,
 		});
@@ -657,13 +663,15 @@ onMounted(() => {
 			waveHeight: liveOnly ? liveOnly.waveHeight : lerp(0.5, 6, sea),
 			hold: holdLevel,
 			control: controlLevel,
+			showMasters: query.get("show") === "masters",
+			below: liveOnly ? strengthBelow(liveOnly, PLACE.bearing) : 0,
 			// On a quiet night of theirs one of them scouts: not in a storm, nor while the boat is
 			// being held back, nor when the sea calls for nearly all four.
-			scout: liveOnly ? darkness * quietEnoughToScout(liveOnly) * (1 - controlLevel) * (1 - holdLevel) * (1 - THREE.MathUtils.smoothstep(need, 0.45, 0.6)) * alive : 0,
+			scout: liveOnly ? darkness * quietEnoughToScout(liveOnly) * (1 - controlLevel) * (1 - THREE.MathUtils.smoothstep(need, 0.45, 0.6)) * alive : 0,
 			tomorrow: liveOnly ? tomorrowsWind(liveOnly) : NO_WIND,
 			thermal: liveOnly ? thermal(liveOnly) : 0,
 			current: liveOnly ? Math.sin(THREE.MathUtils.degToRad(liveOnly.currentDirection - PLACE.bearing)) * Math.min(1, liveOnly.currentSpeed / 3) : 0,
-			strength: Math.max(darkness, holdLevel, controlLevel) * alive,
+			strength: Math.max(darkness, controlLevel) * alive,
 			// More light by day, when it has a bright sea to show against.
 			gain: (0.3 + 0.6 * daylight) / steadyExposure,
 		});
@@ -671,11 +679,18 @@ onMounted(() => {
 			channelling.flowPoint(ahead, flowWorld);
 			toScreen(flowWorld.x, flowWorld.y, flowWorld.z, flowScreen[i]!);
 		});
-		waveUniforms.channelFeed.value = channelling.working * (0.6 + 0.4 * channelling.surge) * need * darkness * (1 - holdLevel) * (1 - controlLevel) * alive;
+		// The weaker channellers' deep weaves round the boat, slowing it: by day or night, as much as it needs.
+		// (More of it, and more of the sea round the boat, when the strongest have taken it over.)
+		waveUniforms.deepWeave.value = (0.3 * Math.max(holdLevel, 0.6 * channelling.masters) * alive) / steadyExposure;
+		waveUniforms.deepMaster.value = channelling.masters;
+		waveUniforms.channelLoss.value = lightIsLoss;
+		waveUniforms.channelFeed.value = channelling.working * (0.6 + 0.4 * channelling.surge) * need * darkness * (1 - controlLevel) * alive;
 		// Driven hard, the flow lights the sea more.
-		waveUniforms.channelLight.value = (0.06 * (1 + 0.5 * channelling.surge) * (0.45 + 0.55 * Math.max(need, holdLevel)) * Math.max(darkness, Math.max(holdLevel, controlLevel) * nightfall) * alive) / steadyExposure;
+		// (In the trial the flow sheds far less light on the sea.)
+		waveUniforms.channelLight.value = (1 - 0.7 * lightIsLoss) * (0.06 * (1 + 0.5 * channelling.surge) * (0.45 + 0.55 * need) * Math.max(darkness, controlLevel * nightfall) * alive) / steadyExposure;
 		// Whenever there is no channelling at night, the boat's electric lamps are all the light there is near by.
-		waveUniforms.boatLamp.value = (0.012 * nightfall * (1 - channelling.working) * alive) / steadyExposure;
+		// (Twelve per cent brighter than it first was, at the owner's request.)
+		waveUniforms.boatLamp.value = (0.01344 * nightfall * (1 - channelling.working) * alive) / steadyExposure;
 		waveUniforms.weavePull.value = formed * (0.6 + 0.8 * fury);
 		vortexUniforms.knotDirection.value.subVectors(knotPosition, camera.position).normalize();
 		vortexUniforms.vortex.value = formed;
@@ -721,7 +736,7 @@ onMounted(() => {
 			// The threads drag the air after them while they race for the knot, and a little once they are laid.
 			// (Not while the channellers are at work: the old weave is put away then, and its draught
 			// would carry the air they have gathered up into the sky.)
-			charge: (Math.sin(Math.PI * Math.min(1, moment.weave / 0.5)) + 0.25 * formed) * (1 - Math.max(darkness, holdLevel, controlLevel)) * alive,
+			charge: (Math.sin(Math.PI * Math.min(1, moment.weave / 0.5)) + 0.25 * formed) * (1 - Math.max(darkness, controlLevel)) * alive,
 			flow: flowScreen,
 			flowPull: calmMotion ? 0 : channelling.pull,
 			knot: knotScreen,

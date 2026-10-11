@@ -16,6 +16,11 @@
 // filaments riding over each crest and going down into each trough, brightest on the crests.
 // The waves themselves go on doing exactly what the weather data says.
 //
+// There are thirteen of them on the boat (the owner's): four at the front at a time, and they
+// take turns. When the boat has to be slowed, that is done by some of the weaker ones, who form
+// deeper weaves close to the sea near the boat, almost wholly out of the picture; the weaving
+// ahead is not interrupted by it.
+//
 // They always work with the sea and the wind, never against them (the owner's rule): they feed
 // whatever those are already doing by the weather data. So the flow is fuller and faster the more
 // is going on, the wind takes its loose filaments with it, its light rises and falls with each
@@ -157,7 +162,9 @@ vec3 threadPoint( float t ) {
 	across += aSeed.z * 0.5 * vec2( cos( wind ), sin( wind ) );
 	// And strays from it, some hardly at all and some a long way.
 	// (Less and less as the flow goes down to the horizon, where strays would only make a tangle.)
-	across += aSeed.w * 0.55 * ( 1.0 - 0.6 * channelHold ) * ( 1.0 - 0.85 * smoothstep( 0.3, 0.8, way ) ) * vec2(
+	// (In the trial, a strong channeller's tress is taut: its filaments hardly stray.)
+	float skill = channelOf( channelOwn, who ) * channelLoss;
+	across += aSeed.w * 0.55 * ( 1.0 - 0.75 * skill ) * ( 1.0 - 0.6 * channelHold ) * ( 1.0 - 0.85 * smoothstep( 0.3, 0.8, way ) ) * vec2(
 		drift( q * 2.3 + aSeed.x * 40.0 - channelTime * 0.22 ),
 		drift( q * 2.9 + aSeed.y * 40.0 + channelTime * 0.17 )
 	);
@@ -165,7 +172,7 @@ vec3 threadPoint( float t ) {
 	// distance; where the tress has gathered itself the trembling stops and the strays are drawn in.
 	float lost = spent( along );
 	float held = gathered( who, q ) * ( 0.5 + 0.5 * lost );
-	across += 0.16 * lost * ( 1.0 - held ) * vec2(
+	across += 0.16 * lost * ( 1.0 - held ) * ( 1.0 - 0.8 * skill ) * vec2(
 		kink( q * 37.0 + aSeed.x * 211.0 - channelTime * 3.1 ),
 		kink( q * 41.0 + aSeed.y * 173.0 + channelTime * 2.7 )
 	);
@@ -215,6 +222,15 @@ void main() {
 	lit *= ( 1.0 - 0.45 * lost ) * ( 1.0 + 1.5 * held );
 	// Only between the cut and where the weave has run out to (see channelShown).
 	lit *= channelShown( aThread.x, aheadAt( aT ) );
+	// The trial (channelLoss): light is what a weave wastes. The stronger and more skilled the
+	// channeller, the less escapes: the strongest's tress is the darkest, the weakest's the palest.
+	// Linked and driven, the work is great and some is lost, but it does not blaze. And where a
+	// weave is cut, what was in it is let go at once: a brief flare at the cut end.
+	float own_ = channelOf( channelOwn, aThread.x );
+	float leak = 0.16 + 1.7 * ( 1.0 - own_ ) * ( 1.0 - own_ );
+	lit *= mix( 1.0, leak * ( 1.0 - 0.45 * channelSurge ), channelLoss );
+	float cutAt = channelOf( channelTail, aThread.x );
+	if ( cutAt < 1.09 ) lit *= 1.0 + 4.0 * channelLoss * exp( - pow( ( channelAlong( aheadAt( aT ) ) - cutAt ) / 0.035, 2.0 ) ) * ( 1.0 - channelOf( channelLinger, aThread.x ) );
 	lit *= withWaves * strength * ( 1.0 - smoothstep( strength * 1.1 - 0.12, strength * 1.1, aSeed.y ) );
 	// A veil does not come and go in stretches: it is a steady glow that breathes with the tress.
 	if ( aSoft > 0.9 ) lit = strength * ( 0.75 + 0.25 * withWaves );
@@ -475,6 +491,10 @@ export interface ChannellerState {
 	// will blow across the view (right when positive) and along it (away when positive), each
 	// scaled by how strong it will be (0..1).
 	scout: number;
+	// For looking at the strongest's deep weaving without waiting for it.
+	showMasters?: boolean;
+	// 0..1 how much of the strongest's strength the sea asks for below, round the boat, and not ahead.
+	below: number;
 	tomorrow: { across: number; along: number };
 	// -1..1 the heat between sea and air: above 0 the sea is the warmer and the air rises in
 	// thermals; below 0 the air is the warmer and lies still in layers.
@@ -557,6 +577,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		channelTime: sea.channelTime,
 		channelWind: sea.channelWind,
 		channelSea: sea.channelSea,
+		channelLoss: sea.channelLoss,
 		channelGate: sea.channelGate,
 		channelHead: sea.channelHead,
 		channelTail: sea.channelTail,
@@ -726,6 +747,61 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		surge += ((driven ? 1 : 0) - surge) * Math.min(1, delta / (part === "working" ? 1.6 : 0.4));
 	};
 
+	// There are thirteen channellers on the boat, not four (the owner's): four are at the front at
+	// any one time and the other nine rest or work elsewhere, and they take turns. Their strengths:
+	const CREW = [1, 0.95, 0.9, 0.82, 0.78, 0.7, 0.64, 0.58, 0.52, 0.47, 0.42, 0.38, 0.34];
+	// Who is at the front, as places in CREW, and how strong each seat's occupant is. Whoever is
+	// strongest of the four always sits second from the right; the rest sit by strength.
+	let atFront = [0, 3, 7, 10];
+	const seatStrength = [0.58, 0.82, 1, 0.42];
+	const SEATS_BY_STRENGTH = [STRONGEST, 1, 0, 3];
+	// While someone is changing places, their seat's weave is let go; the newcomer begins afresh.
+	const changingUntil = [0, 0, 0, 0];
+	let nextTurn = between(50, 110);
+	const takeTurns = (delta: number, time: number) => {
+		if (time > nextTurn) {
+			nextTurn = time + between(70, 160);
+			// One of the four is relieved by one of the nine.
+			const leaving = atFront[Math.floor(Math.random() * atFront.length)]!;
+			const resting = CREW.map((_, member) => member).filter((member) => !atFront.includes(member));
+			const arriving = resting[Math.floor(Math.random() * resting.length)]!;
+			atFront = atFront.map((member) => (member === leaving ? arriving : member)).sort((a, b) => CREW[b]! - CREW[a]!);
+			changingUntil[SEATS_BY_STRENGTH[atFront.indexOf(arriving)]!] = time + 3;
+		}
+		// (Eased, so that a seat's strength does not jump when its occupant changes.)
+		atFront.forEach((member, rank) => {
+			const seat = SEATS_BY_STRENGTH[rank]!;
+			seatStrength[seat] = seatStrength[seat]! + (CREW[member]! - seatStrength[seat]!) * Math.min(1, delta / 3);
+		});
+	};
+
+	// Now and then, while the boat is being slowed, the strongest take that work over from the
+	// weaker ones for half a minute or so (the owner's: the pilgrimage is so sacred). The strongest
+	// seat at the front is then empty, and the sea about the boat is dappled (see `deepMaster`).
+	let masters = 0;
+	let alwaysMasters = false;
+	let mastersFrom = between(25, 55);
+	let mastersUntil = 0;
+	const tendMasters = (delta: number, time: number, slowing: number, below: number) => {
+		if (slowing <= 0.02) {
+			// Nothing to slow: the next time is counted from when there is.
+			mastersFrom = Math.max(mastersFrom, time + 20);
+			mastersUntil = 0;
+		} else if (time > mastersFrom) {
+			mastersUntil = time + between(30, 45);
+			mastersFrom = mastersUntil + between(90, 200);
+		}
+		// (?show=masters keeps them at it, for looking at.)
+		const visiting = time < mastersUntil || alwaysMasters;
+		// How much of the strongest's strength is below is a matter of what the sea asks (`below`,
+		// from the weather data): a steady share. On top of that they still go down wholly now and
+		// then, whatever the share, for the pilgrimage's sake.
+		const share = visiting ? 1 : below;
+		masters += (share - masters) * Math.min(1, delta / (share > masters ? 5 : 8));
+		// The strongest leaves her seat at the front only when most of her strength is below.
+		return masters > 0.6;
+	};
+
 	// Each channeller's weaving. `head` is how far the weave now in their hands has run out from
 	// the boat. When they let go, that weave is cut at the boat and becomes one cut loose: `tail` is
 	// how far its cut end has travelled out (NONE when there is no such weave) and `linger` how far
@@ -766,8 +842,17 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		return target.set(camera.position.x + side, 1.3 + rise, camera.position.z - ahead);
 	};
 
-	const update = ({ time, delta, energy, waveHeight, need, hold, current, control, scout, tomorrow, thermal, strength, gain }: ChannellerState) => {
+	const update = ({ time, delta, energy, waveHeight, need, hold: slowing, current, control, scout, showMasters, below, tomorrow, thermal, strength, gain }: ChannellerState) => {
 		tendScout(delta, time, scout, tomorrow, thermal);
+		takeTurns(delta, time);
+		// Slowing the boat is not the work of the four at the front. The weaker ones do it, with deep
+		// weaves close round the boat (drawn in the water: `deepWeave` in gerstner-waves.ts). So the
+		// weaving ahead goes on as it otherwise would, with its story, however the boat is held.
+		const hold = 0;
+		alwaysMasters = showMasters === true;
+		const mastersBelow = tendMasters(delta, time, slowing, below);
+		// What is given below is not given ahead: the linked flow is driven that much less hard.
+
 		// The story only runs on their nights, and starts from its beginning on each.
 		// Holding the boat back is not part of the story: it is steady work, for as long as the sea
 		// would carry them too fast, by as many of them as it takes. The story starts afresh after it.
@@ -794,6 +879,9 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			linking = false;
 		}
 		for (let who = 0; who < CHANNELLERS; who++) {
+			if (time < changingUntil[who]!) want[who] = false;
+			// The strongest is at the deep weaving, not at the front.
+			if (who === STRONGEST && mastersBelow) want[who] = false;
 			if (want[who] && !weaving[who]) {
 				weaving[who] = true;
 				head[who] = opening ? ALL : 0;
@@ -833,10 +921,12 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		} else if (!any) opening = true;
 		mesh.visible = any;
 		sea.channelGate.value.fromArray(gate);
+		sea.channelOwn.value.fromArray(seatStrength);
 		sea.channelHead.value.fromArray(head);
 		sea.channelTail.value.fromArray(tail);
 		sea.channelLinger.value.fromArray(linger);
-		sea.channelSurge.value = surge;
+		// What the strongest give below is not given ahead: the linked flow is driven that much less hard.
+		sea.channelSurge.value = surge * (1 - masters);
 		sea.channelSea.value.set(energy, waveHeight);
 		// What streams along the flow runs faster the more the sea and wind are doing, and three
 		// times as fast again when it is driven.
@@ -856,7 +946,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		// How strongly the flow is taking the air with it: only where it is one flow (not held back
 		// in four), and with the force it is driven by.
 		const pull = weaving.some(Boolean) ? Math.max(...gate) * (called ? strength : lastStrength) * (0.5 + 0.5 * Math.max(need, control)) * (1 - hold) : 0;
-		return { working: any ? 1 : 0, surge, pull, flowPoint };
+		return { working: any ? 1 : 0, surge: surge * (1 - masters), pull, flowPoint, masters };
 	};
 
 	return { update };

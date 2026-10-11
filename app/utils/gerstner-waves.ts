@@ -236,7 +236,13 @@ export interface GerstnerUniforms {
 	channelSea: THREE.IUniform<THREE.Vector2>;
 	// 0..1 how strongly their channelling feeds the sea and the wind along the flow.
 	channelFeed: THREE.IUniform<number>;
+	channelLoss: THREE.IUniform<number>;
 	channelGate: THREE.IUniform<THREE.Vector4>;
+	channelOwn: THREE.IUniform<THREE.Vector4>;
+	// The deep weaves close round the boat that slow it, as light in the water, before tone mapping. 0 is none.
+	deepWeave: THREE.IUniform<number>;
+	// 0..1 how far the strongest channellers have taken the deep weaving over from the weaker ones.
+	deepMaster: THREE.IUniform<number>;
 	channelHead: THREE.IUniform<THREE.Vector4>;
 	channelTail: THREE.IUniform<THREE.Vector4>;
 	channelLinger: THREE.IUniform<THREE.Vector4>;
@@ -441,6 +447,8 @@ uniform float freshFlow;
 uniform float internalWaves;
 uniform float channelLight;
 uniform float boatLamp;
+uniform float deepWeave;
+uniform float deepMaster;
 ${channelPathChunk}
 varying vec3 vWaveNormal;
 varying float vCrest;
@@ -490,6 +498,20 @@ const fragmentNormal = /* glsl */ `
 		vec2 fine = texture2D( normalSampler, downwind / 31.0 + vec2( time / 23.0, time / 7.0 ) ).xy
 			+ texture2D( normalSampler, downwind / 11.0 + vec2( - time / 13.0, time / 4.0 ) ).xy - 1.0;
 		noise.xy += fine * 0.9 * nearness;
+	}
+	// The trial (channelLoss): the strongest channellers' deep weaving gives off no light. It is
+	// seen only by what it does to the water, which is what salt meeting fresh really does: the
+	// fresher bodies lie smooth and glassy, the saltier ones rough, and where two meet the surface
+	// wavers. All of that is done here, to the surface itself, so the stars and lamps mirrored in
+	// the sea are what show it.
+	if ( deepMaster > 0.0 && channelLoss > 0.0 ) {
+		vec2 fromBoat_ = place - channelBoat;
+		float hereabouts = ( 1.0 - smoothstep( 40.0, 75.0, length( fromBoat_ ) ) ) * deepMaster * channelLoss;
+		float body_ = texture2D( normalSampler, fromBoat_ / 95.0 + vec2( waveTime * 0.003, - waveTime * 0.002 ) ).r
+			+ 0.5 * texture2D( normalSampler, fromBoat_ / 41.0 - vec2( waveTime * 0.004, waveTime * 0.003 ) + 0.37 ).g - 0.25;
+		rippled *= mix( 1.0, mix( 1.9, 0.15, smoothstep( 0.3, 0.7, body_ ) ), hereabouts );
+		float meets = exp( - pow( ( body_ - 0.5 ) / 0.05, 2.0 ) ) * hereabouts;
+		noise.xy += meets * 0.7 * vec2( sin( place.x * 0.9 + waveTime * 1.3 ), cos( place.y * 0.8 - waveTime * 1.1 ) );
 	}
 	vec3 surfaceNormal = normalize( noise.xzy * vec3( rippled, 1.0, rippled ) );
 	surfaceNormal = normalize( vec3(
@@ -545,6 +567,82 @@ const fragmentFoam = /* glsl */ `
 		}
 	}
 
+	// Slowing the boat is the work of the weaker channellers (the owner's). They do not weave out
+	// towards Hawai'i but down: plaits laid in rings close round the boat, just under the level of
+	// the sea, holding the water there against the current. They are behind and beneath the viewer,
+	// so little of them is in the picture. They are not painted over the sea: the sea is still the
+	// sea, with its own waves and ripples, and the plaits duck in and out of it. In a trough the
+	// water has fallen away below a plait and it stands clear, sharp and bright; under a crest it is
+	// beneath the surface, seen through moving water, dim, bluer and shifted about by the ripples.
+	if ( deepWeave > 0.0 ) {
+		float reach = mix( 24.0, 70.0, deepMaster );
+		vec2 fromBoat = worldPosition.xz - channelBoat;
+		if ( length( fromBoat ) < reach + 12.0 ) {
+			// How far this piece of water is below a plait (1, in a trough) or above it (0, on a crest).
+			float clear = 1.0 - smoothstep( - 0.12, 0.1, vCrest );
+			// Under water, what is seen is shifted by the tilt of the surface; clear of it, it is not.
+			vec2 seen = fromBoat + surfaceNormal.xz * 9.0 * ( 1.0 - clear );
+			float r = length( seen );
+			float bearing = atan( seen.y, seen.x );
+			float near = 1.0 - smoothstep( 0.55 * reach, reach, r );
+			float plaits = 0.0;
+			for ( int i = 0; i < 5; i ++ ) {
+				float n = float( i );
+				float way = mod( n, 2.0 ) < 0.5 ? 1.0 : - 1.0;
+				// The rings are wider apart, and reach further, when the strongest are at the work.
+				float ring = 4.5 + ( 3.6 + 7.5 * deepMaster ) * n;
+				float turn = bearing * ( 3.0 + n ) + channelTime * 0.3 * way;
+				// A plait of three strands: each wavers in and out a third of a turn after the last.
+				float fine = mix( 0.2, 0.06, clear ) * ( 1.0 + 0.03 * ring );
+				float strands = 0.0;
+				for ( int j = 0; j < 3; j ++ ) {
+					float d = r - ring - ( 0.7 + 0.03 * ring ) * sin( turn + float( j ) * 2.0944 );
+					strands += exp( - d * d / fine );
+				}
+				float lit = 0.5 + 0.5 * sin( bearing * ( 7.0 + 3.0 * n ) - channelTime * 0.7 * way );
+				plaits += strands * lit / ( 1.0 + 0.25 * n );
+			}
+			// Clear of the water a plait is pale and bright; under it, a deep blue and a quarter as bright.
+			vec3 plaitTone = mix( vec3( 0.16, 0.36, 1.0 ) * 0.3, vec3( 0.78, 0.9, 1.0 ), clear );
+			// (In the trial the strongest's plaits leak almost nothing: they are seen only faintly.)
+			outgoingLight += plaitTone * plaits * 1.4 * ( 1.0 - 0.75 * deepMaster * channelLoss ) * deepWeave * near * ( 1.0 - foamMask ) * mix( 1.0 - reflectance, 1.0, clear );
+			outgoingLight += vec3( 0.03, 0.09, 0.34 ) * exp( - r * r / 110.0 ) * deepWeave * ( 1.0 - reflectance ) * ( 1.0 - foamMask );
+
+			// Now and then the strongest take this work over themselves, the pilgrimage being so
+			// sacred (the owner's). They weave akasha with water, earth and air, and the sea about the
+			// boat is dappled as where salt water meets fresh. It must stay the real sea (a first
+			// version laid a marbled pattern over it and lost that). So nothing is drawn on the water:
+			// the light comes from the weaving at the boat and falls on the waves that are there. Each
+			// wave face and ripple turned towards the boat catches it and the far faces stay dark;
+			// the thin tops of waves let it through. What dapples it is the water itself: it lies in
+			// broad slow-moving bodies, fresher and saltier, and each takes the light differently
+			// (the fresh paler and greener, the salt a deeper blue), with a line of brightness where
+			// two bodies meet, as a line of foam gathers there.
+			if ( deepMaster > 0.0 ) {
+				float t = channelTime;
+				float body = texture2D( normalSampler, fromBoat / 95.0 + vec2( t * 0.003, - t * 0.002 ) ).r
+					+ 0.5 * texture2D( normalSampler, fromBoat / 41.0 - vec2( t * 0.004, t * 0.003 ) + 0.37 ).g - 0.25;
+				// (The bodies have no edges: one shades into the next over tens of metres.)
+				float fresh_ = smoothstep( 0.25, 0.75, body );
+				float meeting_ = exp( - pow( ( body - 0.5 ) / 0.06, 2.0 ) );
+				// The light is at the boat, low: faces of the real surface turned to it are lit.
+				// What is lit is decided by the surface alone: how far each facet of it, wave or ripple,
+				// leans towards the boat. Flat water and faces leaning away get nothing.
+				float lean = dot( surfaceNormal.xz, - normalize( fromBoat + 1e-4 ) );
+				float facing = smoothstep( 0.04, 0.45, lean );
+				float through = smoothstep( 0.0, 0.5, vCrest );
+				vec3 salt = vec3( 0.2, 0.4, 0.95 );
+				vec3 sweet = vec3( 0.62, 0.9, 0.78 );
+				vec3 tone = mix( salt, sweet, fresh_ );
+				// Rings of brightness travelling out from the boat, gently.
+				float rings = 0.75 + 0.25 * sin( r * 0.5 - t * 1.2 );
+				float falloff = near / ( 1.0 + r / 30.0 );
+				outgoingLight += ( tone * ( 0.03 + 1.5 * facing + 0.5 * through ) + vec3( 1.0, 0.98, 0.93 ) * 0.5 * meeting_ * facing )
+					* rings * 0.6 * ( 1.0 - channelLoss ) * deepMaster * deepWeave * falloff * ( 1.0 - 0.6 * reflectance ) * ( 1.0 - foamMask );
+			}
+		}
+	}
+
 	// The small boat's electric lamps: a little warm light on the water close round it.
 	if ( boatLamp > 0.0 ) {
 		vec2 fromBoat = worldPosition.xz - channelBoat;
@@ -597,7 +695,11 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		channelWind: { value: new THREE.Vector2() },
 		channelSea: { value: new THREE.Vector2(0.3, 2) },
 		channelFeed: { value: 0 },
+		channelLoss: { value: 0 },
 		channelGate: { value: new THREE.Vector4(1, 1, 1, 1) },
+		channelOwn: { value: new THREE.Vector4(0.58, 0.82, 1, 0.42) },
+		deepWeave: { value: 0 },
+		deepMaster: { value: 0 },
 		channelHead: { value: new THREE.Vector4() },
 		channelTail: { value: new THREE.Vector4(2, 2, 2, 2) },
 		channelLinger: { value: new THREE.Vector4() },

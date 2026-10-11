@@ -16,7 +16,12 @@ uniform vec2 channelWind;
 // The sea and wind they are working with: x is 0..1 how much is going on (calm to storm), y the
 // height of the waves in metres.
 uniform vec2 channelSea;
+// A trial the owner is weighing (?light=loss): 1 when light is treated as what a weave wastes,
+// not as its strength. The strongest are then the darkest; see channellers.ts.
+uniform float channelLoss;
 uniform vec4 channelGate;
+// How strong the channeller now in each of the four seats is (0..1). They take turns: see channellers.ts.
+uniform vec4 channelOwn;
 // 0..1 how far they are holding the boat back and not channelling towards Hawai'i, the surface
 // current across the view (-1..1, to the right when positive), and a clock for what then runs
 // back along the weaving towards the boat.
@@ -75,8 +80,8 @@ float channelWay( float ahead ) {
 // 0..1 how much channeller k (0..3) is putting out now: a strength of their own, a slow swell
 // and ebb of effort that each has in their own time, and a quick unsteadiness on top.
 float channelStrength( float k ) {
-	// The strongest always sits second from the right.
-	float own = k < 0.5 ? 0.58 : k < 1.5 ? 0.82 : k < 2.5 ? 1.0 : 0.42;
+	// (Whoever is strongest of those at work always sits second from the right.)
+	float own = k < 0.5 ? channelOwn.x : k < 1.5 ? channelOwn.y : k < 2.5 ? channelOwn.z : channelOwn.w;
 	float gate = k < 0.5 ? channelGate.x : k < 1.5 ? channelGate.y : k < 2.5 ? channelGate.z : channelGate.w;
 	float effort = 0.5 + 0.3 * sin( channelTime * ( 0.11 + 0.037 * k ) + k * 2.4 ) + 0.2 * sin( channelTime * ( 0.29 - 0.041 * k ) + k * 5.1 );
 	float unsteady = 0.92 + 0.08 * sin( channelTime * ( 2.1 + 0.6 * k ) + k );
