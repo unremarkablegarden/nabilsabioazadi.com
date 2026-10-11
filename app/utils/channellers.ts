@@ -281,6 +281,182 @@ const ORDER = [STRONGEST, 1, 0, 3];
 const workingFor = (need: number) => (need < 0.2 ? 1 : need < 0.4 ? 2 : need < 0.6 ? 3 : 4);
 const LINK_FROM = 0.6;
 
+// The scout weave (the owner's). On a quiet night one of the four, the one at the far right, who
+// is not needed for the work on the sea, channels away from the others: up into the night, to
+// sense the winds for tomorrow. This one is a master weaver, who knows how to make a weaving
+// disperse and regather. The weave works in an order: it goes out low on the water first, using
+// the surface current; then lifts up into the air; finds the air's current and leans with it;
+// and only then disperses, in a few companies that keep together, each hunting its own quarter of
+// the night; then they are drawn back in; and so on, like slow breathing. (Two earlier versions
+// were turned down by the owner: one line going to one place was too specific, and forty
+// filaments each going its own way from the hand were too individual and skipped the water.)
+// The air it moves through is treated as air: heated from below by a warmer sea it rises in
+// thermals, and the weave winds up them in a widening spiral, quivering, and fans out level at
+// their top; over a colder sea the air lies in still layers, and the weave keeps to the water
+// longer, gets less high, lies flat and slides out along the layers; and the wind it leans with
+// strengthens with height as wind over water does. All from the real temperatures and wind.
+// They thin away to nothing at their far ends: nothing may make a light in the sky. What they
+// work with is real: the current and wind as they are now, and, once dispersed, they are carried
+// the way tomorrow's forecast wind will blow. What they learn comes back down them: the light in
+// them travels downward, towards the boat.
+const SCOUT_FILAMENTS = 40;
+const SCOUT_VEILS = 3;
+const SCOUT_SEGMENTS = 220;
+
+const scoutVertexShader = /* glsl */ `
+attribute float aT;
+attribute float aSide;
+// Two random numbers, how far from the middle of the tress it lies (0..1), and how loosely it is held.
+attribute vec4 aSeed;
+// Brightness, how many lit stretches it has along its length, how fast they travel, width in pixels.
+attribute vec4 aKind;
+attribute float aSoft;
+uniform float uTime;
+uniform float uStrength;
+// How far it has run up from the boat; how far the cut has travelled up it once let go (past
+// the end when there is none); and 0..1 how far a weave let go has faded.
+uniform float uHead;
+uniform float uTail;
+uniform float uFade;
+// Tomorrow's wind as seen from the boat: x how much it will blow to the right across the view,
+// y how much away from the viewer, both scaled by how strong it will be (0..1).
+uniform vec2 uLean;
+// The real surface current across the view, and the real wind across it now (both -1..1, to
+// the right when positive): see channel-path.ts.
+uniform float channelCurrent;
+uniform vec2 channelWind;
+// The heat between sea and air, -1..1, from their real temperatures. Above 0 the sea is warmer
+// than the air: the air is heated from below, turns over, and rises in thermals. Below 0 the air
+// is warmer than the sea: it lies still in layers, and what is in it stays low.
+uniform float uThermal;
+varying vec3 vTint;
+varying float vAlpha;
+varying float vEdge;
+varying float vSoft;
+${ribbonShaderChunk}
+
+float drift( float x ) {
+	float i = floor( x );
+	float f = fract( x );
+	return mix( hash1( i ), hash1( i + 1.0 ), f * f * ( 3.0 - 2.0 * f ) ) * 2.0 - 1.0;
+}
+
+// The filaments hunt in companies, not one by one: five loose tresses of them.
+float scoutCompany() {
+	return floor( aSeed.x * 5.0 );
+}
+
+// 0..1 how far this filament's company is dispersed just now. The weaving breathes: over about
+// forty seconds the companies are let go to hunt, one after another, and are then drawn back in.
+float scoutSpread() {
+	if ( aSoft > 0.9 ) return 0.0;
+	float breath = 0.5 - 0.5 * cos( uTime * 0.16 );
+	float turn = scoutCompany() / 4.0;
+	return smoothstep( turn * 0.4, turn * 0.4 + 0.5, breath );
+}
+
+// How far up into the air a point along the weave is, 0 while it is still on the water.
+float scoutRise( float t ) {
+	// (It comes up off the water in a curve, not at a corner. Over a cold sea, in still layered
+	// air, it keeps to the water for longer before it can get up at all.)
+	float leaves = 0.22 + 0.16 * max( - uThermal, 0.0 );
+	float up = max( t - leaves, 0.0 ) / ( 1.0 - leaves );
+	return up * up * ( 1.6 - 0.6 * up );
+}
+
+// The whole weave as one, before any of it disperses. It works in an order (the owner's):
+//   on the water   it goes out low over the sea first, and lets the surface current carry and
+//                  bend it, as the real current there runs;
+//   up             then it lifts off the water, steeply;
+//   in the air     and as it climbs it finds the air's own current, and leans away downwind,
+//                  as the real wind blows now.
+vec3 scoutStem( float t ) {
+	float rise = scoutRise( t );
+	float out_ = 4.0 + 90.0 * smoothstep( 0.0, 0.34, t ) + 230.0 * rise;
+	float onWater = smoothstep( 0.0, 0.34, t );
+	vec3 p = vec3( 2.25, mix( cameraPosition.y - 1.2, 1.4, smoothstep( 0.0, 0.07, t ) ), - out_ );
+	// Carried by the current, and meandering as water does.
+	p.x += channelCurrent * 55.0 * onWater * onWater + 3.5 * onWater * sin( out_ * 0.07 - uTime * 0.3 );
+	// Up off the sea.
+	// How high it gets is the air's doing. A thermal carries it up, half as high again; still
+	// layered air holds it down to less than half.
+	float warm = max( uThermal, 0.0 );
+	float still = max( - uThermal, 0.0 );
+	p.y += 82.0 * rise * ( 1.0 + 0.5 * warm ) * ( 1.0 - 0.6 * still );
+	// In a thermal it does not go straight up. Rising air turns as it goes and draws in the air
+	// round it, so the column widens with height: the weave winds up it in an opening spiral.
+	float turn = rise * 8.0 - uTime * 0.35;
+	p.xz += warm * ( 1.5 + 16.0 * rise ) * rise * vec2( cos( turn ), sin( turn ) );
+	// Leaning downwind, more the higher it is.
+	// The wind is slowed by the sea and freer above it: it strengthens quickly in the first of
+	// the climb and more slowly after (the logarithmic profile of wind over water). So the lean
+	// comes on early and then steadies. In still layered air the layers slide over one another
+	// and the difference is greater.
+	float shear = log( 1.0 + 9.0 * rise ) / log( 10.0 );
+	p.x += channelWind.x * 80.0 * shear * ( 1.0 + 0.6 * still ) + 6.0 * rise * sin( uTime * 0.23 + rise * 3.0 );
+	return p;
+}
+
+vec3 scoutPoint( float t ) {
+	vec3 p = scoutStem( t );
+	// Within the weave the filaments lie close, as in any tress, a little looser with height.
+	float wind = aSeed.x * 41.0 + t * ( 5.0 + 4.0 * aSeed.y ) - uTime * 0.12;
+	float warm = max( uThermal, 0.0 );
+	float still = max( - uThermal, 0.0 );
+	// (Wider in a thermal, which mixes it; and flattened into a ribbon in still air.)
+	p.xy += aSeed.z * vec2( cos( wind ), ( 0.5 - 0.35 * still ) * sin( wind ) ) * ( 0.3 + 2.2 * smoothstep( 0.0, 0.2, t ) + 9.0 * ( 1.0 + 1.2 * warm ) * scoutRise( t ) * scoutRise( t ) );
+	// Heated air shimmers: in a thermal the filaments quiver, quicker and finer than their wandering.
+	p.xy += warm * scoutRise( t ) * 1.8 * vec2( kink( t * 60.0 + aSeed.x * 97.0 - uTime * 4.0 ), kink( t * 67.0 + aSeed.y * 89.0 + uTime * 3.6 ) );
+	p.y = max( p.y, 0.5 );
+	// Only then, having found the air's current, does it disperse: each company goes to hunt its
+	// own quarter of the night, keeping together, questing about as it goes.
+	float from = 0.3;
+	float gone = max( scoutRise( t ) - from, 0.0 ) / ( 1.0 - from );
+	if ( gone > 0.0 ) {
+		float company = scoutCompany();
+		float bearing = ( company / 4.0 - 0.5 ) * 2.1 + 0.35 * drift( uTime * 0.06 + company * 7.3 ) + 0.3 * gone * drift( gone * 2.5 + uTime * 0.1 + company * 3.1 );
+		float height = 0.22 + 0.13 * mod( company * 2.0, 5.0 ) + 0.12 * drift( uTime * 0.05 + company * 11.0 );
+		// Where they go when they disperse is the air's doing too. Rising air stops where it is no
+		// longer warmer than what is round it, and there it can only spread sideways: at the top of
+		// a thermal the companies fan out nearly level, like the flat top of a cloud. In still
+		// layered air they cannot rise either, and slide out along the layers, one above another.
+		height = mix( height, 0.03 + 0.035 * company, 0.85 * max( warm, still ) );
+		// Each filament a little off its company's line.
+		bearing += ( aSeed.y - 0.5 ) * 0.2;
+		height += ( fract( aSeed.x * 5.0 ) - 0.5 ) * 0.12;
+		vec3 own = scoutStem( 0.62 ) + vec3( sin( bearing ) * cos( height ), sin( height ), - cos( bearing ) * cos( height ) ) * 300.0 * gone;
+		// Where tomorrow's wind will blow, the hunters are carried that way.
+		own.x += uLean.x * 130.0 * gone;
+		own.z -= uLean.y * 100.0 * gone;
+		p = mix( p, own, scoutSpread() * smoothstep( 0.0, 0.25, gone ) );
+	}
+	return vec3( cameraPosition.x, 0.0, cameraPosition.z ) + p;
+}
+
+void main() {
+	mat4 viewProjection = projectionMatrix * viewMatrix;
+	vec4 clip = viewProjection * vec4( scoutPoint( aT ), 1.0 );
+	vec4 clipAhead = viewProjection * vec4( scoutPoint( aT + 0.004 ), 1.0 );
+	// Let go, it lingers soft and broad like any weave cut loose.
+	float loose = uTail < 1.09 ? smoothstep( uTail - 0.2, uTail, aT ) : 0.0;
+	float inHand = 1.0 - smoothstep( uHead - 0.05, uHead, aT );
+	float lingering = loose * uFade * ( 1.0 - inHand );
+	gl_Position = ribbonPosition( clip, clipAhead, aSide, aKind.w * ( 1.0 + 3.0 * lingering ) );
+
+	// The light in it runs downward: what is sensed comes back to the one who sent it.
+	float lit = smoothstep( - 0.2, 0.35, drift( aT * aKind.y + uTime * aKind.z + aSeed.x * 91.0 ) );
+	if ( aSoft > 0.9 ) lit = 0.8;
+	float there = max( inHand, loose * pow( 1.0 - uFade, 1.5 ) );
+	// Pale, and bluer and fainter the higher it goes; gone before its top.
+	vTint = mix( vec3( 0.84, 0.9, 1.0 ), vec3( 0.52, 0.66, 0.96 ), aT );
+	// Each is faint, a thread in the dark. Gathered, forty lie on one line, so each is drawn fainter
+	// still, or the stem would stand in the sky as a bar of light.
+	vAlpha = uStrength * aKind.x * lit * there * mix( 0.16, 0.6, scoutSpread() * smoothstep( 0.3, 0.6, scoutRise( aT ) ) ) * smoothstep( 0.0, 0.06, aT ) * ( 1.0 - smoothstep( 0.62, 0.98, aT ) ) / ( 1.0 + 1.5 * lingering );
+	vEdge = aSide;
+	vSoft = max( aSoft, lingering );
+}
+`;
+
 export interface ChannellerState {
 	time: number;
 	delta: number;
@@ -295,6 +471,14 @@ export interface ChannellerState {
 	current: number;
 	// 0..1 how stormy it is: in a storm they link and channel into the waves.
 	control: number;
+	// The scout: 0..1 whether one of them is up sensing tomorrow's wind, and that wind as it
+	// will blow across the view (right when positive) and along it (away when positive), each
+	// scaled by how strong it will be (0..1).
+	scout: number;
+	tomorrow: { across: number; along: number };
+	// -1..1 the heat between sea and air: above 0 the sea is the warmer and the air rises in
+	// thermals; below 0 the air is the warmer and lies still in layers.
+	thermal: number;
 	// 0..1 how much they are at work: 0 while the sun or moon lights the sea.
 	strength: number;
 	// Multiplies the light so it holds its brightness at any exposure.
@@ -413,6 +597,109 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	let joins = [0, 0, 0, 0];
 	const gate = [1, 1, 1, 1];
 	let surge = 0;
+	// The scout's tress: its own small mesh.
+	const scoutStrips = SCOUT_FILAMENTS + SCOUT_VEILS;
+	const scoutCount = scoutStrips * (SCOUT_SEGMENTS + 1) * 2;
+	const scoutAlong = new Float32Array(scoutCount);
+	const scoutSide = new Float32Array(scoutCount);
+	const scoutSeed = new Float32Array(scoutCount * 4);
+	const scoutKind = new Float32Array(scoutCount * 4);
+	const scoutSoft = new Float32Array(scoutCount);
+	let at = 0;
+	for (let filament = 0; filament < scoutStrips; filament++) {
+		const veil = filament >= SCOUT_FILAMENTS;
+		const seedValues = [Math.random(), Math.random(), veil ? 0.3 * Math.random() : Math.sqrt(Math.random()), veil ? 0.05 : Math.random() ** 2 * 0.9];
+		const kindValues = veil ? [0.05, 1, 0.2, 10 + 8 * Math.random()] : [0.2 + 0.35 * Math.random(), 3 + 5 * Math.random(), 0.25 + 0.4 * Math.random(), 0.55 + 0.3 * Math.random()];
+		for (let i = 0; i <= SCOUT_SEGMENTS; i++) {
+			for (const edge of [-1, 1]) {
+				scoutAlong[at] = i / SCOUT_SEGMENTS;
+				scoutSide[at] = edge;
+				scoutSeed.set(seedValues, at * 4);
+				scoutKind.set(kindValues, at * 4);
+				scoutSoft[at] = veil ? 1 : 0;
+				at++;
+			}
+		}
+	}
+	const scoutGeometry = new THREE.BufferGeometry();
+	scoutGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(scoutCount * 3), 3));
+	scoutGeometry.setAttribute("aT", new THREE.BufferAttribute(scoutAlong, 1));
+	scoutGeometry.setAttribute("aSide", new THREE.BufferAttribute(scoutSide, 1));
+	scoutGeometry.setAttribute("aSeed", new THREE.BufferAttribute(scoutSeed, 4));
+	scoutGeometry.setAttribute("aKind", new THREE.BufferAttribute(scoutKind, 4));
+	scoutGeometry.setAttribute("aSoft", new THREE.BufferAttribute(scoutSoft, 1));
+	scoutGeometry.setIndex(stripIndices(scoutStrips, SCOUT_SEGMENTS));
+	const scoutUniforms = {
+		uTime: { value: 0 },
+		uStrength: { value: 0 },
+		uGain: uniforms.uGain,
+		uHead: { value: 0 },
+		uTail: { value: 2 },
+		uFade: { value: 0 },
+		uLean: { value: new THREE.Vector2() },
+		uThermal: { value: 0 },
+		channelCurrent: sea.channelCurrent,
+		channelWind: sea.channelWind,
+		uPixelRatio: uniforms.uPixelRatio,
+		uResolution: uniforms.uResolution,
+	};
+	const scoutMesh = new THREE.Mesh(
+		scoutGeometry,
+		new THREE.ShaderMaterial({
+			uniforms: scoutUniforms,
+			vertexShader: scoutVertexShader,
+			fragmentShader,
+			transparent: true,
+			depthWrite: false,
+			side: THREE.DoubleSide,
+			blending: THREE.AdditiveBlending,
+		}),
+	);
+	scoutMesh.frustumCulled = false;
+	scoutMesh.renderOrder = WEAVE_RENDER_ORDER;
+	scoutMesh.visible = false;
+	scene.add(scoutMesh);
+	// The scout's weave begins and ends as the others do: it runs up from the boat, and when it
+	// is let go it is cut at the boat, goes on up by itself, and fades high and soft.
+	let scouting = false;
+	let scoutStrength = 0;
+	const tendScout = (delta: number, time: number, wanted: number, tomorrow: { across: number; along: number }, thermal: number) => {
+		const u = scoutUniforms;
+		if (wanted > 0.3 && !scouting) {
+			scouting = true;
+			u.uHead.value = 0;
+		} else if (wanted < 0.15 && scouting) {
+			scouting = false;
+			u.uHead.value = 0;
+			u.uTail.value = 0;
+			u.uFade.value = 0;
+		}
+		if (scouting) {
+			scoutStrength = wanted;
+			// It goes up slowly: it is feeling its way.
+			u.uHead.value = Math.min(1.1, u.uHead.value + delta / 9);
+			if (u.uTail.value < 2 && u.uHead.value >= u.uTail.value - 0.06) u.uTail.value = 2;
+		}
+		if (u.uTail.value < 2) {
+			if (u.uTail.value < 0.6) u.uTail.value += delta * 0.07;
+			else {
+				u.uTail.value += delta * 0.01;
+				u.uFade.value += delta / 18;
+				if (u.uFade.value >= 1) {
+					u.uTail.value = 2;
+					u.uFade.value = 0;
+				}
+			}
+		}
+		scoutMesh.visible = scouting || u.uTail.value < 2;
+		u.uTime.value = time;
+		u.uThermal.value += (thermal - u.uThermal.value) * Math.min(1, delta / 4);
+		u.uStrength.value = scoutStrength;
+		// The lean eases over: a forecast does not swing about.
+		u.uLean.value.x += (tomorrow.across - u.uLean.value.x) * Math.min(1, delta / 4);
+		u.uLean.value.y += (tomorrow.along - u.uLean.value.y) * Math.min(1, delta / 4);
+	};
+
 	// Who the story, or the steady work, wants channelling at this moment.
 	const want = [true, true, true, true];
 	const tell = (delta: number, need: number) => {
@@ -479,7 +766,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		return target.set(camera.position.x + side, 1.3 + rise, camera.position.z - ahead);
 	};
 
-	const update = ({ time, delta, energy, waveHeight, need, hold, current, control, strength, gain }: ChannellerState) => {
+	const update = ({ time, delta, energy, waveHeight, need, hold, current, control, scout, tomorrow, thermal, strength, gain }: ChannellerState) => {
+		tendScout(delta, time, scout, tomorrow, thermal);
 		// The story only runs on their nights, and starts from its beginning on each.
 		// Holding the boat back is not part of the story: it is steady work, for as long as the sea
 		// would carry them too fast, by as many of them as it takes. The story starts afresh after it.

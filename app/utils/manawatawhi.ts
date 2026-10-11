@@ -297,6 +297,10 @@ export interface SeaConditions {
 	windTrend: number;
 	waveTrend: number;
 	pressureTrend: number;
+	// The wind forecast for this time tomorrow: its speed in km/h and the compass direction it
+	// will come from. What the scout weave reaches up to feel for.
+	tomorrowWindSpeed: number;
+	tomorrowWindDirection: number;
 	// Where the weather models disagree, the lowest and highest of their figures (see WEATHER_MODELS).
 	doubt: Partial<Record<keyof typeof BLENDED, [number, number]>>;
 }
@@ -393,22 +397,26 @@ export async function fetchSeaConditions(at: { latitude: number; longitude: numb
 	type Current = { current: Record<string, number | null> & { time: string }; hourly?: Record<string, (number | null)[]> };
 	// The next three hours as well as now, for the figures that say where the weather is heading.
 	const ahead = "&forecast_hours=4&hourly=";
+	// And the wind for a day ahead, for the hour this time tomorrow.
+	const dayAhead = "&forecast_hours=25&hourly=";
 	const forecast = (variables: object, model?: string) =>
 		$fetch<Current>(`https://api.open-meteo.com/v1/forecast?${place}&current=${Object.values(variables).join(",")}${model ? `&models=${model}` : ""}`);
 	const [marine, weather, ...models] = await Promise.all([
 		$fetch<Current>(`https://marine-api.open-meteo.com/v1/marine?${place}&current=${Object.values(MARINE).join(",")}${ahead}wave_height`),
-		$fetch<Current>(`https://api.open-meteo.com/v1/forecast?${place}&current=${Object.values(WEATHER).join(",")}${ahead}wind_speed_10m,pressure_msl`),
+		$fetch<Current>(`https://api.open-meteo.com/v1/forecast?${place}&current=${Object.values(WEATHER).join(",")}${dayAhead}wind_speed_10m,wind_direction_10m,pressure_msl`),
 		// A model that cannot be reached is left out of the blend.
 		...WEATHER_MODELS.map((model) => forecast(BLENDED, model).catch(() => undefined)),
 	]);
 	// A model that has no figure for something sends null; it is read as 0.
 	const read = <Names extends Record<string, string>>(names: Names, from: Current) =>
 		Object.fromEntries(Object.entries(names).map(([key, name]) => [key, from.current[name] ?? 0])) as Record<keyof Names, number>;
-	// Change between the first and last of the hours asked for; 0 if the model did not send them.
+	// Change over the next three hours; 0 if the model did not send them.
 	const trend = (from: Current, name: string) => {
-		const hours = (from.hourly?.[name] ?? []).filter((value) => value != null);
-		return hours.length > 1 ? hours[hours.length - 1]! - hours[0]! : 0;
+		const hours = from.hourly?.[name] ?? [];
+		return hours[0] != null && hours[3] != null ? hours[3] - hours[0] : 0;
 	};
+	// The figure for this hour tomorrow, or failing that today's.
+	const tomorrow = (name: string, today: number) => weather.hourly?.[name]?.[24] ?? today;
 	const conditions: SeaConditions = {
 		observedAt: weather.current.time,
 		...read(MARINE, marine),
@@ -416,8 +424,12 @@ export async function fetchSeaConditions(at: { latitude: number; longitude: numb
 		windTrend: trend(weather, "wind_speed_10m"),
 		waveTrend: trend(marine, "wave_height"),
 		pressureTrend: trend(weather, "pressure_msl"),
+		tomorrowWindSpeed: 0,
+		tomorrowWindDirection: 0,
 		doubt: {},
 	};
+	conditions.tomorrowWindSpeed = tomorrow("wind_speed_10m", conditions.windSpeed);
+	conditions.tomorrowWindDirection = tomorrow("wind_direction_10m", conditions.windDirection);
 	for (const [key, name] of Object.entries(BLENDED) as [keyof typeof BLENDED, string][]) {
 		const answers = models.map((model) => model?.current[name]).filter((answer) => answer != null);
 		if (answers.length < 2) continue;
@@ -470,6 +482,8 @@ export function typicalConditions(boat: { latitude: number }): SeaConditions {
 		pressure: 1015,
 		airTemperature: warmth,
 		humidity: 80,
+		tomorrowWindSpeed: wind.speed,
+		tomorrowWindDirection: wind.from,
 		windTrend: 0,
 		waveTrend: 0,
 		pressureTrend: 0,
@@ -572,6 +586,19 @@ export function holdingBack(conditions: SeaConditions, bearing: number) {
 }
 
 const COMPASS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
+// -1..1 the heat between sea and air. Above 0 the sea is warmer than the air (fully at 3 °C):
+// the air is heated from below and rises in thermals. Below 0 the air is the warmer: it is
+// cooled from below and lies still, in layers.
+export function thermal({ seaTemperature, airTemperature }: SeaConditions) {
+	return Math.min(1, Math.max(-1, (seaTemperature - airTemperature) / 3));
+}
+
+// 0..1 whether it is a night for scouting: quiet enough that the work on the sea does not need
+// everyone. Fully in light airs (under 12 km/h), not at all in a fresh breeze (22 and over).
+export function quietEnoughToScout({ windSpeed }: SeaConditions) {
+	return clamp01((22 - windSpeed) / 10);
+}
+
 // 0..1 how stormy it is, for the channellers: a real storm by the weather (thunder, gale gusts,
 // a cloudburst), or simply a very heavy sea. In a storm they link and work on the waves.
 export function stormy(conditions: SeaConditions) {

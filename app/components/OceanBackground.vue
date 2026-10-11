@@ -114,6 +114,8 @@ const liveFigures = computed(() => {
 		["channellers", `building ${Math.round(building(c) * 100)}% · called for ${Math.round(calling(c) * 100)}%`],
 		["pace", `carried ${carried(c, PLACE.bearing).toFixed(1)} km/h · needs ${PACE.toFixed(1)} · holding back ${Math.round(holdingBack(c, PLACE.bearing) * 100)}%`],
 		["storm", `linked on the waves ${Math.round(stormy(c) * 100)}%`],
+		["tomorrow", `wind ${c.tomorrowWindSpeed.toFixed(0)} km/h from the ${compassPoint(c.tomorrowWindDirection)} · quiet enough to scout ${Math.round(quietEnoughToScout(c) * 100)}%`],
+		["air", thermal(c) > 0.1 ? `sea warmer by ${(c.seaTemperature - c.airTemperature).toFixed(1)} °C: thermals ${Math.round(thermal(c) * 100)}%` : thermal(c) < -0.1 ? `air warmer by ${(c.airTemperature - c.seaTemperature).toFixed(1)} °C: still, layered ${Math.round(-thermal(c) * 100)}%` : "sea and air alike: neither rising nor layered"],
 	];
 });
 
@@ -418,6 +420,14 @@ onMounted(() => {
 	const spread = THREE.MathUtils.randFloatSpread;
 	let measuredSea = false;
 	let holdLevel = 0;
+	// Tomorrow's forecast wind as the scout feels it: across and along the view, scaled by its
+	// strength (a 40 km/h wind counts as full).
+	const NO_WIND = { across: 0, along: 0 };
+	const tomorrowsWind = (c: SeaConditions) => {
+		const blowsTowards = THREE.MathUtils.degToRad(c.tomorrowWindDirection + 180 - PLACE.bearing);
+		const strength = Math.min(1, c.tomorrowWindSpeed / 40);
+		return { across: Math.sin(blowsTowards) * strength, along: Math.cos(blowsTowards) * strength };
+	};
 	let controlLevel = 0;
 	// Metres above the water on a measured sea. September looked down from 18 to 27.
 	const EYE_HEIGHT = 5;
@@ -647,6 +657,11 @@ onMounted(() => {
 			waveHeight: liveOnly ? liveOnly.waveHeight : lerp(0.5, 6, sea),
 			hold: holdLevel,
 			control: controlLevel,
+			// On a quiet night of theirs one of them scouts: not in a storm, nor while the boat is
+			// being held back, nor when the sea calls for nearly all four.
+			scout: liveOnly ? darkness * quietEnoughToScout(liveOnly) * (1 - controlLevel) * (1 - holdLevel) * (1 - THREE.MathUtils.smoothstep(need, 0.45, 0.6)) * alive : 0,
+			tomorrow: liveOnly ? tomorrowsWind(liveOnly) : NO_WIND,
+			thermal: liveOnly ? thermal(liveOnly) : 0,
 			current: liveOnly ? Math.sin(THREE.MathUtils.degToRad(liveOnly.currentDirection - PLACE.bearing)) * Math.min(1, liveOnly.currentSpeed / 3) : 0,
 			strength: Math.max(darkness, holdLevel, controlLevel) * alive,
 			// More light by day, when it has a bright sea to show against.
