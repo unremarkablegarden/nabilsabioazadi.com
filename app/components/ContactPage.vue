@@ -29,7 +29,7 @@ const notice = ref("");
 // the whole site can change language, this is the one place to connect it.
 const words = computed(() => LETTER_WORDS[useRoute().query.lang as string] ?? LETTER_WORDS.en!);
 const sentence = computed(() => letterSentence(words.value));
-const PIECES = ["moc.idazaoibaslibana", "oiduts"];
+const PIECES = ["moc.idazaoibasliban", "oiduts"];
 const address = () => PIECES.map((piece) => [...piece].reverse().join("")).reverse().join(String.fromCharCode(64));
 // Shown after Send, for anyone whose email program did not open.
 const shownAddress = ref("");
