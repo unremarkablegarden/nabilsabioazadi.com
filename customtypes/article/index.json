@@ -1,0 +1,36 @@
+{
+  "format": "page",
+  "id": "article",
+  "label": "Article",
+  "repeatable": true,
+  "status": true,
+  "json": {
+    "Main": {
+      "uid": { "config": { "label": "UID (the end of the web address)" }, "type": "UID" },
+      "kind": { "config": { "label": "Kind (for example: Essay)", "placeholder": "Essay" }, "type": "Text" },
+      "title": { "config": { "label": "Title", "multi": "heading1", "labels": ["haw", "mi"] }, "type": "StructuredText" },
+      "authors": { "config": { "label": "Authors (one per line or separated by commas)" }, "type": "Text" },
+      "date": { "config": { "label": "Date" }, "type": "Date" },
+      "standfirst": { "config": { "label": "Standfirst (one or two sentences shown under the title and in the list)", "multi": "paragraph,em,strong", "labels": ["haw", "mi"] }, "type": "StructuredText" },
+      "body": {
+        "config": {
+          "label": "Body. Labels: quote = a quotation set apart (label the whole paragraph); caption = the caption for the image above it (label the whole paragraph); note = an endnote number; haw / mi = Hawaiian / Māori words, for screen readers",
+          "multi": "paragraph,heading2,heading3,strong,em,hyperlink,image,list-item,o-list-item",
+          "allowTargetBlank": true,
+          "labels": ["quote", "caption", "note", "haw", "mi"]
+        },
+        "type": "StructuredText"
+      },
+      "notes": {
+        "config": { "label": "Endnotes, as a numbered list, in order", "multi": "o-list-item,paragraph,strong,em,hyperlink", "allowTargetBlank": true, "labels": ["haw", "mi"] },
+        "type": "StructuredText"
+      },
+      "keywords": { "config": { "label": "Keywords (separated by commas)" }, "type": "Text" }
+    },
+    "SEO & Metadata": {
+      "meta_title": { "config": { "label": "Meta Title", "placeholder": "A title of the page used for social media and search engines" }, "type": "Text" },
+      "meta_description": { "config": { "label": "Meta Description", "placeholder": "A brief summary of the page" }, "type": "Text" },
+      "meta_image": { "config": { "constraint": { "height": 1260, "width": 2400 }, "label": "Meta Image", "thumbnails": [] }, "type": "Image" }
+    }
+  }
+}

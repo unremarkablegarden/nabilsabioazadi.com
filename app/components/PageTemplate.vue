@@ -6,7 +6,7 @@ defineProps<{ page: Content.PageDocument }>();
 </script>
 
 <template>
-	<main>
+	<main id="main" tabindex="-1">
 		<h1 class="font-bold"><PrismicText :field="page.data.title" /></h1>
 		<PrismicRichText :field="page.data.body" />
 		<figure v-for="(item, i) in page.data.gallery" :key="i">

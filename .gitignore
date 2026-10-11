@@ -22,3 +22,9 @@ logs
 .env
 .env.*
 !.env.example
+
+# Licensed typefaces: used locally, not to be published in this public repository
+public/fonts/licensed/
+
+# A stray duplicate of the project that the desktop app copied in; kept, per the never-delete rule, but not tracked
+.trash/site/

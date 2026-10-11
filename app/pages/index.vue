@@ -5,15 +5,14 @@ const { data: page } = await useAsyncData("homepage", () =>
 );
 
 useSeoMeta({
-	title: page.value?.data.meta_title,
+	title: page.value?.data.meta_title || "Nabil Sabio Azadi",
 	description: page.value?.data.meta_description,
 });
 </script>
 
+<!-- The homepage is the ocean and the navigation alone. Its Prismic page now only supplies the title and description. -->
 <template>
-	<PageTemplate
-		v-if="page"
-		:page="page"
-		class="flex min-h-screen flex-col items-center justify-center"
-	/>
+	<main id="main" tabindex="-1">
+		<h1 class="sr-only">{{ page?.data.meta_title || "Nabil Sabio Azadi" }}</h1>
+	</main>
 </template>

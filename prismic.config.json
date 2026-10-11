@@ -2,6 +2,10 @@
   "repositoryName": "nabilsabioazadicom",
   "routes": [
     {
+      "type": "article",
+      "path": "/writing/:uid"
+    },
+    {
       "type": "page",
       "path": "/:uid"
     }
