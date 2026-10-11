@@ -114,6 +114,7 @@ const liveFigures = computed(() => {
 		["channellers", `building ${Math.round(building(c) * 100)}% · called for ${Math.round(calling(c) * 100)}%`],
 		["pace", `carried ${carried(c, PLACE.bearing).toFixed(1)} km/h · needs ${PACE.toFixed(1)} · holding back ${Math.round(holdingBack(c, PLACE.bearing) * 100)}%`],
 		["storm", `linked on the waves ${Math.round(stormy(c) * 100)}%`],
+		["unusual", `air ${Math.round(unusual(c).air * 100)}% · water ${Math.round(unusual(c).water * 100)}% (the strongest looks into it past 50%)`],
 		["strongest", `${Math.round((1 - strengthBelow(c, PLACE.bearing)) * 100)}% ahead (${calling(c) >= 0.6 ? "linked" : "not linked"}) · ${Math.round(strengthBelow(c, PLACE.bearing) * 100)}% below, round the boat`],
 		["tomorrow", `wind ${c.tomorrowWindSpeed.toFixed(0)} km/h from the ${compassPoint(c.tomorrowWindDirection)} · quiet enough to scout ${Math.round(quietEnoughToScout(c) * 100)}%`],
 		["air", thermal(c) > 0.1 ? `sea warmer by ${(c.seaTemperature - c.airTemperature).toFixed(1)} °C: thermals ${Math.round(thermal(c) * 100)}%` : thermal(c) < -0.1 ? `air warmer by ${(c.airTemperature - c.seaTemperature).toFixed(1)} °C: still, layered ${Math.round(-thermal(c) * 100)}%` : "sea and air alike: neither rising nor layered"],
@@ -273,6 +274,8 @@ onMounted(() => {
 	let darkness = 0;
 	// 0..1 how far night has fallen.
 	let nightfall = 0;
+	// 0..1 how far it is dawn or dusk: then all thirteen channellers link.
+	let gathering = 0;
 	// The moment shown, and 0..1 how far the stars are out at it.
 	let shownMoment = new Date();
 	let starsOut = 0;
@@ -300,6 +303,9 @@ onMounted(() => {
 
 		shownMoment = when;
 		nightfall = staged ? 0 : night;
+		// Dawn and dusk (the owner's): from the sun 9 degrees under the horizon to 8 degrees over it,
+		// about an hour and a half each, there is most qi in the air, and they all link to draw on it.
+		gathering = staged ? 0 : THREE.MathUtils.smoothstep(sunElevation, -9, -5) * (1 - THREE.MathUtils.smoothstep(sunElevation, 3, 8));
 		// Stars need a dark sky: they are drowned by a bright moon and hidden by cloud. (The cloud
 		// here dims them all alike; it cannot yet hide the ones behind each cloud.)
 		starsOut = staged ? 0 : night * (1 - 0.6 * moonlight) * (1 - sky ** 0.8);
@@ -429,6 +435,7 @@ onMounted(() => {
 	// Tomorrow's forecast wind as the scout feels it: across and along the view, scaled by its
 	// strength (a 40 km/h wind counts as full).
 	const NO_WIND = { across: 0, along: 0 };
+	const NOTHING_UNUSUAL = { air: 0, water: 0 };
 	const tomorrowsWind = (c: SeaConditions) => {
 		const blowsTowards = THREE.MathUtils.degToRad(c.tomorrowWindDirection + 180 - PLACE.bearing);
 		const strength = Math.min(1, c.tomorrowWindSpeed / 40);
@@ -630,7 +637,7 @@ onMounted(() => {
 		const liveRain = liveOnly ? rainAmount(liveOnly) : 0;
 		const rain = calmMotion ? 0 : Math.max(THREE.MathUtils.smoothstep(fury, 0.15, 0.6), liveRain) * alive;
 		// The weave, and what its knot does to the sea and the clouds around it.
-		const formed = knotFormed(moment.weave * (1 - Math.max(darkness, controlLevel)));
+		const formed = knotFormed(moment.weave * (1 - Math.max(darkness, controlLevel, gathering)));
 		knotReady = formed > 0.8;
 		// The bond: how far the channelling has taken hold of the storm's wind, air and fog.
 		const bond = bondLevel.value * formed * alive;
@@ -639,7 +646,7 @@ onMounted(() => {
 		weave.update({
 			time,
 			delta,
-			amount: moment.weave * (1 - Math.max(darkness, controlLevel)),
+			amount: moment.weave * (1 - Math.max(darkness, controlLevel, gathering)),
 			spread: fury + 2 * moment.white * moment.veil,
 			gain: 0.5 / steadyExposure,
 		});
@@ -664,6 +671,11 @@ onMounted(() => {
 			hold: holdLevel,
 			control: controlLevel,
 			showMasters: query.get("show") === "masters",
+			showSoundings: query.get("show") === "soundings",
+			gathering,
+			// Softest in full day, and still soft through twilight.
+			soften: Math.max(daylight, gathering),
+			unusual: liveOnly ? unusual(liveOnly) : NOTHING_UNUSUAL,
 			below: liveOnly ? strengthBelow(liveOnly, PLACE.bearing) : 0,
 			// On a quiet night of theirs one of them scouts: not in a storm, nor while the boat is
 			// being held back, nor when the sea calls for nearly all four.
@@ -671,7 +683,7 @@ onMounted(() => {
 			tomorrow: liveOnly ? tomorrowsWind(liveOnly) : NO_WIND,
 			thermal: liveOnly ? thermal(liveOnly) : 0,
 			current: liveOnly ? Math.sin(THREE.MathUtils.degToRad(liveOnly.currentDirection - PLACE.bearing)) * Math.min(1, liveOnly.currentSpeed / 3) : 0,
-			strength: Math.max(darkness, controlLevel) * alive,
+			strength: Math.max(darkness, controlLevel, gathering) * alive,
 			// More light by day, when it has a bright sea to show against.
 			gain: (0.3 + 0.6 * daylight) / steadyExposure,
 		});
@@ -736,7 +748,7 @@ onMounted(() => {
 			// The threads drag the air after them while they race for the knot, and a little once they are laid.
 			// (Not while the channellers are at work: the old weave is put away then, and its draught
 			// would carry the air they have gathered up into the sky.)
-			charge: (Math.sin(Math.PI * Math.min(1, moment.weave / 0.5)) + 0.25 * formed) * (1 - Math.max(darkness, controlLevel)) * alive,
+			charge: (Math.sin(Math.PI * Math.min(1, moment.weave / 0.5)) + 0.25 * formed) * (1 - Math.max(darkness, controlLevel, gathering)) * alive,
 			flow: flowScreen,
 			flowPull: calmMotion ? 0 : channelling.pull,
 			knot: knotScreen,

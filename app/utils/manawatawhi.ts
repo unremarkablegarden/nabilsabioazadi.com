@@ -616,5 +616,32 @@ export function stormy(conditions: SeaConditions) {
 	return clamp01(Math.max(stormFury(conditions), (seaState(conditions) - 0.55) / 0.3));
 }
 
+// 0..1 how far something out of the ordinary is happening, in the air and in the water. The
+// strongest channeller looks into it first (the owner's): see `tendOccurrence` in channellers.ts.
+// The owner had every benchmark first tried brought down by 40% (`EASILY`), so that less counts:
+//   air     the wind rising or dropping fast (9 km/h in three hours counts as fully), the
+//           pressure moving fast either way (1.8 hPa), gusts far above the steady wind, thunder,
+//           or tomorrow's wind coming from quite another quarter than today's
+//   water   the sea getting up or going down fast (0.48 m in three hours), or a surface current
+//           running hard (1.8 km/h and more)
+const EASILY = 0.6;
+export function unusual(conditions: SeaConditions) {
+	const { windTrend, waveTrend, pressureTrend, windSpeed, windGusts, windDirection, tomorrowWindSpeed, tomorrowWindDirection, currentSpeed } = conditions;
+	const turn = Math.abs(((tomorrowWindDirection - windDirection + 540) % 360) - 180);
+	const backing = Math.max(windSpeed, tomorrowWindSpeed) > 12 * EASILY ? (turn - 60 * EASILY) / (80 * EASILY) : 0;
+	return {
+		air: clamp01(
+			Math.max(
+				Math.abs(windTrend) / (15 * EASILY),
+				Math.abs(pressureTrend) / (3 * EASILY),
+				(windGusts - 1.6 * windSpeed - 6 * EASILY) / (20 * EASILY),
+				thunderAmount(conditions),
+				backing,
+			),
+		),
+		water: clamp01(Math.max(Math.abs(waveTrend) / (0.8 * EASILY), (currentSpeed - 1.5 * EASILY) / (1.5 * EASILY))),
+	};
+}
+
 // A compass direction in degrees as a word.
 export const compassPoint = (degrees: number) => COMPASS[Math.round((((degrees % 360) + 360) % 360) / 45) % 8]!;

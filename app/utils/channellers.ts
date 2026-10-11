@@ -16,6 +16,9 @@
 // filaments riding over each crest and going down into each trough, brightest on the crests.
 // The waves themselves go on doing exactly what the weather data says.
 //
+// Every now and then three or four of them sound the water with braids that duck into the sea
+// and come back to the boat (see the soundings, further down).
+//
 // There are thirteen of them on the boat (the owner's): four at the front at a time, and they
 // take turns. When the boat has to be slowed, that is done by some of the weaker ones, who form
 // deeper weaves close to the sea near the boat, almost wholly out of the picture; the weaving
@@ -76,6 +79,9 @@ attribute vec4 aKind;
 // 1 for a veil, 0 for a filament.
 attribute float aSoft;
 uniform float uStrength;
+// 0..1 how light the sky is. Against a light sky a fine bright line reads as a wire, so there
+// each filament is drawn broad and soft and fainter: a breath of light, not a line.
+uniform float uSoften;
 uniform vec3 uTints[ 3 ];
 uniform vec3 uElements[ 6 ];
 uniform vec3 uBaseTone;
@@ -208,7 +214,7 @@ void main() {
 	vec4 clipAhead = viewProjection * vec4( threadPoint( aT + 0.002 ), 1.0 );
 	// (Lingering, each filament is broad and soft: a blur, not a line.)
 	float lingering = channelPresence( aThread.x, aheadAt( aT ) ).y;
-	gl_Position = ribbonPosition( clip, clipAhead, aSide, aThread.w * ( 1.0 + 4.0 * lingering ) );
+	gl_Position = ribbonPosition( clip, clipAhead, aSide, aThread.w * ( 1.0 + 4.0 * lingering + 3.0 * uSoften ) );
 
 	float ahead = max( aheadAt( aT ), 0.0 );
 	float q = log( ahead + 12.0 );
@@ -255,9 +261,9 @@ void main() {
 	// (Driven hard there are more filaments alight at once, so each is drawn a little fainter,
 	// or their colours would burn out to white where they lie thickest.)
 	vAlpha = uStrength * aKind.x * ( 1.0 - 0.4 * channelSurge ) * lit * ( 0.55 + 1.1 * channelPulse( aThread.x, ahead ) ) * smoothstep( 0.0, 0.05, aT )
-		* ( 1.0 - smoothstep( 0.7, 1.0, channelWay( ahead ) ) * ( 1.0 - 0.8 * lingering ) ) / ( 1.0 + ahead / 1500.0 ) / ( 1.0 + 2.0 * lingering );
+		* ( 1.0 - smoothstep( 0.7, 1.0, channelWay( ahead ) ) * ( 1.0 - 0.8 * lingering ) ) / ( 1.0 + ahead / 1500.0 ) / ( 1.0 + 2.0 * lingering ) / ( 1.0 + 1.6 * uSoften );
 	vEdge = aSide;
-	vSoft = max( aSoft, lingering );
+	vSoft = max( aSoft, max( lingering, 0.9 * uSoften ) );
 }
 `;
 
@@ -337,6 +343,10 @@ uniform float uFade;
 // Tomorrow's wind as seen from the boat: x how much it will blow to the right across the view,
 // y how much away from the viewer, both scaled by how strong it will be (0..1).
 uniform vec2 uLean;
+// Where along the boat's rail it is sent up from (metres right of the middle), and how light
+// the sky is (see uSoften in the main weaving).
+uniform float uSeat;
+uniform float uSoften;
 // The real surface current across the view, and the real wind across it now (both -1..1, to
 // the right when positive): see channel-path.ts.
 uniform float channelCurrent;
@@ -390,7 +400,7 @@ vec3 scoutStem( float t ) {
 	float rise = scoutRise( t );
 	float out_ = 4.0 + 90.0 * smoothstep( 0.0, 0.34, t ) + 230.0 * rise;
 	float onWater = smoothstep( 0.0, 0.34, t );
-	vec3 p = vec3( 2.25, mix( cameraPosition.y - 1.2, 1.4, smoothstep( 0.0, 0.07, t ) ), - out_ );
+	vec3 p = vec3( uSeat, mix( cameraPosition.y - 1.2, 1.4, smoothstep( 0.0, 0.07, t ) ), - out_ );
 	// Carried by the current, and meandering as water does.
 	p.x += channelCurrent * 55.0 * onWater * onWater + 3.5 * onWater * sin( out_ * 0.07 - uTime * 0.3 );
 	// Up off the sea.
@@ -457,7 +467,7 @@ void main() {
 	float loose = uTail < 1.09 ? smoothstep( uTail - 0.2, uTail, aT ) : 0.0;
 	float inHand = 1.0 - smoothstep( uHead - 0.05, uHead, aT );
 	float lingering = loose * uFade * ( 1.0 - inHand );
-	gl_Position = ribbonPosition( clip, clipAhead, aSide, aKind.w * ( 1.0 + 3.0 * lingering ) );
+	gl_Position = ribbonPosition( clip, clipAhead, aSide, aKind.w * ( 1.0 + 3.0 * lingering + 3.0 * uSoften ) );
 
 	// The light in it runs downward: what is sensed comes back to the one who sent it.
 	float lit = smoothstep( - 0.2, 0.35, drift( aT * aKind.y + uTime * aKind.z + aSeed.x * 91.0 ) );
@@ -467,9 +477,159 @@ void main() {
 	vTint = mix( vec3( 0.84, 0.9, 1.0 ), vec3( 0.52, 0.66, 0.96 ), aT );
 	// Each is faint, a thread in the dark. Gathered, forty lie on one line, so each is drawn fainter
 	// still, or the stem would stand in the sky as a bar of light.
-	vAlpha = uStrength * aKind.x * lit * there * mix( 0.16, 0.6, scoutSpread() * smoothstep( 0.3, 0.6, scoutRise( aT ) ) ) * smoothstep( 0.0, 0.06, aT ) * ( 1.0 - smoothstep( 0.62, 0.98, aT ) ) / ( 1.0 + 1.5 * lingering );
+	vAlpha = uStrength * aKind.x * lit * there * mix( 0.16, 0.6, scoutSpread() * smoothstep( 0.3, 0.6, scoutRise( aT ) ) ) * smoothstep( 0.0, 0.06, aT ) * ( 1.0 - smoothstep( 0.62, 0.98, aT ) ) / ( 1.0 + 1.5 * lingering ) / ( 1.0 + 1.6 * uSoften );
 	vEdge = aSide;
-	vSoft = max( aSoft, lingering );
+	vSoft = max( aSoft, max( lingering, 0.9 * uSoften ) );
+}
+`;
+
+// Soundings (the owner's). Every now and then three or four of the channellers feel the water:
+// its temperature and its currents. Each sends a tress of fine filaments, plaited in three, out
+// low over the sea ahead; it slips under the surface, quests about down there, comes up again
+// and returns to the boat. None of it is drawn to a pattern, and no two do it alike:
+//   each begins when they are ready, reaches as far as they can, holds as long as they need,
+//                  and lets go in their own time;
+//   together       at times their tresses are laid in one and wound round each other on the way
+//                  out, but under water they part, each to feel its own quarter;
+//   in the water   it runs shallow, just under the mean surface, so the real waves cover it and
+//                  their troughs uncover it: it ducks in and out as the sea moves. The real
+//                  current carries it, further the longer it has been under. In water warmer than
+//                  the air the plait slackens, lifts and shimmers; in colder it draws tight and
+//                  lies deeper.
+//   coming back    what was felt runs along it towards the hands, and its colour leans a little
+//                  to the water's warmth or cold.
+// It is a light touch and is drawn as one: faint threads, nothing near the bow.
+const SOUNDERS = 4;
+const SOUNDING_FILAMENTS = 15;
+const SOUNDING_SEGMENTS = 220;
+
+const soundingVertexShader = /* glsl */ `
+attribute float aT;
+attribute float aSide;
+// Which sounder (0..3), which strand of the plait (0..2), a random number, width in pixels.
+attribute vec4 aBraid;
+// Brightness, how many lit stretches along its length, how fast they travel, and how far off its
+// strand's line it lies (-1..1).
+attribute vec4 aKind;
+uniform float uTime;
+uniform float uStrength;
+// For each sounder: how far their tress has run round its loop, and how far the cut has followed
+// once they let go (past the end when there is none).
+uniform vec4 uHead;
+uniform vec4 uTail;
+uniform float uSoften;
+// 0..1 how far they are doing it together just now.
+uniform float uTogether;
+uniform float uThermal;
+uniform float channelCurrent;
+varying vec3 vTint;
+varying float vAlpha;
+varying float vEdge;
+varying float vSoft;
+${ribbonShaderChunk}
+
+float drift( float x ) {
+	float i = floor( x );
+	float f = fract( x );
+	return mix( hash1( i ), hash1( i + 1.0 ), f * f * ( 3.0 - 2.0 * f ) ) * 2.0 - 1.0;
+}
+
+float ofSounder( vec4 each, float who ) {
+	return who < 0.5 ? each.x : who < 1.5 ? each.y : who < 2.5 ? each.z : each.w;
+}
+
+// 0..1 how far a point along the loop is under the sea. Each goes in and comes out where it will.
+float soundingUnder( float t, float who ) {
+	float enters = 0.25 + 0.05 * hash1( who * 3.7 + 1.0 );
+	float leaves = 0.75 - 0.06 * hash1( who * 5.3 + 2.0 );
+	return smoothstep( enters - 0.06, enters + 0.06, t ) * ( 1.0 - smoothstep( leaves - 0.06, leaves + 0.06, t ) );
+}
+
+// The line one sounder's tress lies along, relative to the boat.
+vec3 soundingStem( float t, float who ) {
+	float under = soundingUnder( t, who );
+	float warm = max( uThermal, 0.0 );
+	float still = max( - uThermal, 0.0 );
+	// Together in the air; under water each feels its own quarter.
+	float held = uTogether * ( 1.0 - 0.7 * under );
+	float own = ( who - 1.5 ) * 0.36 + 0.14 * drift( uTime * 0.04 + who * 7.1 );
+	float bearing = mix( own, 0.1 * drift( uTime * 0.03 ), held );
+	float reach = mix( 34.0 + 30.0 * hash1( who * 9.1 + 0.5 ), 50.0, held );
+	vec2 out_ = vec2( sin( bearing ), - cos( bearing ) );
+	vec2 across = vec2( - out_.y, out_.x );
+	// Out along one side and back along the other: which side, and how wide, is each one's own.
+	float arc = sin( 3.14159 * t );
+	float aside = reach * ( 0.16 + 0.1 * hash1( who * 2.3 ) ) * sin( 6.28319 * t ) * ( hash1( who * 4.9 ) < 0.5 ? 1.0 : - 1.0 );
+	// Under water it quests about.
+	aside += under * 3.0 * drift( t * 5.0 + uTime * 0.07 + who * 13.0 );
+	vec2 level = vec2( ( who - 1.5 ) * 1.5, 0.0 ) * ( 1.0 - arc ) + out_ * reach * arc + across * aside;
+	// The current carries it, further the longer it has been under, and it is drawn back against
+	// the current as it comes home.
+	float carried = smoothstep( 0.25, 0.75, t );
+	level.x += channelCurrent * 16.0 * carried * carried * ( 1.0 - smoothstep( 0.78, 1.0, t ) );
+	// Together, the tresses wind round one another.
+	float wind = t * 14.0 - uTime * 0.2 + who * 1.5708;
+	vec2 wound = vec2( cos( wind ), sin( wind ) ) * 0.55 * held * arc;
+	// Low over the sea, not arched high; and shallow under it, where the real waves cover and
+	// uncover it. Warm water lifts it; cold lets it lie deeper.
+	float air = 1.0 + 0.6 * arc + 0.5 * drift( t * 3.0 + who * 5.0 + uTime * 0.05 );
+	float depth = 0.45 + 0.5 * still - 0.25 * warm + 0.3 * drift( t * 7.0 + uTime * 0.09 + who * 3.0 );
+	vec3 p = vec3( level.x + across.x * wound.x, mix( air + wound.y, - depth, under ), level.y + across.y * wound.x );
+	// It leaves from, and returns to, hands held a little below the eye.
+	p.y = mix( cameraPosition.y - 1.2, p.y, smoothstep( 0.0, 0.16, t ) * smoothstep( 1.0, 0.84, t ) );
+	return p;
+}
+
+vec3 soundingPoint( float t ) {
+	float who = aBraid.x;
+	vec3 p = soundingStem( t, who );
+	vec2 way = soundingStem( t + 0.01, who ).xz - p.xz;
+	way = normalize( way + vec2( 1e-4, 0.0 ) );
+	vec2 across = vec2( - way.y, way.x );
+	float under = soundingUnder( t, who );
+	float warm = max( uThermal, 0.0 );
+	float still = max( - uThermal, 0.0 );
+	float ends = smoothstep( 0.0, 0.1, t ) * smoothstep( 1.0, 0.9, t );
+	// Three strands passing over and under: a plait. Close in the air. In the water it slackens,
+	// more in warm water, which mixes it; cold water draws it tight.
+	float slack = 1.0 + under * ( 0.8 + 1.6 * warm - 0.5 * still );
+	float phase = t * 40.0 - uTime * 0.4 + aBraid.y * 2.0944;
+	vec2 off = vec2( sin( phase ), 0.5 * sin( 2.0 * phase ) ) * 0.26 * slack;
+	// Each filament a little off its strand's line, and looser under water.
+	float turn = aBraid.z * 41.0 + t * ( 6.0 + 5.0 * aBraid.z ) - uTime * 0.15;
+	off += aKind.w * vec2( cos( turn ), sin( turn ) ) * ( 0.07 + 0.4 * under * ( 0.6 + warm ) );
+	// Warm water shimmers.
+	off += warm * under * 0.12 * vec2( kink( t * 70.0 + aBraid.z * 97.0 - uTime * 3.0 ), kink( t * 77.0 + aBraid.z * 89.0 + uTime * 2.6 ) );
+	off *= ends;
+	p.xz += across * off.x;
+	p.y += off.y;
+	return vec3( cameraPosition.x + p.x, p.y, cameraPosition.z - 2.0 + p.z );
+}
+
+void main() {
+	mat4 viewProjection = projectionMatrix * viewMatrix;
+	vec4 clip = viewProjection * vec4( soundingPoint( aT ), 1.0 );
+	vec4 clipAhead = viewProjection * vec4( soundingPoint( aT + 0.004 ), 1.0 );
+	float who = aBraid.x;
+	float head = ofSounder( uHead, who );
+	float tail = ofSounder( uTail, who );
+	float inHand = 1.0 - smoothstep( head - 0.06, head, aT );
+	// Let go at the hands, the cut follows round; what is just ahead of it goes soft and broad.
+	float cut = tail < 1.5 ? 1.0 : 0.0;
+	float kept = mix( 1.0, smoothstep( tail - 0.1, tail + 0.02, aT ), cut );
+	float loose = cut * ( 1.0 - smoothstep( tail, tail + 0.3, aT ) );
+	gl_Position = ribbonPosition( clip, clipAhead, aSide, aBraid.w * ( 1.0 + 2.5 * loose + 3.0 * uSoften ) );
+	// What is felt runs along it towards the hands.
+	float lit = smoothstep( - 0.25, 0.4, drift( aT * aKind.y - uTime * aKind.z + aBraid.z * 91.0 ) );
+	// Going out it is the pale of any weave. Coming back it leans to the water's warmth or cold.
+	vec3 pale = vec3( 0.8, 0.88, 1.0 );
+	vec3 felt = uThermal > 0.0 ? mix( pale, vec3( 1.0, 0.82, 0.64 ), 0.6 * uThermal ) : mix( pale, vec3( 0.5, 0.72, 1.0 ), - 0.6 * uThermal );
+	vTint = mix( pale, felt, smoothstep( 0.3, 0.65, aT ) );
+	// Nothing near the bow: it is seen from where it nears the water.
+	float away = smoothstep( 0.05, 0.2, aT ) * smoothstep( 0.95, 0.8, aT );
+	vAlpha = uStrength * aKind.x * lit * inHand * kept * away / ( 1.0 + 1.5 * loose ) / ( 1.0 + 1.6 * uSoften );
+	vEdge = aSide;
+	vSoft = max( loose, 0.9 * uSoften );
 }
 `;
 
@@ -493,6 +653,15 @@ export interface ChannellerState {
 	scout: number;
 	// For looking at the strongest's deep weaving without waiting for it.
 	showMasters?: boolean;
+	// The same for the soundings.
+	showSoundings?: boolean;
+	// 0..1 how far it is dawn or dusk. Then all thirteen link (the owner's): it is when there is
+	// most qi in the air for them to draw upon. Nobody is below, sounding or scouting: all are in it.
+	gathering: number;
+	// 0..1 how light the sky is (see uSoften).
+	soften: number;
+	// 0..1 how far something out of the ordinary is happening in the air and in the water (`unusual`).
+	unusual: { air: number; water: number };
 	// 0..1 how much of the strongest's strength the sea asks for below, round the boat, and not ahead.
 	below: number;
 	tomorrow: { across: number; along: number };
@@ -566,6 +735,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	geometry.setIndex(stripIndices(strips, SEGMENTS));
 	const uniforms = {
 		uStrength: { value: 0 },
+		uSoften: { value: 0 },
 		uGain: { value: 1 },
 		uTints: { value: TINTS },
 		uElements: { value: ELEMENTS },
@@ -658,6 +828,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uTail: { value: 2 },
 		uFade: { value: 0 },
 		uLean: { value: new THREE.Vector2() },
+		uSeat: { value: 2.25 },
+		uSoften: uniforms.uSoften,
 		uThermal: { value: 0 },
 		channelCurrent: sea.channelCurrent,
 		channelWind: sea.channelWind,
@@ -684,11 +856,13 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	// is let go it is cut at the boat, goes on up by itself, and fades high and soft.
 	let scouting = false;
 	let scoutStrength = 0;
-	const tendScout = (delta: number, time: number, wanted: number, tomorrow: { across: number; along: number }, thermal: number) => {
+	const tendScout = (delta: number, time: number, wanted: number, tomorrow: { across: number; along: number }, thermal: number, byStrongest: boolean) => {
 		const u = scoutUniforms;
 		if (wanted > 0.3 && !scouting) {
 			scouting = true;
 			u.uHead.value = 0;
+			// The night scout sits at the far right. The strongest, looking into something, is second from the right.
+			u.uSeat.value = byStrongest ? 0.75 : 2.25;
 		} else if (wanted < 0.15 && scouting) {
 			scouting = false;
 			u.uHead.value = 0;
@@ -721,6 +895,133 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		u.uLean.value.y += (tomorrow.along - u.uLean.value.y) * Math.min(1, delta / 4);
 	};
 
+	// The soundings' tresses: their own small mesh.
+	const soundingStrips = SOUNDERS * SOUNDING_FILAMENTS;
+	const soundingCount = soundingStrips * (SOUNDING_SEGMENTS + 1) * 2;
+	const soundingAlong = new Float32Array(soundingCount);
+	const soundingSide = new Float32Array(soundingCount);
+	const soundingBraid = new Float32Array(soundingCount * 4);
+	const soundingKind = new Float32Array(soundingCount * 4);
+	let place = 0;
+	for (let who = 0; who < SOUNDERS; who++) {
+		for (let filament = 0; filament < SOUNDING_FILAMENTS; filament++) {
+			// Unequal, as filaments are: most are faint and fine, a few carry more.
+			const braid = [who, filament % 3, Math.random(), between(0.5, 1)];
+			const kind = [between(0.03, 0.09) + (Math.random() < 0.2 ? 0.08 : 0), between(5, 14), between(0.15, 0.5), between(-1, 1)];
+			for (let i = 0; i <= SOUNDING_SEGMENTS; i++) {
+				for (const edge of [-1, 1]) {
+					soundingAlong[place] = i / SOUNDING_SEGMENTS;
+					soundingSide[place] = edge;
+					soundingBraid.set(braid, place * 4);
+					soundingKind.set(kind, place * 4);
+					place++;
+				}
+			}
+		}
+	}
+	const soundingGeometry = new THREE.BufferGeometry();
+	soundingGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(soundingCount * 3), 3));
+	soundingGeometry.setAttribute("aT", new THREE.BufferAttribute(soundingAlong, 1));
+	soundingGeometry.setAttribute("aSide", new THREE.BufferAttribute(soundingSide, 1));
+	soundingGeometry.setAttribute("aBraid", new THREE.BufferAttribute(soundingBraid, 4));
+	soundingGeometry.setAttribute("aKind", new THREE.BufferAttribute(soundingKind, 4));
+	soundingGeometry.setIndex(stripIndices(soundingStrips, SOUNDING_SEGMENTS));
+	const soundingUniforms = {
+		uTime: { value: 0 },
+		uStrength: { value: 1 },
+		uGain: uniforms.uGain,
+		uSoften: uniforms.uSoften,
+		uHead: { value: new THREE.Vector4(0, 0, 0, 0) },
+		uTail: { value: new THREE.Vector4(2, 2, 2, 2) },
+		uTogether: { value: 0 },
+		uThermal: { value: 0 },
+		channelCurrent: sea.channelCurrent,
+		uPixelRatio: uniforms.uPixelRatio,
+		uResolution: uniforms.uResolution,
+	};
+	const soundingMesh = new THREE.Mesh(
+		soundingGeometry,
+		new THREE.ShaderMaterial({
+			uniforms: soundingUniforms,
+			vertexShader: soundingVertexShader,
+			fragmentShader,
+			transparent: true,
+			depthWrite: false,
+			side: THREE.DoubleSide,
+			blending: THREE.AdditiveBlending,
+		}),
+	);
+	soundingMesh.frustumCulled = false;
+	soundingMesh.renderOrder = WEAVE_RENDER_ORDER;
+	soundingMesh.visible = false;
+	scene.add(soundingMesh);
+	// A sounding. Each of those taking part runs their tress out when they are ready, holds it
+	// while they feel, and lets it go at the hands in their own time, the cut following round.
+	// While it lasts they drift between working together and apart. Then a rest of a minute or three.
+	const sounders = Array.from({ length: SOUNDERS }, () => ({ begins: 0, lets: 0, out: 6, back: 5, sounding: false }));
+	let nextSounding = between(18, 45);
+	let togetherWanted = 0;
+	let togetherTurns = 0;
+	const tendSoundings = (delta: number, time: number, thermal: number, always: boolean, linkedAll: boolean, strongestAlone: boolean) => {
+		const u = soundingUniforms;
+		// The strongest, looking into something in the water, sounds it alone, and for as long as she looks.
+		const hers = sounders[STRONGEST]!;
+		if (strongestAlone && !hers.sounding) {
+			sounders.forEach((one) => (one.lets = Math.min(one.lets, time)));
+			Object.assign(hers, { sounding: true, begins: time, lets: Infinity, out: 4, back: 5 });
+			u.uHead.value.setComponent(STRONGEST, 0);
+			u.uTail.value.setComponent(STRONGEST, 2);
+			togetherWanted = 0;
+		} else if (!strongestAlone && hers.lets === Infinity) hers.lets = time;
+		// (Not while all thirteen are linked: whoever is sounding then lets go and joins.)
+		if (linkedAll && !always && !strongestAlone) {
+			nextSounding = Math.max(nextSounding, time + 30);
+			sounders.forEach((one) => (one.lets = Math.min(one.lets, time)));
+		}
+		if (strongestAlone) nextSounding = Math.max(nextSounding, time + 40);
+		if (!sounders.some((one) => one.sounding) && (time > nextSounding || always)) {
+			// Three of them, or all four.
+			const rests = Math.random() < 0.5 ? Math.floor(Math.random() * SOUNDERS) : -1;
+			sounders.forEach((one, who) => {
+				if (who === rests) return;
+				one.sounding = true;
+				one.begins = time + between(0, 5);
+				one.lets = one.begins + between(14, 26);
+				one.out = between(5, 8);
+				one.back = between(4, 7);
+				u.uHead.value.setComponent(who, 0);
+				u.uTail.value.setComponent(who, 2);
+			});
+			togetherWanted = Math.random() < 0.5 ? 1 : 0;
+			u.uTogether.value = togetherWanted;
+			togetherTurns = time + between(6, 11);
+			nextSounding = time + between(100, 220);
+		}
+		// Together, apart, or part-way: it changes as they go.
+		if (time > togetherTurns) {
+			togetherWanted = [0, 0.5, 1][Math.floor(Math.random() * 3)]!;
+			togetherTurns = time + between(6, 11);
+		}
+		u.uTogether.value += (togetherWanted - u.uTogether.value) * Math.min(1, delta / 5);
+		sounders.forEach((one, who) => {
+			if (!one.sounding || time < one.begins) return;
+			u.uHead.value.setComponent(who, Math.min(1.1, u.uHead.value.getComponent(who) + delta / one.out));
+			if (time < one.lets) return;
+			const tail = u.uTail.value.getComponent(who);
+			const cut = (tail >= 2 ? 0 : tail) + delta / one.back;
+			if (cut >= 1.15) {
+				one.sounding = false;
+				u.uHead.value.setComponent(who, 0);
+				u.uTail.value.setComponent(who, 2);
+			} else {
+				u.uTail.value.setComponent(who, cut);
+			}
+		});
+		soundingMesh.visible = sounders.some((one) => one.sounding);
+		u.uTime.value = time;
+		u.uThermal.value = thermal;
+	};
+
 	// Who the story, or the steady work, wants channelling at this moment.
 	const want = [true, true, true, true];
 	const tell = (delta: number, need: number) => {
@@ -749,16 +1050,28 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 
 	// There are thirteen channellers on the boat, not four (the owner's): four are at the front at
 	// any one time and the other nine rest or work elsewhere, and they take turns. Their strengths:
-	const CREW = [1, 0.95, 0.9, 0.82, 0.78, 0.7, 0.64, 0.58, 0.52, 0.47, 0.42, 0.38, 0.34];
+	// The strongest is immensely stronger than the rest (the owner's, never to be forgotten): 1.8
+	// times as strong as the other twelve put together. A tress cannot be drawn to that scale, or
+	// the others' would not be seen at all beside hers; so the others are drawn at about six tenths
+	// of what they were, clearly the lesser, and the true measure is kept in the rules instead:
+	// she is the first to look into anything out of the ordinary and the first to work with it,
+	// she begins the story alone, and what she gives below is taken from the whole flow ahead.
+	const STRONGEST_TO_THE_REST = 1.8;
+	const REST = [0.95, 0.9, 0.82, 0.78, 0.7, 0.64, 0.58, 0.52, 0.47, 0.42, 0.38, 0.34];
+	const TRUE_STRENGTH = [STRONGEST_TO_THE_REST * REST.reduce((sum, one) => sum + one, 0), ...REST];
+	// As drawn, 0..1.
+	const CREW = TRUE_STRENGTH.map((strength, member) => (member === 0 ? 1 : 0.62 * strength));
 	// Who is at the front, as places in CREW, and how strong each seat's occupant is. Whoever is
 	// strongest of the four always sits second from the right; the rest sit by strength.
 	let atFront = [0, 3, 7, 10];
-	const seatStrength = [0.58, 0.82, 1, 0.42];
+	const seatStrength = [0.36, 0.51, 1, 0.26];
 	const SEATS_BY_STRENGTH = [STRONGEST, 1, 0, 3];
 	// While someone is changing places, their seat's weave is let go; the newcomer begins afresh.
 	const changingUntil = [0, 0, 0, 0];
 	let nextTurn = between(50, 110);
-	const takeTurns = (delta: number, time: number) => {
+	const takeTurns = (delta: number, time: number, linkedAll: boolean) => {
+		// (Nobody changes places while all thirteen are linked.)
+		if (linkedAll) nextTurn = Math.max(nextTurn, time + 20);
 		if (time > nextTurn) {
 			nextTurn = time + between(70, 160);
 			// One of the four is relieved by one of the nine.
@@ -771,8 +1084,34 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		// (Eased, so that a seat's strength does not jump when its occupant changes.)
 		atFront.forEach((member, rank) => {
 			const seat = SEATS_BY_STRENGTH[rank]!;
-			seatStrength[seat] = seatStrength[seat]! + (CREW[member]! - seatStrength[seat]!) * Math.min(1, delta / 3);
+			// All thirteen linked, their strength is pooled: no tress is the weaker one.
+			const strength = linkedAll ? 1 : CREW[member]!;
+			seatStrength[seat] = seatStrength[seat]! + (strength - seatStrength[seat]!) * Math.min(1, delta / (linkedAll ? 6 : 3));
 		});
+	};
+
+	// Anything out of the ordinary in the wind, the waves or the weather (`unusual`, from the data):
+	// the strongest is the first to look into it (the owner's). She lets her own tress go and sends
+	// an investigative weave, up into the air (the scout's weave, from her seat) or down into the
+	// water (a sounding, alone), whichever it is in, for ten to sixteen seconds. Then she channels
+	// with it: see `update`. It happens once for each occurrence, and again if it passes from the
+	// air to the water or back.
+	let responding = false;
+	let wasProbing = false;
+	let lookedInto: "air" | "water" | undefined;
+	let probesUntil = 0;
+	const tendOccurrence = (delta: number, time: number, { air, water }: { air: number; water: number }) => {
+		const level = Math.max(air, water);
+		const kind = air >= water ? "air" : "water";
+		if (level < 0.3) {
+			responding = false;
+			lookedInto = undefined;
+		} else if (level > 0.5 && lookedInto !== kind && time > probesUntil) {
+			responding = true;
+			lookedInto = kind;
+			probesUntil = time + between(10, 16);
+		}
+		return responding && time < probesUntil ? lookedInto : undefined;
 	};
 
 	// Now and then, while the boat is being slowed, the strongest take that work over from the
@@ -842,23 +1181,46 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		return target.set(camera.position.x + side, 1.3 + rise, camera.position.z - ahead);
 	};
 
-	const update = ({ time, delta, energy, waveHeight, need, hold: slowing, current, control, scout, showMasters, below, tomorrow, thermal, strength, gain }: ChannellerState) => {
-		tendScout(delta, time, scout, tomorrow, thermal);
-		takeTurns(delta, time);
+	const update = ({ time, delta, energy, waveHeight, need, hold: slowing, current, control, scout, showMasters, showSoundings, gathering, soften, unusual, below, tomorrow, thermal, strength, gain }: ChannellerState) => {
+		const linkedAll = gathering > 0.05;
+		const probing = tendOccurrence(delta, time, unusual);
+		tendScout(delta, time, probing === "air" ? 1 : scout * (1 - gathering), tomorrow, thermal, probing === "air");
+		takeTurns(delta, time, linkedAll);
+		tendSoundings(delta, time, thermal, showSoundings === true, linkedAll, probing === "water");
 		// Slowing the boat is not the work of the four at the front. The weaker ones do it, with deep
 		// weaves close round the boat (drawn in the water: `deepWeave` in gerstner-waves.ts). So the
 		// weaving ahead goes on as it otherwise would, with its story, however the boat is held.
 		const hold = 0;
 		alwaysMasters = showMasters === true;
-		const mastersBelow = tendMasters(delta, time, slowing, below);
+		const mastersBelow = tendMasters(delta, time, linkedAll ? 0 : slowing, linkedAll ? 0 : below);
 		// What is given below is not given ahead: the linked flow is driven that much less hard.
 
 		// The story only runs on their nights, and starts from its beginning on each.
 		// Holding the boat back is not part of the story: it is steady work, for as long as the sea
 		// would carry them too fast, by as many of them as it takes. The story starts afresh after it.
 		// Nor is a storm: then all four are linked for as long as it lasts, and work on the waves.
+		// Something out of the ordinary calls them whatever the hour or the moon. While the strongest
+		// is still looking into it, nobody begins anything on its account.
+		const answering = responding && !probing;
+		if (answering) strength = Math.max(strength, 0.8);
 		const called = strength > 0.12;
-		if (called && control > 0.05) {
+		if (wasProbing && !probing && called) {
+			// She has found what it is, and now channels with it: she begins alone, at once, and the
+			// others come in after her as the sea and wind call for (the story's own second part).
+			part = "stopped";
+			since = 0;
+			lasts = 0;
+			surge = 0;
+		}
+		wasProbing = probing !== undefined;
+		if (called && linkedAll && control <= 0.05) {
+			// Dawn or dusk: all linked, drawing on what is in the air. It is not force for the sea's
+			// sake, so the flow is not driven harder than the sea and wind call for.
+			want.fill(true);
+			surge += (0.35 + 0.45 * need - surge) * Math.min(1, delta / 4);
+			part = "opening";
+			since = 0;
+		} else if (called && control > 0.05) {
 			want.fill(true);
 			surge += (1 - surge) * Math.min(1, delta / 1.6);
 			part = "opening";
@@ -880,6 +1242,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		}
 		for (let who = 0; who < CHANNELLERS; who++) {
 			if (time < changingUntil[who]!) want[who] = false;
+			// The strongest is looking into something: her own tress is not out.
+			if (who === STRONGEST && probing) want[who] = false;
 			// The strongest is at the deep weaving, not at the front.
 			if (who === STRONGEST && mastersBelow) want[who] = false;
 			if (want[who] && !weaving[who]) {
@@ -939,13 +1303,14 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		sea.channelBoat.value.set(camera.position.x, camera.position.z);
 		sea.channelTime.value = time;
 		// No more light than the work calls for. (A weave being cut keeps the light it had.)
-		uniforms.uStrength.value = (called ? strength : lastStrength) * (0.45 + 0.55 * Math.max(need, hold, control));
+		uniforms.uStrength.value = (called ? strength : lastStrength) * (0.45 + 0.55 * Math.max(need, hold, control, gathering));
+		uniforms.uSoften.value = soften;
 		uniforms.uGain.value = gain;
 		uniforms.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(uniforms.uPixelRatio.value);
 		// 0..1 how much channelling there is, and how hard it is driven.
 		// How strongly the flow is taking the air with it: only where it is one flow (not held back
 		// in four), and with the force it is driven by.
-		const pull = weaving.some(Boolean) ? Math.max(...gate) * (called ? strength : lastStrength) * (0.5 + 0.5 * Math.max(need, control)) * (1 - hold) : 0;
+		const pull = weaving.some(Boolean) ? Math.max(...gate) * (called ? strength : lastStrength) * (0.5 + 0.5 * Math.max(need, control, gathering)) * (1 - hold) : 0;
 		return { working: any ? 1 : 0, surge: surge * (1 - masters), pull, flowPoint, masters };
 	};
 
