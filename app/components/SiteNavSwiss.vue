@@ -239,8 +239,15 @@ const links = [
 
 			<div class="side end">
 				<button type="button" class="item wide" @click="toNewsletter">Newsletter</button>
-				<button type="button" class="item" :aria-pressed="paused" :aria-label="paused ? 'Play the moving background' : 'Pause the moving background'" @click="paused = !paused">
-					{{ paused ? "Play" : "Pause" }}
+				<!-- The pause button: the sign everyone knows, two bars; a triangle once paused. It is drawn
+				     as one more word of the bar would be: the height of its capitals, the weight of their strokes.
+				     Its name for screen readers is the one word, Pause or Play, and changes with it
+				     (so it is not also marked as pressed, which would say the same thing twice). -->
+				<button type="button" class="control" :aria-label="paused ? 'Play' : 'Pause'" :title="paused ? 'Play the moving background' : 'Pause the moving background'" @click="paused = !paused">
+					<svg viewBox="0 0 12 12" aria-hidden="true">
+						<path v-if="paused" d="M2.5 1 L11 6 L2.5 11 Z" />
+						<path v-else d="M2.5 1 H4.2 V11 H2.5 Z M7.8 1 H9.5 V11 H7.8 Z" />
+					</svg>
 				</button>
 			</div>
 		</div>
@@ -358,6 +365,34 @@ const links = [
 	text-decoration: underline;
 	text-decoration-thickness: 1px;
 	text-underline-offset: 0.5em;
+}
+/* The pause button. No ring: in a bar this thin a ring was the heaviest thing in it. The sign
+   alone, the size of the bar's capitals and in their ink, set at the same distance from the
+   right edge as Menu is from the left. The button round it is still 44px each way to press. */
+.control {
+	display: inline-grid;
+	place-items: center;
+	width: 2.75rem;
+	height: 2.75rem;
+	min-height: 0;
+	cursor: pointer;
+}
+.control svg {
+	width: 0.75rem;
+	height: 0.75rem;
+	fill: var(--ink);
+	overflow: visible;
+	/* Lifted a hair, to sit on the same line as the capitals beside it. */
+	position: relative;
+	top: -1px;
+}
+/* Hover and focus mark it as they mark the bar's words: with a line beneath. */
+.control:hover svg,
+.control:focus-visible svg {
+	border-bottom: 1px solid var(--ink);
+	padding-bottom: 0.4rem;
+	margin-bottom: calc(-0.4rem - 1px);
+	box-sizing: content-box;
 }
 /* The signature, in the middle. Its loops are let hang a little below the bar. */
 /* It stays above the open drawer, with its disc, so the drawer never cuts across it. */
