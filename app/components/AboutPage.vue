@@ -11,11 +11,16 @@ defineProps<{ layout: string }>();
 // The menu's drawer opens where this page's panel is. While it is open the page steps aside,
 // or the two would lie over each other with this page's words and picture showing round the drawer.
 const menuOpen = useState("menu-open", () => false);
+// And until the drawer has come to rest: this page is never to appear while the drawer is moving.
+const menuMoving = useState("menu-moving", () => false);
+// And once the menu's Close has put it away, for the moment it lingers before it is gone.
+const putAway = useState("panel-put-away", () => false);
 // Tells the menu that this page is a panel over the picture, so that its Close leads back to
 // the main screen (see SiteNavSwiss).
 const pageIsPanel = useState("page-is-panel", () => false);
 pageIsPanel.value = true;
 onBeforeUnmount(() => (pageIsPanel.value = false));
+onUnmounted(() => (putAway.value = false));
 // The sky chart that lies behind the menu's words made this page untidy: here the words are
 // many and the chart ran through them. So by default the page has none. ?sky=seal sets it
 // small and clear of all the words, above the picture, like a seal on a document; ?sky=behind
@@ -42,7 +47,7 @@ const links: { label: string; href: string; title?: boolean; after?: string }[] 
 </script>
 
 <template>
-	<main id="main" tabindex="-1" class="about" :class="{ aside: menuOpen }" :data-layout="layout">
+	<main id="main" tabindex="-1" class="about" :class="{ aside: menuOpen || menuMoving || putAway }" :data-layout="layout">
 		<!-- The panel's coloured shape, apart from its contents so that the picture can sit across its edge. -->
 		<div class="back" aria-hidden="true">
 			<MenuFigure v-if="sky === 'behind' || sky === 'seal'" class="trine" :class="{ seal: sky === 'seal' }" kind="sky" />
@@ -127,8 +132,20 @@ const links: { label: string; href: string; title?: boolean; after?: string }[] 
 }
 /* Out of sight, and out of reach of the keyboard and screen readers, while the menu is open.
    The sheet stays: it lies below the drawer, not beside it. */
+.about {
+	/* Eased, never sudden: it surfaces once the drawer is at rest, and sinks as the drawer comes. */
+	transition: opacity 0.7s ease-out;
+}
 .about.aside:not([data-layout="sheet"]) {
 	visibility: hidden;
+	opacity: 0;
+	transition: opacity 0.4s ease-in, visibility 0s 0.4s;
+}
+@media (prefers-reduced-motion: reduce) {
+	.about,
+	.about.aside {
+		transition-duration: 0.2s;
+	}
 }
 
 /* The grid: a narrow column for what a thing is, a wide one for the thing. */

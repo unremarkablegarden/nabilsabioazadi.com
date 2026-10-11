@@ -50,6 +50,13 @@ vec4 ribbonPosition( vec4 clip, vec4 clipAhead, float side, float widthPx ) {
 	return clip;
 }
 
+// 0..1 whether a point is seen against the sky and not the sea: it is, once it stands above
+// the eye's own height, which is where the horizon lies. Eased in from a little under it.
+float againstSky( vec3 p ) {
+	float rise = ( p.y - cameraPosition.y ) / max( length( p.xz - cameraPosition.xz ), 1.0 );
+	return smoothstep( - 0.012, 0.004, rise );
+}
+
 float hash1( float n ) {
 	return fract( sin( n * 127.1 ) * 43758.5453 );
 }

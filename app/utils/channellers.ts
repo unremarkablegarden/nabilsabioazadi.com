@@ -81,6 +81,8 @@ attribute float aSoft;
 uniform float uStrength;
 // 0..1 how light the sky is. Against a light sky a fine bright line reads as a wire, so there
 // each filament is drawn broad and soft and fainter: a breath of light, not a line.
+// Only there: where the sea is behind it, it is drawn fine and sharp whatever the hour (the
+// owner saw the weaving lose its sharpness against the ocean when all of it was softened).
 uniform float uSoften;
 // For each seat, 0..1 how restless its occupant is (their temperament): a restless one's
 // filaments stray further and wander quicker; a steady one's lie close and still.
@@ -212,14 +214,17 @@ vec3 threadPoint( float t ) {
 
 void main() {
 	mat4 viewProjection = projectionMatrix * viewMatrix;
-	vec4 clip = viewProjection * vec4( threadPoint( aT ), 1.0 );
+	vec3 here = threadPoint( aT );
+	vec4 clip = viewProjection * vec4( here, 1.0 );
+	// (Soft only where it is seen against the sky; against the sea it keeps its fine, sharp line.)
+	float soften = uSoften * againstSky( here );
 	// They work with the waves: each crest that passes under the flow lifts its light, each trough dims it.
 	// (Far more so in a storm, when the waves are what they are working on.)
 	float withWaves = 1.0 + ( 0.7 + 0.3 * channelControl ) * clamp( seaUnder / max( 0.25 * channelSea.y, 0.1 ), - 1.0, 1.0 );
 	vec4 clipAhead = viewProjection * vec4( threadPoint( aT + 0.002 ), 1.0 );
 	// (Lingering, each filament is broad and soft: a blur, not a line.)
 	float lingering = channelPresence( aThread.x, aheadAt( aT ) ).y;
-	gl_Position = ribbonPosition( clip, clipAhead, aSide, aThread.w * ( 1.0 + 4.0 * lingering + 3.0 * uSoften * ( 1.0 - aSoft ) ) );
+	gl_Position = ribbonPosition( clip, clipAhead, aSide, aThread.w * ( 1.0 + 4.0 * lingering + 3.0 * soften * ( 1.0 - aSoft ) ) );
 
 	float ahead = max( aheadAt( aT ), 0.0 );
 	float q = log( ahead + 12.0 );
@@ -266,13 +271,13 @@ void main() {
 	// (Driven hard there are more filaments alight at once, so each is drawn a little fainter,
 	// or their colours would burn out to white where they lie thickest.)
 	vAlpha = uStrength * aKind.x * ( 1.0 - 0.4 * channelSurge ) * lit * ( 0.55 + 1.1 * channelPulse( aThread.x, ahead ) ) * smoothstep( 0.0, 0.05, aT )
-		* ( 1.0 - smoothstep( 0.7, 1.0, channelWay( ahead ) ) * ( 1.0 - 0.8 * lingering ) ) / ( 1.0 + ahead / 1500.0 ) / ( 1.0 + 2.0 * lingering ) / ( 1.0 + 1.6 * uSoften );
+		* ( 1.0 - smoothstep( 0.7, 1.0, channelWay( ahead ) ) * ( 1.0 - 0.8 * lingering ) ) / ( 1.0 + ahead / 1500.0 ) / ( 1.0 + 2.0 * lingering ) / ( 1.0 + 1.6 * soften );
 	vEdge = aSide;
-	vSoft = max( aSoft, max( lingering, 0.9 * uSoften ) );
+	vSoft = max( aSoft, max( lingering, 0.9 * soften ) );
 	// The strongest's own weaves show white against anything. By day they are not thinned away
 	// with the rest, or there would be nothing to turn the sky white with.
 	vWhite = aThread.x > ${STRONGEST - 0.5} && aThread.x < ${STRONGEST + 0.5} ? 1.0 : 0.0;
-	vAlpha *= mix( 1.0, 1.0 + 0.7 * uSoften, vWhite * ( 1.0 - aSoft ) );
+	vAlpha *= mix( 1.0, 1.0 + 0.7 * soften, vWhite * ( 1.0 - aSoft ) );
 }
 `;
 
@@ -487,13 +492,16 @@ vec3 scoutPoint( float t ) {
 
 void main() {
 	mat4 viewProjection = projectionMatrix * viewMatrix;
-	vec4 clip = viewProjection * vec4( scoutPoint( aT ), 1.0 );
+	vec3 here = scoutPoint( aT );
+	vec4 clip = viewProjection * vec4( here, 1.0 );
+	// (Soft only where it is seen against the sky; against the sea it keeps its fine, sharp line.)
+	float soften = uSoften * againstSky( here );
 	vec4 clipAhead = viewProjection * vec4( scoutPoint( aT + 0.004 ), 1.0 );
 	// Let go, it lingers soft and broad like any weave cut loose.
 	float loose = uTail < 1.09 ? smoothstep( uTail - 0.2, uTail, aT ) : 0.0;
 	float inHand = 1.0 - smoothstep( uHead - 0.05, uHead, aT );
 	float lingering = loose * uFade * ( 1.0 - inHand );
-	gl_Position = ribbonPosition( clip, clipAhead, aSide, aKind.w * ( 1.0 + 3.0 * lingering + 3.0 * uSoften * ( 1.0 - aSoft ) ) );
+	gl_Position = ribbonPosition( clip, clipAhead, aSide, aKind.w * ( 1.0 + 3.0 * lingering + 3.0 * soften * ( 1.0 - aSoft ) ) );
 
 	// The light in it runs downward: what is sensed comes back to the one who sent it.
 	float lit = smoothstep( - 0.2, 0.35, drift( aT * aKind.y + uTime * aKind.z + aSeed.x * 91.0 ) );
@@ -503,13 +511,13 @@ void main() {
 	vTint = mix( vec3( 0.84, 0.9, 1.0 ), vec3( 0.52, 0.66, 0.96 ), aT );
 	// Each is faint, a thread in the dark. Gathered, forty lie on one line, so each is drawn fainter
 	// still, or the stem would stand in the sky as a bar of light.
-	vAlpha = uStrength * aKind.x * lit * there * mix( 0.16, 0.6, scoutSpread() * smoothstep( 0.3, 0.6, scoutRise( aT ) ) ) * smoothstep( 0.0, 0.06, aT ) * ( 1.0 - smoothstep( 0.62, 0.98, aT ) ) / ( 1.0 + 1.5 * lingering ) / ( 1.0 + 1.6 * uSoften );
+	vAlpha = uStrength * aKind.x * lit * there * mix( 0.16, 0.6, scoutSpread() * smoothstep( 0.3, 0.6, scoutRise( aT ) ) ) * smoothstep( 0.0, 0.06, aT ) * ( 1.0 - smoothstep( 0.62, 0.98, aT ) ) / ( 1.0 + 1.5 * lingering ) / ( 1.0 + 1.6 * soften );
 	vEdge = aSide;
-	vSoft = max( aSoft, max( lingering, 0.9 * uSoften ) );
+	vSoft = max( aSoft, max( lingering, 0.9 * soften ) );
 	// The strongest's own weaves show white against anything. By day they are not thinned away
 	// with the rest, or there would be nothing to turn the sky white with.
 	vWhite = uOwn;
-	vAlpha *= mix( 1.0, 1.0 + 0.7 * uSoften, vWhite * ( 1.0 - aSoft ) );
+	vAlpha *= mix( 1.0, 1.0 + 0.7 * soften, vWhite * ( 1.0 - aSoft ) );
 }
 `;
 
@@ -643,7 +651,10 @@ vec3 soundingPoint( float t ) {
 
 void main() {
 	mat4 viewProjection = projectionMatrix * viewMatrix;
-	vec4 clip = viewProjection * vec4( soundingPoint( aT ), 1.0 );
+	vec3 here = soundingPoint( aT );
+	vec4 clip = viewProjection * vec4( here, 1.0 );
+	// (Soft only where it is seen against the sky; against the sea it keeps its fine, sharp line.)
+	float soften = uSoften * againstSky( here );
 	vec4 clipAhead = viewProjection * vec4( soundingPoint( aT + 0.004 ), 1.0 );
 	float who = aBraid.x;
 	float head = ofSounder( uHead, who );
@@ -653,7 +664,7 @@ void main() {
 	float cut = tail < 1.5 ? 1.0 : 0.0;
 	float kept = mix( 1.0, smoothstep( tail - 0.1, tail + 0.02, aT ), cut );
 	float loose = cut * ( 1.0 - smoothstep( tail, tail + 0.3, aT ) );
-	gl_Position = ribbonPosition( clip, clipAhead, aSide, aBraid.w * ( 1.0 + 2.5 * loose + 3.0 * uSoften ) );
+	gl_Position = ribbonPosition( clip, clipAhead, aSide, aBraid.w * ( 1.0 + 2.5 * loose + 3.0 * soften ) );
 	// What is felt runs along it towards the hands.
 	float lit = smoothstep( - 0.25, 0.4, drift( aT * aKind.y - uTime * aKind.z + aBraid.z * 91.0 ) );
 	// Going out it is the pale of any weave. Coming back it leans to the water's warmth or cold.
@@ -662,13 +673,13 @@ void main() {
 	vTint = mix( pale, felt, smoothstep( 0.3, 0.65, aT ) );
 	// Nothing near the bow: it is seen from where it nears the water.
 	float away = smoothstep( 0.05, 0.2, aT ) * smoothstep( 0.95, 0.8, aT );
-	vAlpha = uStrength * aKind.x * lit * inHand * kept * away / ( 1.0 + 1.5 * loose ) / ( 1.0 + 1.6 * uSoften );
+	vAlpha = uStrength * aKind.x * lit * inHand * kept * away / ( 1.0 + 1.5 * loose ) / ( 1.0 + 1.6 * soften );
 	vEdge = aSide;
-	vSoft = max( loose, 0.9 * uSoften );
+	vSoft = max( loose, 0.9 * soften );
 	// The strongest's own weaves show white against anything. By day they are not thinned away
 	// with the rest, or there would be nothing to turn the sky white with.
 	vWhite = uOwn * step( ${STRONGEST - 0.5}, who ) * step( who, ${STRONGEST + 0.5} );
-	vAlpha *= mix( 1.0, 1.0 + 0.7 * uSoften, vWhite );
+	vAlpha *= mix( 1.0, 1.0 + 0.7 * soften, vWhite );
 }
 `;
 

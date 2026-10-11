@@ -38,7 +38,8 @@
 // Neue, Helvetica or Arial, and Georgia, stand in.
 //
 // Accessibility is as in the earlier slabs: all text is on an opaque ground (about 16:1),
-// nothing moves, controls are at least 44px tall with a white focus ring, the form is labelled
+// nothing moves but the drawer's own coming and going (stilled for anyone who asks their
+// device for less motion), controls are at least 44px tall with a white focus ring, the form is labelled
 // and speaks its status, there is a skip link, the ocean can be paused, and the slab folds away.
 
 // Shared with OceanBackground, which stops drawing while this is true.
@@ -52,6 +53,12 @@ onBeforeUnmount(() => (captionInNavigation.value = false));
 // The drawer starts shut: the page opens on the picture. Shared, so that a page with a panel of
 // its own in the same place (About) can step aside while the drawer is open.
 const open = useState("menu-open", () => false);
+// True from the moment the drawer starts to open or shut until it has come to rest. A panel
+// page (About, Contact) keeps out of sight for as long: the owner must never see one appear
+// suddenly while the drawer is still moving. Set at once, before anything is drawn again.
+const moving = useState("menu-moving", () => false);
+watch(open, () => (moving.value = true), { flush: "sync" });
+const settled = () => (moving.value = false);
 // The cut of the drawer's outer edge. ?shape= tries the others:
 //   moon      part of a great disc, its edge the lit limb of a moon (the first, and the default)
 //   straight  no cut: a plain upright slab
@@ -90,8 +97,15 @@ onMounted(() => {
 // such a page goes back to the main screen, the picture alone: to the owner the drawer and the
 // panel are one thing, and Close should put both away.
 const pageIsPanel = useState("page-is-panel", () => false);
+// The panel page lingers a moment after the address has changed, while the main screen is
+// made ready. It is told it has been put away, so it does not show itself again in that moment
+// once the drawer has gone (it did: About came back for a second after Close).
+const putAway = useState("panel-put-away", () => false);
 const toggle = () => {
-	if (open.value && pageIsPanel.value) navigateTo("/");
+	if (open.value && pageIsPanel.value) {
+		putAway.value = true;
+		navigateTo("/");
+	}
 	open.value = !open.value;
 };
 // Escape shuts the drawer and hands the keyboard back to the button that opened it.
@@ -158,6 +172,7 @@ const links = [
 				</button>
 
 				<!-- The drawer comes straight after its button, so the keyboard goes from one into the other. -->
+				<Transition name="tide" @after-enter="settled" @after-leave="settled" @enter-cancelled="settled" @leave-cancelled="settled">
 				<div v-show="open" id="menu" class="slab" :data-shape="shape" :data-menu="menu" :style="shape === 'wave' ? { clipPath: wave } : undefined">
 					<!-- Decoration only: a faint figure behind the text. ?figure= tries the others (see MenuFigure). -->
 					<MenuFigure class="trine" :kind="figure" :ring="menu !== 'field'" />
@@ -230,6 +245,7 @@ const links = [
 			</div>
 					</div>
 				</div>
+				</Transition>
 
 				<NuxtLink to="/contact" class="item wide">Contact</NuxtLink>
 			</div>
@@ -335,6 +351,10 @@ const links = [
 	inset: 0 0 auto 0;
 	display: grid;
 	grid-template-columns: 1fr auto 1fr;
+	/* The row is the bar's own height and no more. Left to itself it grew to the height of the
+	   mark, which hangs below the bar, and the words were centred in that: nearer the foot of
+	   the blue than its head. */
+	grid-template-rows: var(--bar);
 	align-items: center;
 	height: var(--bar);
 	padding: 0 calc(var(--unit) * 3);
@@ -352,7 +372,9 @@ const links = [
 	display: inline-flex;
 	align-items: center;
 	min-height: 2.75rem;
-	padding: 0 calc(var(--unit) * 1.5);
+	/* (The little at the top sets the capitals themselves, which have nothing below the line,
+	   midway between the head and foot of the blue.) */
+	padding: 0.22em calc(var(--unit) * 1.5) 0;
 	font-size: 0.75rem;
 	font-weight: 400;
 	letter-spacing: 0.18em;
@@ -383,9 +405,6 @@ const links = [
 	height: 0.75rem;
 	fill: var(--ink);
 	overflow: visible;
-	/* Lifted a hair, to sit on the same line as the capitals beside it. */
-	position: relative;
-	top: -1px;
 }
 /* Hover and focus mark it as they mark the bar's words: with a line beneath. */
 .control:hover svg,
@@ -446,6 +465,53 @@ const links = [
 	   a moon, bowing out to the slab's full width at mid-height and falling well back at head and foot. */
 	--radius: 74vh;
 	clip-path: circle(var(--radius) at calc(100% - var(--radius)) 50%);
+}
+/* The drawer comes in as a tide does: from the left, quick at first and spending itself as it
+   arrives, its moon-edge leading; its words surface a little after the water has. It goes out
+   the way it came, a little sooner, words first. */
+.tide-enter-active {
+	transition: transform 1.1s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.7s ease-out;
+}
+.tide-leave-active {
+	transition: transform 0.8s cubic-bezier(0.6, 0, 0.75, 0.3), opacity 0.6s ease-in 0.2s;
+}
+.tide-enter-from,
+.tide-leave-to {
+	transform: translateX(-100%);
+	opacity: 0;
+}
+.tide-enter-active .body,
+.tide-enter-active .trine {
+	transition: opacity 0.8s ease-out 0.3s, transform 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.15s;
+}
+.tide-leave-active .body,
+.tide-leave-active .trine {
+	transition: opacity 0.35s ease-in;
+}
+.tide-enter-from .body {
+	transform: translateX(-2rem);
+}
+.tide-enter-from .body,
+.tide-enter-from .trine,
+.tide-leave-to .body,
+.tide-leave-to .trine {
+	opacity: 0;
+}
+/* For anyone who has asked for less motion nothing travels: it fades, briefly. */
+@media (prefers-reduced-motion: reduce) {
+	.tide-enter-active,
+	.tide-leave-active,
+	.tide-enter-active .body,
+	.tide-enter-active .trine,
+	.tide-leave-active .body,
+	.tide-leave-active .trine {
+		transition: opacity 0.2s linear;
+	}
+	.tide-enter-from,
+	.tide-leave-to,
+	.tide-enter-from .body {
+		transform: none !important;
+	}
 }
 /* Ways for the sky chart and the words to share the drawer (?menu=). */
 /* Field: the stars alone, larger than the drawer and bled off its edges, fixed while the words scroll. */
@@ -864,6 +930,11 @@ input:focus-visible {
 		max-height: calc(100dvh - var(--bar));
 		padding: calc(var(--unit) * 7) calc(var(--unit) * 3.5) calc(var(--unit) * 5);
 		clip-path: none !important;
+	}
+	/* Here it hangs from the bar, so it comes down from behind it and goes back up. */
+	.tide-enter-from,
+	.tide-leave-to {
+		transform: translateY(-2rem);
 	}
 	.trine {
 		display: none;

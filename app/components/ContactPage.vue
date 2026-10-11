@@ -17,9 +17,14 @@ defineProps<{ layout: string }>();
 // As on the About page: this is a panel over the picture. It steps aside while the menu is
 // open, and Close leads back to the main screen.
 const menuOpen = useState("menu-open", () => false);
+// And until the drawer has come to rest: this page is never to appear while the drawer is moving.
+const menuMoving = useState("menu-moving", () => false);
+// And once the menu's Close has put it away, for the moment it lingers before it is gone.
+const putAway = useState("panel-put-away", () => false);
 const pageIsPanel = useState("page-is-panel", () => false);
 pageIsPanel.value = true;
 onBeforeUnmount(() => (pageIsPanel.value = false));
+onUnmounted(() => (putAway.value = false));
 // Where the boat is and what time it keeps, for the radiogram's heading.
 const readout = useState<{ place?: string; time: string }>("scene-readout", () => ({ time: "" }));
 
@@ -46,7 +51,7 @@ const send = () => {
 </script>
 
 <template>
-	<main id="main" tabindex="-1" class="contact" :class="{ aside: menuOpen }" :data-layout="layout">
+	<main id="main" tabindex="-1" class="contact" :class="{ aside: menuOpen || menuMoving || putAway }" :data-layout="layout">
 		<div class="back" aria-hidden="true" />
 		<div class="ground">
 			<p class="leave" :lang="layout === 'letter' ? words.lang : undefined"><NuxtLink to="/">{{ layout === "letter" ? words.close : "Close" }}</NuxtLink></p>
@@ -133,8 +138,20 @@ const send = () => {
 	outline: none;
 }
 /* Out of sight and out of reach while the menu is open in the same place. */
+.contact {
+	/* Eased, never sudden: it surfaces once the drawer is at rest, and sinks as the drawer comes. */
+	transition: opacity 0.7s ease-out;
+}
 .contact.aside {
 	visibility: hidden;
+	opacity: 0;
+	transition: opacity 0.4s ease-in, visibility 0s 0.4s;
+}
+@media (prefers-reduced-motion: reduce) {
+	.contact,
+	.contact.aside {
+		transition-duration: 0.2s;
+	}
 }
 .back,
 .ground {
