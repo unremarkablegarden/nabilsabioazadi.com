@@ -11,6 +11,11 @@
 // either side like the lines of a sea anchor, in the sea's own blue, drawn the way the current
 // runs, with the light in them travelling slowly back towards the boat.
 //
+// In stormy weather, at any hour, they link all the same, and are seen channelling into the
+// waves to keep them in hand: the linked flow is thrown wide and low over the sea ahead, its
+// filaments riding over each crest and going down into each trough, brightest on the crests.
+// The waves themselves go on doing exactly what the weather data says.
+//
 // They always work with the sea and the wind, never against them (the owner's rule): they feed
 // whatever those are already doing by the weather data. So the flow is fuller and faster the more
 // is going on, the wind takes its loose filaments with it, its light rises and falls with each
@@ -121,7 +126,8 @@ vec3 threadPoint( float t ) {
 	// A channeller who is giving more has a fuller tress.
 	// The more the sea and wind are doing, the more there is to feed, and the fuller the flow.
 	// (Held back, a tress is opened out wide and thin over the water.)
-	float width = ( 0.1 + 0.04 * along ) * ( 1.0 + 1.8 * channelHold ) * ( 0.75 + 0.7 * channelSea.x ) * ( 1.0 + 0.4 * channelSurge ) * smoothstep( - 4.0, 8.0, ahead ) * breath * ( 0.55 + 0.7 * channelStrength( who ) ) * ( 1.0 - smoothstep( 0.6, 0.97, way ) );
+	// (In a storm the linked flow is thrown wide over the waves ahead.)
+	float width = ( 0.1 + 0.04 * along ) * ( 1.0 + 1.8 * channelHold ) * ( 1.0 + 1.4 * channelControl ) * ( 0.75 + 0.7 * channelSea.x ) * ( 1.0 + 0.4 * channelSurge ) * smoothstep( - 4.0, 8.0, ahead ) * breath * ( 0.55 + 0.7 * channelStrength( who ) ) * ( 1.0 - smoothstep( 0.6, 0.97, way ) );
 	// Its three strands pass over and under each other: a plait, loosely kept.
 	float phase = q * 6.0 - channelTime * 0.4 + aThread.y * 2.0944 + who * 0.7;
 	vec2 across = vec2( sin( phase ), 0.5 * sin( 2.0 * phase ) ) * 0.42;
@@ -146,6 +152,10 @@ vec3 threadPoint( float t ) {
 	// Held back, it lies on the water itself.
 	float low = mix( max( 0.35, 1.3 + across.y * width * 0.7 + loose.y ), 0.15, channelHold * smoothstep( 4.0, 14.0, ahead ) ) + channelRise( who, along );
 	seaUnder = seaHeight( p );
+	// In a storm they channel into the waves themselves: the filaments ride over each crest and
+	// go down into the water of each trough, so the weaving is seen entering wave after wave.
+	float crest = clamp( seaUnder / max( 0.25 * channelSea.y, 0.1 ), - 1.0, 1.0 );
+	low = mix( low, 0.2 + 0.7 * crest, channelControl * smoothstep( 6.0, 20.0, ahead ) );
 	float height = mix( cameraPosition.y - 1.2, seaUnder + low, smoothstep( - 2.0, 14.0, ahead ) );
 	return vec3( p.x, height, p.y );
 }
@@ -154,7 +164,8 @@ void main() {
 	mat4 viewProjection = projectionMatrix * viewMatrix;
 	vec4 clip = viewProjection * vec4( threadPoint( aT ), 1.0 );
 	// They work with the waves: each crest that passes under the flow lifts its light, each trough dims it.
-	float withWaves = 1.0 + 0.7 * clamp( seaUnder / max( 0.25 * channelSea.y, 0.1 ), - 1.0, 1.0 );
+	// (Far more so in a storm, when the waves are what they are working on.)
+	float withWaves = 1.0 + ( 0.7 + 0.3 * channelControl ) * clamp( seaUnder / max( 0.25 * channelSea.y, 0.1 ), - 1.0, 1.0 );
 	vec4 clipAhead = viewProjection * vec4( threadPoint( aT + 0.002 ), 1.0 );
 	gl_Position = ribbonPosition( clip, clipAhead, aSide, aThread.w );
 
@@ -239,6 +250,8 @@ export interface ChannellerState {
 	// 0..1 how much the boat has to be held back, and the current across the view (-1..1).
 	hold: number;
 	current: number;
+	// 0..1 how stormy it is: in a storm they link and channel into the waves.
+	control: number;
 	// 0..1 how much they are at work: 0 while the sun or moon lights the sea.
 	strength: number;
 	// Multiplies the light so it holds its brightness at any exposure.
@@ -306,6 +319,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		channelWind: sea.channelWind,
 		channelSea: sea.channelSea,
 		channelGate: sea.channelGate,
+		channelControl: sea.channelControl,
 		channelHold: sea.channelHold,
 		channelCurrent: sea.channelCurrent,
 		channelBack: sea.channelBack,
@@ -369,13 +383,19 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		surge = ease(surge, part === "working" && linking && since >= Math.max(...joins) ? 1 : 0, part === "working" ? 1.6 : 0.4);
 	};
 
-	const update = ({ time, delta, energy, waveHeight, need, hold, current, strength, gain }: ChannellerState) => {
+	const update = ({ time, delta, energy, waveHeight, need, hold, current, control, strength, gain }: ChannellerState) => {
 		mesh.visible = strength > 0.001;
 		// The story only runs on their nights, and starts from its beginning on each.
 		// Holding the boat back is not part of the story: it is steady work, for as long as the sea
 		// would carry them too fast, by as many of them as it takes. The story starts afresh after it.
+		// Nor is a storm: then all four are linked for as long as it lasts, and work on the waves.
 		const holding = hold > 0.02;
-		if (mesh.visible && holding) {
+		if (mesh.visible && control > 0.05) {
+			for (let who = 0; who < CHANNELLERS; who++) gate[who] += (1 - gate[who]!) * Math.min(1, delta / 0.9);
+			surge += (1 - surge) * Math.min(1, delta / 1.6);
+			part = "opening";
+			since = 0;
+		} else if (mesh.visible && holding) {
 			for (let who = 0; who < CHANNELLERS; who++) {
 				const working = ORDER.indexOf(who) < workingFor(0.2 + hold);
 				gate[who] += ((working ? 1 : 0) - gate[who]!) * Math.min(1, delta / 0.9);
@@ -401,11 +421,12 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		// Held back, what streams along the weaving runs the other way, in towards the boat, and slowly.
 		sea.channelBack.value += delta * 0.45 * hold;
 		sea.channelHold.value = hold;
+		sea.channelControl.value = control;
 		sea.channelCurrent.value = current;
 		sea.channelBoat.value.set(camera.position.x, camera.position.z);
 		sea.channelTime.value = time;
 		// No more light than the work calls for.
-		uniforms.uStrength.value = strength * (0.45 + 0.55 * Math.max(need, hold));
+		uniforms.uStrength.value = strength * (0.45 + 0.55 * Math.max(need, hold, control));
 		uniforms.uGain.value = gain;
 		uniforms.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(uniforms.uPixelRatio.value);
 		// 0..1 how much channelling there is, and how hard it is driven.

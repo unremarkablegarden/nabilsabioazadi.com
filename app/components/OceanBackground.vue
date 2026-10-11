@@ -109,6 +109,7 @@ const liveFigures = computed(() => {
 		["picture", `sea ${Math.round(seaState(c) * 100)}% · sky ${Math.round(skyState(c) * 100)}% · storm ${Math.round(stormFury(c) * 100)}%`],
 		["channellers", `building ${Math.round(building(c) * 100)}% · called for ${Math.round(calling(c) * 100)}%`],
 		["pace", `carried ${carried(c, PLACE.bearing).toFixed(1)} km/h · needs ${PACE.toFixed(1)} · holding back ${Math.round(holdingBack(c, PLACE.bearing) * 100)}%`],
+		["storm", `linked on the waves ${Math.round(stormy(c) * 100)}%`],
 	];
 });
 
@@ -372,6 +373,7 @@ onMounted(() => {
 	const spread = THREE.MathUtils.randFloatSpread;
 	let measuredSea = false;
 	let holdLevel = 0;
+	let controlLevel = 0;
 	// Metres above the water on a measured sea. September looked down from 18 to 27.
 	const EYE_HEIGHT = 5;
 	const boltScreen = Array.from({ length: BOLT_POINTS }, () => ({ x: 0, y: 0 }));
@@ -553,7 +555,7 @@ onMounted(() => {
 		const liveRain = liveOnly ? rainAmount(liveOnly) : 0;
 		const rain = calmMotion ? 0 : Math.max(THREE.MathUtils.smoothstep(fury, 0.15, 0.6), liveRain) * alive;
 		// The weave, and what its knot does to the sea and the clouds around it.
-		const formed = knotFormed(moment.weave * (1 - Math.max(darkness, holdLevel)));
+		const formed = knotFormed(moment.weave * (1 - Math.max(darkness, holdLevel, controlLevel)));
 		knotReady = formed > 0.8;
 		// The bond: how far the channelling has taken hold of the storm's wind, air and fog.
 		const bond = bondLevel.value * formed * alive;
@@ -562,7 +564,7 @@ onMounted(() => {
 		weave.update({
 			time,
 			delta,
-			amount: moment.weave * (1 - Math.max(darkness, holdLevel)),
+			amount: moment.weave * (1 - Math.max(darkness, holdLevel, controlLevel)),
 			spread: fury + 2 * moment.white * moment.veil,
 			gain: 0.5 / steadyExposure,
 		});
@@ -573,7 +575,10 @@ onMounted(() => {
 		const need = liveOnly ? calling(liveOnly) : sea;
 		// When the sea and wind would carry the boat faster than the pilgrimage's pace, they hold it
 		// back, by day or night. It comes on and goes off gently.
-		const held = liveOnly ? holdingBack(liveOnly, PLACE.bearing) : 0;
+		// In a storm they link and work on the waves instead, whatever the hour; that comes first.
+		const storm = liveOnly ? stormy(liveOnly) : 0;
+		controlLevel += (storm - controlLevel) * Math.min(1, delta / 3);
+		const held = liveOnly ? holdingBack(liveOnly, PLACE.bearing) * (1 - controlLevel) : 0;
 		holdLevel += (held - holdLevel) * Math.min(1, delta / 3);
 		const channelling = channellers.update({
 			time,
@@ -582,13 +587,15 @@ onMounted(() => {
 			need,
 			waveHeight: liveOnly ? liveOnly.waveHeight : lerp(0.5, 6, sea),
 			hold: holdLevel,
+			control: controlLevel,
 			current: liveOnly ? Math.sin(THREE.MathUtils.degToRad(liveOnly.currentDirection - PLACE.bearing)) * Math.min(1, liveOnly.currentSpeed / 3) : 0,
-			strength: Math.max(darkness, holdLevel) * alive,
-			gain: 0.3 / steadyExposure,
+			strength: Math.max(darkness, holdLevel, controlLevel) * alive,
+			// More light by day, when it has a bright sea to show against.
+			gain: (0.3 + 0.6 * daylight) / steadyExposure,
 		});
-		waveUniforms.channelFeed.value = channelling.working * (0.6 + 0.4 * channelling.surge) * need * darkness * (1 - holdLevel) * alive;
+		waveUniforms.channelFeed.value = channelling.working * (0.6 + 0.4 * channelling.surge) * need * darkness * (1 - holdLevel) * (1 - controlLevel) * alive;
 		// Driven hard, the flow lights the sea more.
-		waveUniforms.channelLight.value = (0.06 * (1 + 0.5 * channelling.surge) * (0.45 + 0.55 * Math.max(need, holdLevel)) * Math.max(darkness, holdLevel * nightfall) * alive) / steadyExposure;
+		waveUniforms.channelLight.value = (0.06 * (1 + 0.5 * channelling.surge) * (0.45 + 0.55 * Math.max(need, holdLevel)) * Math.max(darkness, Math.max(holdLevel, controlLevel) * nightfall) * alive) / steadyExposure;
 		// Whenever there is no channelling at night, the boat's electric lamps are all the light there is near by.
 		waveUniforms.boatLamp.value = (0.012 * nightfall * (1 - channelling.working) * alive) / steadyExposure;
 		waveUniforms.weavePull.value = formed * (0.6 + 0.8 * fury);

@@ -20,6 +20,8 @@ uniform vec4 channelGate;
 // 0..1 how far they are holding the boat back and not channelling towards Hawai'i, the surface
 // current across the view (-1..1, to the right when positive), and a clock for what then runs
 // back along the weaving towards the boat.
+// 0..1 how far, in a storm, they are linked and channelling into the waves to keep them in hand.
+uniform float channelControl;
 uniform float channelHold;
 uniform float channelCurrent;
 uniform float channelBack;

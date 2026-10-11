@@ -506,5 +506,11 @@ export function holdingBack(conditions: SeaConditions, bearing: number) {
 }
 
 const COMPASS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
+// 0..1 how stormy it is, for the channellers: a real storm by the weather (thunder, gale gusts,
+// a cloudburst), or simply a very heavy sea. In a storm they link and work on the waves.
+export function stormy(conditions: SeaConditions) {
+	return clamp01(Math.max(stormFury(conditions), (seaState(conditions) - 0.55) / 0.3));
+}
+
 // A compass direction in degrees as a word.
 export const compassPoint = (degrees: number) => COMPASS[Math.round((((degrees % 360) + 360) % 360) / 45) % 8]!;

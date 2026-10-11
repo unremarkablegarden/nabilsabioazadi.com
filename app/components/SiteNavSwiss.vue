@@ -63,6 +63,23 @@ const SHAPES = ["moon", "straight", "wave", "sail", "corner", "full"];
 const shape = computed(() => (SHAPES.includes(route.query.shape as string) ? (route.query.shape as string) : "moon"));
 // The faint figure behind the words: the sky over the boat (the owner's choice). ?figure= shows the others.
 const figure = computed(() => (route.query.figure as string) || "sky");
+// How the sky chart and the words share the drawer. The first way, the chart's circle behind
+// the links with the links' hairlines running across it, was a mess of crossing lines (the
+// owner: "truly awful"). ?menu= tries the ways out of it:
+//   field   no circle at all: the stars alone, spread behind the whole drawer like a night sky.
+//           Nothing for the hairlines to cross (default while the owner chooses)
+//   clear   the circle stays behind the links, and the links lose their hairlines
+//   seal    the chart is small and stands by itself beside the name; nothing lies over it
+//   within  the links are set inside the circle, centred, with no hairlines: the chart is their
+//           frame. The owner is trying versions of this one (11 October 2026):
+//     within        the serif links centred in a roomier circle (default while they choose)
+//     within-caps   the links as small, widely spaced capitals in the sans: quiet, like the labels on a chart
+//     within-left   a much larger circle running off the drawer's edge; the links flush left on
+//                   the name's line with their numbers, as on the Swiss grid
+//     within-name   the name goes inside too, small at the head of the circle, over the links
+//   lines   as it was, for comparison
+const MENUS = ["within", "within-caps", "within-left", "within-name", "field", "clear", "seal", "lines"];
+const menu = computed(() => (MENUS.includes(route.query.menu as string) ? (route.query.menu as string) : "within"));
 // The swell, as points down the drawer's right edge.
 const wave = `polygon(0 0, ${Array.from({ length: 41 }, (_, i) => `${(89 + 10 * Math.sin((i / 40) * Math.PI * 2.6 + 0.6)).toFixed(1)}% ${(i * 2.5).toFixed(1)}%`).join(", ")}, 0 100%)`;
 const menuButton = ref<HTMLButtonElement>();
@@ -140,12 +157,12 @@ const links = [
 				</button>
 
 				<!-- The drawer comes straight after its button, so the keyboard goes from one into the other. -->
-				<div v-show="open" id="menu" class="slab" :data-shape="shape" :style="shape === 'wave' ? { clipPath: wave } : undefined">
+				<div v-show="open" id="menu" class="slab" :data-shape="shape" :data-menu="menu" :style="shape === 'wave' ? { clipPath: wave } : undefined">
 					<!-- Decoration only: a faint figure behind the text. ?figure= tries the others (see MenuFigure). -->
-					<MenuFigure class="trine" :kind="figure" />
+					<MenuFigure class="trine" :kind="figure" :ring="menu !== 'field'" />
 					<div class="body">
 			<div class="row">
-				<p class="name">Nabil<br />Sabio<br />Azadi</p>
+				<p class="name">Nabil<br /> Sabio<br /> Azadi</p>
 			</div>
 
 			<nav aria-label="Main">
@@ -391,6 +408,152 @@ const links = [
 	--radius: 74vh;
 	clip-path: circle(var(--radius) at calc(100% - var(--radius)) 50%);
 }
+/* Ways for the sky chart and the words to share the drawer (?menu=). */
+/* Field: the stars alone, larger than the drawer and bled off its edges, fixed while the words scroll. */
+.slab[data-menu="field"] .trine:not([data-kind="trine"]) {
+	position: fixed;
+	top: calc(var(--bar) + 2vh);
+	left: -6rem;
+	width: 46rem;
+	opacity: 0.38;
+}
+/* Clear: the circle keeps its place, and the links go without hairlines, parted by space alone. */
+.slab[data-menu="clear"] nav a,
+.slab[data-menu^="within"] nav a {
+	border-top: 0;
+}
+.slab[data-menu="clear"] form.rule,
+.slab[data-menu^="within"] form.rule {
+	margin-top: calc(var(--unit) * 6);
+}
+/* Seal: small, in the narrow column beside the name, with nothing over it. */
+.slab[data-menu="seal"] .trine:not([data-kind="trine"]) {
+	top: calc(var(--unit) * 7);
+	left: calc(var(--unit) * 5);
+	width: 6.5rem;
+	opacity: 0.85;
+}
+
+/* Within: the circle is the frame, and the links are set inside it with no hairlines.
+   --ring is the circle's width; the list of links is a square of the same size laid over it. */
+.slab[data-menu^="within"] {
+	--ring: 26rem;
+}
+.slab[data-menu^="within"] .trine:not([data-kind="trine"]) {
+	top: 12.5rem;
+	left: calc(var(--unit) * 6 + (20.5rem - var(--ring)) / 2);
+	width: var(--ring);
+	opacity: 0.45;
+}
+.slab[data-menu^="within"] ol {
+	display: grid;
+	align-content: center;
+	width: var(--ring);
+	height: var(--ring);
+	margin: calc(var(--unit) * 5) 0 0 calc((20.5rem - var(--ring)) / 2);
+}
+.slab[data-menu^="within"] nav a {
+	display: block;
+	min-height: 0;
+	padding: calc(var(--unit) * 1.25) 0;
+	text-align: center;
+}
+.slab[data-menu^="within"] nav .key {
+	display: none;
+}
+.slab[data-menu^="within"] .title {
+	font-size: 2.375rem;
+	line-height: 1.15;
+}
+.slab[data-menu^="within"] nav a:hover,
+.slab[data-menu^="within"] nav a:focus-visible {
+	background: none;
+	color: var(--ink);
+	box-shadow: none;
+}
+.slab[data-menu^="within"] nav a:hover .title,
+.slab[data-menu^="within"] nav a:focus-visible .title {
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.2em;
+}
+
+/* Capitals: the links as small capitals in the sans, set wide: the voice of a chart's labels. */
+.slab[data-menu="within-caps"] {
+	--ring: 22rem;
+}
+.slab[data-menu="within-caps"] nav a {
+	padding: calc(var(--unit) * 2.5) 0;
+}
+.slab[data-menu="within-caps"] .title,
+.slab[data-menu="within-caps"] nav a:hover .title,
+.slab[data-menu="within-caps"] nav a[aria-current="page"] .title {
+	font: 300 1.125rem/1.4 "Helvetica Neue LT", "Helvetica Neue", Helvetica, Arial, sans-serif;
+	letter-spacing: 0.3em;
+	text-transform: uppercase;
+}
+.slab[data-menu="within-caps"] nav a[aria-current="page"] .title {
+	font-weight: 500;
+}
+
+/* Left: a circle much larger than the drawer, running off its edge, so only part of its sweep
+   shows. The links stay on the Swiss grid inside it: numbers in the narrow column, words flush
+   left on the name's line. */
+.slab[data-menu="within-left"] .trine:not([data-kind="trine"]) {
+	top: 8rem;
+	left: -11rem;
+	width: 38rem;
+	opacity: 0.4;
+}
+.slab[data-menu="within-left"] ol {
+	display: block;
+	width: auto;
+	height: auto;
+	margin: calc(var(--unit) * 8) 0 0;
+}
+.slab[data-menu="within-left"] nav a {
+	display: grid;
+	min-height: 4.75rem;
+	text-align: left;
+}
+.slab[data-menu="within-left"] nav .key {
+	display: block;
+}
+.slab[data-menu="within-left"] .title {
+	font-size: 3rem;
+	line-height: 1.25;
+}
+
+/* Name: the circle holds the whole head of the drawer. The name is small at its top, in
+   capitals, and the links follow beneath it. */
+.slab[data-menu="within-name"] {
+	--ring: 27rem;
+}
+.slab[data-menu="within-name"] .trine:not([data-kind="trine"]) {
+	top: calc(var(--unit) * 5);
+}
+.slab[data-menu="within-name"] .body > .row:first-child {
+	display: block;
+	width: var(--ring);
+	margin-left: calc((20.5rem - var(--ring)) / 2);
+	padding-top: calc(var(--unit) * 11);
+	text-align: center;
+}
+.slab[data-menu="within-name"] .name {
+	font-size: 0.8125rem;
+	font-weight: 400;
+	letter-spacing: 0.3em;
+	text-transform: uppercase;
+}
+.slab[data-menu="within-name"] .name br {
+	display: none;
+}
+.slab[data-menu="within-name"] ol {
+	height: auto;
+	margin-top: calc(var(--unit) * 4);
+	padding-bottom: calc(var(--unit) * 10);
+}
+
 /* The other cuts (?shape=). Each sets the drawer's width, the room kept clear on its right
    for the cut, and the cut itself. */
 .slab[data-shape="straight"] {

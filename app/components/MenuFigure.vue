@@ -14,7 +14,8 @@
 //            as long as they are high or strong
 //   moon     the moon as it is tonight, large: its lit part and its dark part
 //   none     nothing
-const props = defineProps<{ kind: string }>();
+// `ring` is the drawn circle of the horizon; without it the sky chart is a field of stars alone.
+const props = withDefaults(defineProps<{ kind: string; ring?: boolean }>(), { ring: true });
 
 // Set by OceanBackground: the moment shown, and the live conditions.
 const moment = useState("scene-moment", () => Date.now());
@@ -120,9 +121,9 @@ const ticks = Array.from({ length: 36 }, (_, i) => {
 		</template>
 
 		<template v-else-if="kind === 'sky'">
-			<circle cx="100" cy="100" r="96" />
+			<circle v-if="ring" cx="100" cy="100" r="96" />
 			<!-- A mark at the top of the rim: the way the boat faces, towards Hawaiʻi. -->
-			<path d="M100 4 L100 -2" />
+			<path v-if="ring" d="M100 4 L100 -2" />
 			<circle v-for="(star, i) in stars" :key="i" :cx="star.x" :cy="star.y" :r="star.size" class="solid" />
 			<circle v-for="(planet, i) in planets" :key="`p${i}`" :cx="planet.x" :cy="planet.y" r="2.2" />
 			<g v-if="sun">

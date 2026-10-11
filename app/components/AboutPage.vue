@@ -24,16 +24,21 @@ const sky = computed(() => useRoute().query.sky as string | undefined);
 // Where the boat is and what time it keeps, for the almanac's page heading.
 const readout = useState<{ place?: string; time: string }>("scene-readout", () => ({ time: "" }));
 
-// Stand-ins, so the layouts can be judged. None of this is the owner's own wording.
-const statement = "A sentence or two that says who Nabil is and what the work is about. This is the line a visitor reads first, so it is set large.";
+// The owner's own words (11 October 2026). The paragraphs carry a little HTML, for the titles of
+// works, which are set in italics.
+const statement = "Nabil Sabio Azadi is an artist, anthropologist, editor and poet.";
 const paragraphs = [
-	"A first paragraph of biography goes here: where the work comes from, what it is made of, who it is made with. Four or five sentences sit comfortably at this width, and the line length is kept to about sixty-five characters so that it reads easily.",
-	"A second paragraph, if wanted: present projects, the studio, where the work has been shown or published. It can be left out, and the page closes up without it.",
+	"Nabil was born and raised in Tāmaki Makaurau, Aotearoa. He is a Persian-New Zealand artist and is Tangata Tiriti. He comes from Persian healing lineages in Yazd and Shiraz, Iran. His work moves between painting, poetry, artist books, essays and curatorial practices, with a focus on accessibility, movement and chanting.",
+	"He was Acting Editor at the Queensland Art Gallery | Gallery of Modern Art. His artist book <cite>For You The Traveller</cite> (2012) is held in Special Collections at UC Santa Cruz. From 2025–26, he was Editor of <cite>Asia Pacific Art Papers</cite>. He co-directs Tîr Aho Studio, a creative studio with a focus on accessibility, inclusion and equity.",
 ];
-const links = [
+// `title` marks a label that is the title of a work, set in italics; `after` is plain words
+// that follow it in the same entry.
+// The Asia Pacific Art Papers address is Claude's best finding and could not be opened to
+// check (the site refuses automated visitors): the owner should confirm it.
+const links: { label: string; href: string; title?: boolean; after?: string }[] = [
 	{ label: "Tîr Aho Studio", href: "https://www.tiraho.com.au" },
-	{ label: "A second link, to come" },
-	{ label: "A third link, to come" },
+	{ label: "Asia Pacific Art Papers", href: "https://apap.qagoma.qld.gov.au/", title: true, after: ", Queensland Art Gallery | Gallery of Modern Art" },
+	{ label: "Wikipedia", href: "https://en.wikipedia.org/wiki/Nabil_Sabio_Azadi" },
 ];
 </script>
 
@@ -53,21 +58,29 @@ const links = [
 			<header class="row">
 				<p class="key">About</p>
 				<div>
-					<h1>Nabil Sabio Azadi</h1>
-					<p class="statement">{{ statement }}</p>
+					<!-- The opening line is the page's heading: it begins with the name, so the name is not set above it as well. -->
+					<h1 class="statement">{{ statement }}</h1>
 				</div>
 			</header>
 
 			<figure class="row">
-				<figcaption class="key">Portrait<br />A caption, and who took the picture</figcaption>
-				<!-- A stand-in for the picture. The real one will carry a description of what it shows. -->
-				<div class="picture" role="img" aria-label="A stand-in for a portrait of Nabil Sabio Azadi"><span>Portrait</span></div>
+				<figcaption class="key">Portrait<br />Photograph by Amelia J Dowd</figcaption>
+				<!-- The owner's portrait, cropped square for the layouts that show it as a disc or a
+				     square, and upright (four to five) for the others. -->
+				<img
+					class="picture"
+					:src="['panel', 'klein'].includes(layout) ? '/about/portrait-square.jpg' : '/about/portrait-tall.jpg'"
+					width="900"
+					:height="['panel', 'klein'].includes(layout) ? 900 : 1125"
+					alt="Nabil Sabio Azadi in black and white, seated at a table in a dark jacket, hands pressed together upright in front of the face so that one eye looks out past them. Along the edges of the hands are tattooed the words Long heal and Sun bearing."
+				/>
 			</figure>
 
 			<div class="row words">
 				<p class="key">Biography</p>
 				<div>
-					<p v-for="paragraph in paragraphs" :key="paragraph" class="text">{{ paragraph }}</p>
+					<!-- eslint-disable-next-line vue/no-v-html -->
+					<p v-for="paragraph in paragraphs" :key="paragraph" class="text" v-html="paragraph" />
 				</div>
 			</div>
 
@@ -75,8 +88,7 @@ const links = [
 				<p class="key">Elsewhere</p>
 				<ul>
 					<li v-for="link in links" :key="link.label">
-						<a v-if="link.href" :href="link.href">{{ link.label }}</a>
-						<span v-else class="waiting">{{ link.label }}</span>
+						<a :href="link.href"><cite v-if="link.title">{{ link.label }}</cite><template v-else>{{ link.label }}</template>{{ link.after }}</a>
 					</li>
 				</ul>
 			</nav>
@@ -140,7 +152,7 @@ header.row {
 	text-transform: uppercase;
 	text-underline-offset: 0.5em;
 }
-h1 {
+h1:not(.statement) {
 	font-size: 1.5rem;
 	font-weight: 300;
 	line-height: 1.4;
@@ -148,7 +160,6 @@ h1 {
 }
 .statement {
 	max-width: 24em;
-	margin-top: calc(var(--unit) * 3);
 	font: 300 2rem/1.3 "Lyon Display", "Lyon Text", Georgia, serif;
 	letter-spacing: 0.01em;
 }
@@ -157,20 +168,21 @@ h1 {
 	font: 400 1.125rem/1.75 "Lyon Text", Georgia, "Times New Roman", serif;
 	letter-spacing: 0.01em;
 }
+/* Titles of works. (Reached through :deep, since they come in with the paragraph's own HTML.) */
+.text :deep(cite) {
+	font-style: italic;
+}
 .text + .text {
 	margin-top: calc(var(--unit) * 3);
 }
-/* The stand-in picture: upright, four to five. */
+/* The picture: upright, four to five, unless a layout says otherwise. */
 .picture {
-	display: grid;
-	place-items: center;
+	display: block;
 	width: min(100%, 22rem);
+	height: auto;
 	aspect-ratio: 4 / 5;
-	background: color-mix(in srgb, currentColor 14%, transparent);
+	object-fit: cover;
 	border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
-	font-size: 0.75rem;
-	letter-spacing: 0.18em;
-	text-transform: uppercase;
 }
 ul {
 	display: grid;
@@ -182,6 +194,15 @@ a,
 	align-items: center;
 	min-height: 2.75rem;
 	font: 400 1.125rem/1.5 "Lyon Text", Georgia, serif;
+}
+/* A link's words run on and wrap as one piece of text, with room above and below for a finger. */
+li a {
+	display: inline-block;
+	min-height: 0;
+	padding: calc(var(--unit) * 1.25) 0;
+}
+li cite {
+	font-style: italic;
 }
 a {
 	text-decoration: underline;
@@ -364,7 +385,7 @@ a:focus-visible {
 	padding: calc(var(--unit) * 5) 0;
 	border: 0;
 }
-[data-layout="klein"] h1 {
+[data-layout="klein"] h1:not(.statement) {
 	font-size: 1rem;
 	letter-spacing: 0.18em;
 	text-transform: uppercase;
@@ -409,7 +430,7 @@ a:focus-visible {
 	white-space: pre;
 	font-weight: 700;
 }
-[data-layout="poster"] h1 {
+[data-layout="poster"] h1:not(.statement) {
 	font-weight: 700;
 	letter-spacing: 0.02em;
 }
