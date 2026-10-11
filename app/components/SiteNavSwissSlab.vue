@@ -325,8 +325,11 @@ const links = [
 	aspect-ratio: 733 / 757;
 	margin: calc(var(--unit) * -2) 0 calc(var(--unit) * 5) -1.75rem;
 	background: var(--ink);
-	-webkit-mask: url("/brand/nsa-signed.png") center / contain no-repeat;
-	mask: url("/brand/nsa-signed.png") center / contain no-repeat;
+	/* Copies of the mark made at the sizes it is shown at (one for each screen density), shrunk
+	   smoothly with its fine pen lines kept. Left to the browser to shrink from the full-size
+	   image, those lines broke up into steps and dots. */
+	-webkit-mask: -webkit-image-set(url("/brand/nsa-signed-72.png") 1x, url("/brand/nsa-signed-144.png") 2x, url("/brand/nsa-signed-216.png") 3x) center / contain no-repeat;
+	mask: image-set(url("/brand/nsa-signed-72.png") 1x, url("/brand/nsa-signed-144.png") 2x, url("/brand/nsa-signed-216.png") 3x) center / contain no-repeat;
 }
 /* Middle size: the name, hung on the wide column's line, set solid. */
 .name {
