@@ -3,6 +3,7 @@
 // Reference: GPU Gems 1, ch. 1, "Effective Water Simulation from Physical Models".
 import * as THREE from "three";
 import type { Water } from "three/addons/objects/Water.js";
+import { CHANNELLERS, channelPathChunk } from "./channel-path";
 
 // Small seeded random generator, so the sea looks the same on every visit.
 function seededRandom(seed: number) {
@@ -19,6 +20,8 @@ function seededRandom(seed: number) {
 // A real sea is many wave trains with unrelated lengths, headings and phases. Long swell
 // runs close to the wind; short chop spreads widely around it.
 const WAVE_COUNT = 12;
+// How many wave trains the shader adds up. The dial's sea uses the first twelve; a measured sea uses all.
+const TRAIN_COUNT = 32;
 const WAVES = (() => {
 	const random = seededRandom(7);
 	const waves = Array.from({ length: WAVE_COUNT }, (_, i) => {
@@ -30,6 +33,163 @@ const WAVES = (() => {
 	for (const wave of waves) wave.z /= total;
 	return waves;
 })();
+
+// On the dial, the shorter a wave the more it is the wind's.
+const dialWindSea = (wave: THREE.Vector4) => 1 - THREE.MathUtils.smoothstep(wave.w, 40, 110);
+
+// The sea of the weather dial and the story (September's sea): the wave trains above, running
+// away from the viewer, sized by the waveSteepness and waveScale uniforms.
+export function useDialSea(uniforms: GerstnerUniforms) {
+	uniforms.waves.value.forEach((train, i) => {
+		const wave = WAVES[i];
+		// A train with no steepness adds nothing.
+		if (wave) train.copy(wave);
+		else train.set(0, 0, 0, 1);
+		uniforms.waveWind.value[i] = wave ? dialWindSea(wave) : 0;
+	});
+	uniforms.windHeading.value.set(0, -1);
+	uniforms.windDrift.value = 14;
+	uniforms.ripple.value = 1;
+	uniforms.crestWarp.value = 1;
+}
+
+// A measured sea is several seas on top of each other: swell that has come from weather far away
+// (long, regular, all from nearly one direction), often a second, shorter swell crossing it from
+// somewhere else, and the waves the wind here is raising (short, steep, spread widely about the
+// wind). The wave model gives each as three figures: a significant height, a mean period and a
+// direction. A real sea is not three waves but a whole spectrum of them, and the model does not
+// publish its spectrum for this spot. So each system is filled out the way oceanographers and
+// ship designers do it: its energy is spread over wave frequencies in the JONSWAP shape
+// (Hasselmann and others, 1973; the measured form of a sea's spectrum), and over directions as
+// cos^2s of half the angle off the mean (Mitsuyasu and others, 1975). `peakedness` is how sharply
+// the energy gathers at one period, `spreading` (the s) how tightly at one direction; the values
+// below are the usual ones for old swell, young swell and a wind sea.
+interface Spectrum {
+	// Per train: its frequency as a multiple of the peak frequency, its angle off the mean
+	// direction in radians, and its phase. Every train carries an equal share of the energy.
+	trains: { frequency: number; off: number; phase: number }[];
+	// The peak period as a multiple of the mean period, which is the one the model gives.
+	peakOverMean: number;
+}
+
+function spectrum(count: number, peakedness: number, spreading: number, seed: number): Spectrum {
+	const random = seededRandom(seed);
+	// The spectrum in fine steps of frequency (as a multiple of the peak's), from waves much
+	// longer than the peak to ones too short for the grid to draw.
+	const STEPS = 4000;
+	const energy: number[] = [];
+	const frequencies: number[] = [];
+	let total = 0;
+	let moment = 0;
+	for (let step = 0; step < STEPS; step++) {
+		const f = 0.6 + (2.0 * (step + 0.5)) / STEPS;
+		const width = f < 1 ? 0.07 : 0.09;
+		const e = f ** -5 * Math.exp(-1.25 * f ** -4) * peakedness ** Math.exp(-((f - 1) ** 2) / (2 * width ** 2));
+		frequencies.push(f);
+		energy.push(e);
+		total += e;
+		moment += e * f;
+	}
+	// Cut into bands of equal energy, one train each, at the band's centre of energy.
+	const bands: number[] = [];
+	let step = 0;
+	for (let band = 0; band < count; band++) {
+		let sum = 0;
+		let weighted = 0;
+		while (step < STEPS && sum < total / count) {
+			sum += energy[step]!;
+			weighted += energy[step]! * frequencies[step]!;
+			step++;
+		}
+		bands.push(weighted / sum);
+	}
+	// Directions that follow the spreading law, at equal steps of its running total, dealt out
+	// at random so that a train's direction has nothing to do with its length.
+	const ANGLES = 2000;
+	const density = Array.from({ length: ANGLES }, (_, i) => Math.cos(((i + 0.5) / ANGLES - 0.5) * Math.PI) ** (2 * spreading));
+	const whole = density.reduce((sum, d) => sum + d, 0);
+	const offs: number[] = [];
+	let running = 0;
+	let angle = 0;
+	for (let n = 0; n < count; n++) {
+		while (angle < ANGLES && running + density[angle]! < ((n + 0.5) / count) * whole) running += density[angle++]!;
+		offs.push(((angle + 0.5) / ANGLES - 0.5) * 2 * Math.PI);
+	}
+	for (let n = count - 1; n > 0; n--) {
+		const other = Math.floor(random() * (n + 1));
+		[offs[n], offs[other]] = [offs[other]!, offs[n]!];
+	}
+	return {
+		trains: bands.map((frequency, n) => ({ frequency, off: offs[n]!, phase: random() * Math.PI * 2 })),
+		peakOverMean: moment / total,
+	};
+}
+
+// Old swell from far away, a younger swell crossing it, and the wind's own waves.
+const SWELL = spectrum(10, 7, 30, 11);
+const SECOND_SWELL = spectrum(8, 3.3, 15, 23);
+const WIND_SEA = spectrum(TRAIN_COUNT - 18, 3.3, 6, 37);
+
+export interface WaveSystem {
+	// Significant height in metres, mean period in seconds, and the compass direction it comes from.
+	height: number;
+	period: number;
+	from: number;
+}
+
+// The sea as measured, in metres and true directions. The scene is in metres and the viewer
+// faces the compass bearing `facing`.
+export function useMeasuredSea(
+	uniforms: GerstnerUniforms,
+	sea: { swell: WaveSystem; secondSwell: WaveSystem; windSea: WaveSystem; wind: { speed: number; from: number }; facing: number },
+) {
+	// Angle off the view of something travelling away from the compass direction it comes from.
+	const heading = (from: number) => THREE.MathUtils.degToRad(from + 180 - sea.facing);
+	let i = 0;
+	const lay = (system: WaveSystem, shape: Spectrum, wind: number) => {
+		const peakPeriod = Math.max(system.period, 1) * shape.peakOverMean;
+		// Significant height is four times the root of the sea's variance, and a train of
+		// amplitude a carries a² / 2 of it.
+		const amplitude = (system.height / 4) * Math.sqrt(2 / shape.trains.length);
+		for (const train of shape.trains) {
+			// In deep water a wave's length follows from its period: g T² / 2π.
+			const length = (9.8 * (peakPeriod / train.frequency) ** 2) / (2 * Math.PI);
+			uniforms.waves.value[i]!.set(heading(system.from) + train.off, train.phase, (amplitude * 2 * Math.PI) / length, length);
+			uniforms.waveWind.value[i] = wind;
+			i++;
+		}
+	};
+	lay(sea.swell, SWELL, 0);
+	lay(sea.secondSwell, SECOND_SWELL, 0);
+	lay(sea.windSea, WIND_SEA, 1);
+	const windAngle = heading(sea.wind.from);
+	uniforms.windHeading.value.set(Math.sin(windAngle), -Math.cos(windAngle));
+	uniforms.windDrift.value = sea.wind.speed;
+	uniforms.waveScale.value = 1;
+	uniforms.crestWarp.value = 0;
+	// The fine roughness of the sea grows with the wind: its mean square slope is about
+	// 0.003 + 0.00512 × wind speed in m/s (Cox and Munk, 1954). The stock ripple is about right for a gale.
+	uniforms.ripple.value = Math.sqrt(0.003 + 0.00512 * sea.wind.speed) / 0.3;
+}
+
+// Height of a measured sea at a point, for carrying the viewer on it. (It leaves out the small
+// sideways shift of the surface and the gusts' unevenness, so it is right to within the chop.)
+export function measuredSeaHeight(uniforms: GerstnerUniforms, x: number, z: number, time: number) {
+	let height = 0;
+	for (const train of uniforms.waves.value) {
+		const k = (2 * Math.PI) / train.w;
+		const along = Math.sin(train.x) * x - Math.cos(train.x) * z;
+		height += ((train.z * uniforms.waveSteepness.value) / k) * Math.sin(k * (along - Math.sqrt(9.8 / k) * time) + train.y);
+	}
+	return height;
+}
+
+// 0..1 for the foam uniform from the wind speed in m/s. The share of the sea covered by
+// whitecaps is about 3.84e-6 × speed^3.41 (Monahan and O'Muircheartaigh, 1980): none to speak
+// of below 4 m/s, a few percent in a near gale, a fifth of the sea in a storm.
+export function whitecaps(windSpeed: number) {
+	return Math.min(1, Math.sqrt((3.84e-6 * windSpeed ** 3.41) / 0.2));
+}
 
 // Giant swells raised at the height of the storm. Same layout as WAVES, but the wavelength is fixed
 // and the steepness comes from the surge uniform. Few and regular, so the camera can ride them.
@@ -56,6 +216,34 @@ export interface GerstnerUniforms {
 	waveSteepness: THREE.IUniform<number>;
 	// Multiplies every wavelength, and with it the wave height.
 	waveScale: THREE.IUniform<number>;
+	// The wave trains themselves: angle off the view in radians, phase, steepness, wavelength in
+	// metres. And for each, 0..1 how far it is wind-raised chop and not swell.
+	waves: THREE.IUniform<THREE.Vector4[]>;
+	waveWind: THREE.IUniform<number[]>;
+	// Which way the wind blows over the sea (a unit vector, world x and z) and how fast its gusts
+	// cross the water, in metres a second.
+	windHeading: THREE.IUniform<THREE.Vector2>;
+	windDrift: THREE.IUniform<number>;
+	// 0..1 how far crests are bent by a slow drifting pattern. The dial's few trains need it to
+	// look like a sea; a measured sea has trains enough, and without it the viewer can ride the water.
+	crestWarp: THREE.IUniform<number>;
+	// The four channellers' braids over the sea (channellers.ts): where their boat is, their
+	// clock, and how brightly their weaving lights the water, before tone mapping. 0 is unlit.
+	channelBoat: THREE.IUniform<THREE.Vector2>;
+	channelTime: THREE.IUniform<number>;
+	// The wind across the view, for carrying their flow: see channel-path.ts.
+	channelWind: THREE.IUniform<THREE.Vector2>;
+	channelSea: THREE.IUniform<THREE.Vector2>;
+	// 0..1 how strongly their channelling feeds the sea and the wind along the flow.
+	channelFeed: THREE.IUniform<number>;
+	channelGate: THREE.IUniform<THREE.Vector4>;
+	channelSurge: THREE.IUniform<number>;
+	channelStream: THREE.IUniform<number>;
+	// The boat's electric lamps on the water round it, before tone mapping. 0 is unlit.
+	boatLamp: THREE.IUniform<number>;
+	channelLight: THREE.IUniform<number>;
+	// How rough the wind makes the fine surface. 1 is the stock ripple.
+	ripple: THREE.IUniform<number>;
 	// 0..1 amount of white foam on the steepest crests.
 	foam: THREE.IUniform<number>;
 	// 0..1 how unevenly the wind roughens the surface: 0 is a uniform sea, 1 has calm slicks and rough patches.
@@ -70,12 +258,6 @@ export interface GerstnerUniforms {
 	gustSwirl: THREE.IUniform<number>;
 	// Brightness of the threads of the weave that run under the water, before tone mapping. 0 hides them.
 	weaveGlow: THREE.IUniform<number>;
-	// A ship making way: where she is (world x, z) and 0..1 how strong her wake is.
-	shipWake: THREE.IUniform<THREE.Vector3>;
-	// Fire and air channelled under the sea to one point: where (world x, z), the height of the
-	// water raised there, and 0..1 how brightly it glows. burstLight is that glow before tone mapping.
-	burst: THREE.IUniform<THREE.Vector4>;
-	burstLight: THREE.IUniform<number>;
 	// 0..1 strength of the stream of fresh water running out through the salt, and of the bands of
 	// smooth water that internal waves leave on the surface.
 	freshFlow: THREE.IUniform<number>;
@@ -91,8 +273,13 @@ uniform float surge;
 uniform vec2 weaveCentre;
 uniform float weavePull;
 uniform float gustSwirl;
-uniform vec4 burst;
-uniform vec4 waves[${WAVES.length}];
+uniform vec4 waves[${TRAIN_COUNT}];
+uniform float waveWind[${TRAIN_COUNT}];
+uniform vec2 windHeading;
+uniform float windDrift;
+uniform float crestWarp;
+uniform float channelFeed;
+${channelPathChunk}
 uniform vec4 giantWaves[${GIANT_WAVES.length}];
 varying vec3 vWaveNormal;
 varying float vCrest;
@@ -113,8 +300,13 @@ float waveNoise( vec2 p ) {
 	);
 }
 
+// A place on the sea as the wind sees it: x across the wind, y against it. September's wind
+// always blew away from the viewer (-z), where this is the place unchanged.
+vec2 windFrame( vec2 p ) {
+	return vec2( - windHeading.y * p.x + windHeading.x * p.y, - dot( windHeading, p ) );
+}
+
 // Wind strength 0..1 over the surface: patches stretched along the wind that drift downwind.
-// The wind always blows away from the viewer (-z), towards Hawai'i.
 float gustPattern( vec2 q ) {
 	return 0.6 * waveNoise( q * vec2( 0.006, 0.0025 ) ) + 0.4 * waveNoise( q * vec2( 0.017, 0.007 ) + 31.0 );
 }
@@ -122,7 +314,7 @@ float gustPattern( vec2 q ) {
 // When the channelling takes hold of the wind, the same patches wheel round the point below
 // the knot in spiral bands instead of running straight downwind.
 float gustField( vec2 p ) {
-	float straight = gustPattern( vec2( p.x, p.y + waveTime * 14.0 ) );
+	float straight = gustPattern( windFrame( p ) + vec2( 0.0, waveTime * windDrift ) );
 	if ( gustSwirl <= 0.0 ) return straight;
 	vec2 rel = p - weaveCentre;
 	float turn = waveTime * 0.15 + length( rel ) * 0.0015;
@@ -152,23 +344,36 @@ vec3 gerstner( vec3 p, out vec3 normal, out float crest, out float gust ) {
 	vec3 binormal = vec3( 0.0, 0.0, 1.0 );
 	float distanceToEye = length( p.xz - cameraPosition.xz );
 	gust = gustField( p.xz );
+	// The channellers do not make weather of their own: they feed what the sea and the wind are
+	// already doing. Along their flow every wave that is there stands a little steeper and the
+	// wind's gusts bite a little harder. (Not close by the boat, which rides the sea as measured.)
+	float fed = 0.0;
+	if ( channelFeed > 0.0 ) {
+		float ahead = channelBoat.y - p.z;
+		if ( ahead > 30.0 ) {
+			float off = p.x - channelBoat.x - channelFlow( ahead );
+			float reach = 6.0 + 0.08 * ahead;
+			fed = channelFeed * exp( - off * off / ( reach * reach ) ) * smoothstep( 30.0, 90.0, ahead ) * ( 1.0 - smoothstep( 0.75, 1.0, channelWay( ahead ) ) );
+			gust = min( 1.0, gust + 0.5 * fed );
+		}
+	}
 	// Slow sideways drift of the phase, so crests bend and break up instead of running as straight lines.
 	vec2 warp = vec2(
 		waveNoise( p.xz * 0.005 + vec2( 0.0, waveTime * 0.03 ) ),
 		waveNoise( p.xz * 0.005 + vec2( 47.0, - waveTime * 0.02 ) )
 	) - 0.5;
 	crest = 0.0;
-	for ( int i = 0; i < ${WAVES.length}; i ++ ) {
+	for ( int i = 0; i < ${TRAIN_COUNT}; i ++ ) {
 		vec2 d = vec2( sin( waves[ i ].x ), - cos( waves[ i ].x ) );
 		float wavelength = waves[ i ].w * waveScale;
 		// Gusts act on the wind-driven chop, not on the long swell.
-		float windSea = 1.0 - smoothstep( 40.0, 110.0, waves[ i ].w );
-		float steepness = waves[ i ].z * waveSteepness
+		float windSea = waveWind[ i ];
+		float steepness = waves[ i ].z * waveSteepness * ( 1.0 + 0.35 * fed )
 			* mix( 1.0, mix( 0.35, 1.5, gust ), gustiness * windSea )
 			* ( 1.0 - smoothstep( 0.5 * pow( wavelength, 1.5 ), pow( wavelength, 1.5 ), distanceToEye ) );
 		float k = 2.0 * PI / wavelength;
 		float c = sqrt( 9.8 / k );
-		float f = k * ( dot( d, p.xz + warp * wavelength * 0.7 ) - c * waveTime ) + waves[ i ].y;
+		float f = k * ( dot( d, p.xz + warp * wavelength * 0.7 * crestWarp ) - c * waveTime ) + waves[ i ].y;
 		float a = steepness / k;
 		offset += vec3( d.x * a * cos( f ), a * sin( f ), d.y * a * cos( f ) );
 		tangent += vec3( - d.x * d.x * steepness * sin( f ), d.x * steepness * cos( f ), - d.x * d.y * steepness * sin( f ) );
@@ -204,15 +409,6 @@ vec3 gerstner( vec3 p, out vec3 normal, out float crest, out float gust ) {
 		binormal.y += weavePull * slope.y;
 		crest += weavePull * 0.035 * ( h - mound );
 	}
-	// Water raised over the point where fire and air are gathering below: a dome, then a column.
-	if ( burst.z > 0.0 ) {
-		vec2 rel = p.xz - burst.xy;
-		float raised = burst.z * exp( - dot( rel, rel ) / 1600.0 );
-		offset.y += raised;
-		tangent.y += raised * - 2.0 * rel.x / 1600.0;
-		binormal.y += raised * - 2.0 * rel.y / 1600.0;
-		crest += min( 1.0, raised * 0.06 );
-	}
 	normal = normalize( cross( binormal, tangent ) );
 	return p + offset;
 }
@@ -229,14 +425,16 @@ const vertexMain = /* glsl */ `
 const fragmentPars = /* glsl */ `
 uniform float foam;
 uniform float gustiness;
+uniform float ripple;
+uniform vec2 windHeading;
 uniform float weaveGlow;
 uniform float waveTime;
 uniform vec2 weaveCentre;
-uniform vec3 shipWake;
-uniform vec4 burst;
-uniform float burstLight;
 uniform float freshFlow;
 uniform float internalWaves;
+uniform float channelLight;
+uniform float boatLamp;
+${channelPathChunk}
 varying vec3 vWaveNormal;
 varying float vCrest;
 varying float vGust;
@@ -277,14 +475,16 @@ const fragmentNormal = /* glsl */ `
 		noise.xy += ( mix( early, late, abs( 2.0 * beat - 1.0 ) ) - 0.5 ) * 2.2 * ( fresh + meeting ) * ( 1.0 - smoothstep( 500.0, 1500.0, fromEye ) );
 	}
 	float slick = smoothstep( 0.55, 0.95, 0.5 + 0.5 * sin( place.x * 0.011 + place.y * 0.021 - waveTime * 0.22 ) );
-	float ripple = 1.5 * mix( 1.0, mix( 0.4, 2.0, vGust ), gustiness ) * ( 1.0 - 0.5 * internalWaves * slick );
+	float rippled = 1.5 * ripple * mix( 1.0, mix( 0.4, 2.0, vGust ), gustiness ) * ( 1.0 - 0.5 * internalWaves * slick );
+	// The place as the wind sees it (x across the wind, y against it), for what the wind carries.
+	vec2 downwind = vec2( - windHeading.y * place.x + windHeading.x * place.y, - dot( windHeading, place ) );
 	float nearness = 1.0 - smoothstep( 120.0, 700.0, fromEye );
 	if ( nearness > 0.0 ) {
-		vec2 fine = texture2D( normalSampler, worldPosition.xz / 31.0 + vec2( time / 23.0, time / 7.0 ) ).xy
-			+ texture2D( normalSampler, worldPosition.xz / 11.0 + vec2( - time / 13.0, time / 4.0 ) ).xy - 1.0;
+		vec2 fine = texture2D( normalSampler, downwind / 31.0 + vec2( time / 23.0, time / 7.0 ) ).xy
+			+ texture2D( normalSampler, downwind / 11.0 + vec2( - time / 13.0, time / 4.0 ) ).xy - 1.0;
 		noise.xy += fine * 0.9 * nearness;
 	}
-	vec3 surfaceNormal = normalize( noise.xzy * vec3( ripple, 1.0, ripple ) );
+	vec3 surfaceNormal = normalize( noise.xzy * vec3( rippled, 1.0, rippled ) );
 	surfaceNormal = normalize( vec3(
 		surfaceNormal.x / surfaceNormal.y + vWaveNormal.x / vWaveNormal.y,
 		1.0,
@@ -298,7 +498,7 @@ const fragmentFoam = /* glsl */ `
 	// In a storm the foam reaches further down the crests.
 	float foamMask = foam * smoothstep( mix( 0.35, 0.12, foam ), mix( 0.8, 0.5, foam ), vCrest + noise.x * 0.3 );
 	// Streaks of foam torn off by the gusts, stretched along the wind and drifting with it.
-	float streak = texture2D( normalSampler, worldPosition.xz * vec2( 0.03, 0.004 ) + vec2( 0.0, time * 0.05 ) ).r;
+	float streak = texture2D( normalSampler, downwind * vec2( 0.03, 0.004 ) + vec2( 0.0, time * 0.05 ) ).r;
 	foamMask = max( foamMask, foam * foam * vGust * smoothstep( 0.55, 0.8, streak ) * 0.7 * ( 1.0 - smoothstep( 600.0, 2000.0, distance ) ) );
 	vec3 foamColor = vec3( dot( reflectionSample, vec3( 0.3, 0.59, 0.11 ) ) ) * 1.2 + sunColor * diffuseLight;
 	// Light passes through the thin tops of waves and comes out green-blue, most of all when the
@@ -308,34 +508,40 @@ const fragmentFoam = /* glsl */ `
 	outgoingLight += vec3( 0.12, 0.95, 0.78 ) * 0.5 * length( waterColor ) * sunColor.g * thinWater * throughLight * ( 1.0 - reflectance );
 	outgoingLight *= mix( 0.82, 1.0, smoothstep( - 0.5, 0.2, vCrest ) );
 
-	// A ship's wake: the churned water straight astern, and the two arms of waves she trails,
-	// which stand at about 19 degrees to her track whatever her speed (Kelvin's wake).
-	if ( shipWake.z > 0.0 ) {
-		vec2 astern = vec2( shipWake.x - worldPosition.x, abs( worldPosition.z - shipWake.y ) );
-		if ( astern.x > 0.0 ) {
-			float churn = exp( - pow( astern.y / ( 5.0 + astern.x * 0.04 ), 2.0 ) ) * exp( - astern.x / 170.0 );
-			float arms = exp( - pow( ( astern.y - astern.x * 0.354 ) / ( 3.0 + astern.x * 0.05 ), 2.0 ) ) * exp( - astern.x / 260.0 )
-				* ( 0.6 + 0.4 * sin( astern.x * 0.5 - waveTime * 3.0 ) );
-			foamMask = max( foamMask, shipWake.z * max( churn, arms * 0.8 ) * ( 0.7 + 0.3 * noise.x ) );
-		}
-	}
 	// Fresh water is clearer and greener than salt, and shows what is under it more.
 	outgoingLight = mix( outgoingLight, outgoingLight * vec3( 0.8, 1.2, 1.0 ) + vec3( 0.04, 0.2, 0.14 ) * length( waterColor ) * sunColor.g, fresh * 0.7 * ( 1.0 - reflectance ) );
 	// Where the two waters meet, a broken line of foam.
 	foamMask = max( foamMask, meeting * 0.75 * smoothstep( 0.3, 0.7, 0.5 + 0.5 * noise.x + 0.2 * sin( worldPosition.z * 0.3 ) ) );
 
-	// Fire and air gathering under the sea: the water boils white over it.
-	vec2 fromBurst = worldPosition.xz - burst.xy;
-	float awayFromBurst = length( fromBurst );
-	float heart = exp( - awayFromBurst * awayFromBurst / 1800.0 );
-	foamMask = max( foamMask, burst.w * heart * ( 0.55 + 0.45 * noise.x ) );
 	outgoingLight = mix( outgoingLight, foamColor, foamMask );
-	// And glows from below: orange at the heart, with threads of fire and of air (white) running
-	// in to it under the surface from all round, pulsing inward.
-	if ( burstLight > 0.0 ) {
-		float runners = pow( abs( sin( atan( fromBurst.y, fromBurst.x ) * 4.5 + sin( awayFromBurst * 0.03 ) ) ), 14.0 )
-			* exp( - awayFromBurst / 160.0 ) * ( 0.5 + 0.5 * sin( awayFromBurst * 0.12 + waveTime * 7.0 ) );
-		outgoingLight += ( vec3( 1.0, 0.45, 0.12 ) * ( heart * 1.6 + runners * 0.8 ) + vec3( 0.85, 0.95, 1.0 ) * runners * 0.5 ) * burstLight;
+	// The channellers' braids light the sea they run over. Each is a line of light a little above
+	// the water: bright in a band beneath it, fainter in a wide pool about it, and coming from the
+	// side, so the faces of the waves that are turned to it show and the far faces stay dark.
+	// Water gives light back from within where it is not acting as a mirror; foam gives back most.
+	if ( channelLight > 0.0 ) {
+		float ahead = channelBoat.y - worldPosition.z;
+		if ( ahead > - 6.0 ) {
+			float out_ = max( ahead, 0.0 );
+			float lit = 0.0;
+			for ( int i = 0; i < ${CHANNELLERS}; i ++ ) {
+				float k = float( i );
+				float off = worldPosition.x - channelBoat.x - channelLine( k, out_ );
+				// The higher a braid climbs, the wider and fainter its light falls on the sea.
+				float climbed = channelRise( k, out_ );
+				float reach = 0.9 + 0.03 * out_ + 0.6 * climbed;
+				float near = exp( - off * off / ( reach * reach ) ) + 0.16 * exp( - off * off / ( 49.0 * reach * reach ) );
+				float facing = clamp( dot( surfaceNormal, normalize( vec3( - off, 1.3 + 0.02 * out_ + climbed, 0.0 ) ) ), 0.0, 1.0 );
+				lit += near * ( 0.25 + 0.75 * facing * facing ) * ( 0.55 + 0.75 * channelPulse( k, out_ ) ) * channelStrength( k ) / ( 1.0 + climbed / 12.0 );
+			}
+			lit *= smoothstep( - 6.0, 5.0, ahead ) / ( 1.0 + out_ / 500.0 );
+			outgoingLight += vec3( 0.74, 0.92, 1.0 ) * lit * channelLight * ( 0.3 + 0.7 * ( 1.0 - reflectance ) + 1.5 * foamMask );
+		}
+	}
+
+	// The small boat's electric lamps: a little warm light on the water close round it.
+	if ( boatLamp > 0.0 ) {
+		vec2 fromBoat = worldPosition.xz - channelBoat;
+		outgoingLight += vec3( 1.0, 0.76, 0.48 ) * boatLamp * exp( - dot( fromBoat, fromBoat ) / 320.0 ) * ( 0.3 + 0.7 * ( 1.0 - reflectance ) + foamMask );
 	}
 
 	// The weave under the sea: threads of light fanning out from below the knot and running under
@@ -373,6 +579,22 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		waveTime: { value: 0 },
 		waveSteepness: { value: 0.2 },
 		waveScale: { value: 1 },
+		waves: { value: Array.from({ length: TRAIN_COUNT }, () => new THREE.Vector4(0, 0, 0, 1)) },
+		waveWind: { value: new Array<number>(TRAIN_COUNT).fill(0) },
+		crestWarp: { value: 1 },
+		windHeading: { value: new THREE.Vector2(0, -1) },
+		windDrift: { value: 14 },
+		ripple: { value: 1 },
+		channelBoat: { value: new THREE.Vector2() },
+		channelTime: { value: 0 },
+		channelWind: { value: new THREE.Vector2() },
+		channelSea: { value: new THREE.Vector2(0.3, 2) },
+		channelFeed: { value: 0 },
+		channelGate: { value: new THREE.Vector4(1, 1, 1, 1) },
+		channelSurge: { value: 0 },
+		channelStream: { value: 0 },
+		boatLamp: { value: 0 },
+		channelLight: { value: 0 },
 		foam: { value: 0 },
 		gustiness: { value: 0.8 },
 		surge: { value: 0 },
@@ -380,13 +602,11 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		weavePull: { value: 0 },
 		gustSwirl: { value: 0 },
 		weaveGlow: { value: 0 },
-		shipWake: { value: new THREE.Vector3() },
-		burst: { value: new THREE.Vector4() },
-		burstLight: { value: 0 },
 		freshFlow: { value: 1 },
 		internalWaves: { value: 0.6 },
 	};
-	Object.assign(material.uniforms, uniforms, { waves: { value: WAVES }, giantWaves: { value: GIANT_WAVES } });
+	useDialSea(uniforms);
+	Object.assign(material.uniforms, uniforms, { giantWaves: { value: GIANT_WAVES } });
 
 	let vertex = material.vertexShader;
 	vertex = replaceOrThrow(vertex, "#include <common>", `#include <common>\n${vertexPars}`);

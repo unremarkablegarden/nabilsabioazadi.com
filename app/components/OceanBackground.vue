@@ -10,10 +10,13 @@ const overlayCanvas = ref<HTMLCanvasElement>();
 const veil = ref<HTMLDivElement>();
 // Seconds into the story (see storm-cycle.ts). The dev slider moves it.
 const cycle = ref(0);
-// The look the page opens on, chosen by the owner for its sharpness and colour grading: late
-// morning, a light sea, a strong storm sky and only the first threads of the weave. It holds
-// until the "now", "live" or "play" links hand over to the clock, the live conditions or the story.
-const OPENING = { hour: 11.05, weather: 0.08, weave: 0.11, storm: 0.69, bond: 0.9 };
+// The page opens on the sea as it is now where the boat is: the boat's clock and the live
+// conditions there. Only the weave is still set by hand.
+const OPENING = { weather: 0.3, weave: 0.11, storm: 0, bond: 0.9 };
+// September's opening look, chosen by the owner for its sharpness and colour grading: late
+// morning, a light sea, a strong storm sky and the first threads of the weave. ?look=september
+// shows it; it holds until the "now", "live" or "play" links are used.
+const SEPTEMBER = { hour: 11.05, weather: 0.08, weave: 0.11, storm: 0.69, bond: 0.9 };
 // The weave (the channelling) and the storm (the weather) are separate things, both 0..1.
 // The story sets them. Moving either dev slider stops the story and sets them by hand.
 const followStory = ref(false);
@@ -31,43 +34,105 @@ const showControls = ref(false);
 // Set by the navigation's pause button (WCAG 2.2.2): while true nothing is redrawn.
 const motionPaused = useState("motion-paused", () => false);
 // The navigation can show the place, time and conditions itself, in which case the caption here is left out.
-const readout = useState<{ time: string; waves?: string; wind?: string }>("scene-readout", () => ({ time: "" }));
+const readout = useState<{ place?: string; time: string; waves?: string; wind?: string }>("scene-readout", () => ({ time: "" }));
 const captionInNavigation = useState("caption-in-navigation", () => false);
 let dispose: (() => void) | undefined;
 
-const clockHour = () => aotearoaHour();
-// Time of day in Aotearoa in hours (0..24). The dev slider sets it and stops it following the clock.
-const hour = ref(OPENING.hour);
-const followClock = ref(false);
+const clockHour = () => boatHour();
+// Time of day on the boat in hours (0..24). The dev slider sets it and stops it following the clock.
+const hour = ref(clockHour());
+const followClock = ref(true);
+// A day other than today, for trying (?date=).
+const pretendDate = ref<Date>();
+// Where the boat is at the time shown, in words.
+const placeLabel = computed(() => {
+	const boat = boatAt(dateAtBoatHour(hour.value, pretendDate.value ?? new Date()));
+	const degrees = (value: number, plus: string, minus: string) => `${Math.abs(value).toFixed(1)}° ${value >= 0 ? plus : minus}`;
+	const where = `${degrees(boat.latitude, "N", "S")}, ${degrees(boat.longitude, "E", "W")}`;
+	const km = (value: number) => `${Math.round(value).toLocaleString("en-GB")} km`;
+	if (boat.done <= 0) return `Manawatāwhi, Three Kings Islands (${where})`;
+	if (boat.done >= 1) return `Hawaiʻi (${where})`;
+	return `At sea, ${where}: ${km(boat.gone)} out from Manawatāwhi, ${km(boat.left)} to Hawaiʻi`;
+});
 const hourLabel = computed(() => {
 	const minutes = Math.round(hour.value * 60) % 1440;
 	return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 });
+// The time with what it is the time of: people's clock time, as against the sun's.
+const timeLabel = computed(() => `${hourLabel.value} (${boatTimeZone(dateAtBoatHour(hour.value, pretendDate.value ?? new Date()))})`);
 const resetToClock = () => {
 	followClock.value = true;
 	hour.value = clockHour();
 };
 // 0 = calm, 1 = storm. Used until the live conditions arrive, and when the dev slider overrides them.
 const weather = ref(OPENING.weather);
-const conditions = ref<SeaConditions>();
-const followLive = ref(false);
+// Shared, so the menu's figure can draw the weather too.
+const conditions = useState<SeaConditions | undefined>("sea-conditions", () => undefined);
+// The moment shown, for the same reason.
+const shownAt = useState("scene-moment", () => Date.now());
+// The weather and storm sliders stop the picture following the live conditions; "live" resumes it.
+const followLive = ref(true);
+// September's light was staged: the sun kept near the view, and a full moon up every night.
+// ?look=september keeps it. Otherwise the sun and moon are where they really are.
+const stagedLight = ref(false);
 const live = computed(() => (followLive.value ? conditions.value : undefined));
-// The sea here is never calm: live conditions only move it between a gale and a full storm.
-const STORM_FLOOR = 0.6;
-const stormy = (state: number) => STORM_FLOOR + (1 - STORM_FLOOR) * state;
-const seaAmount = computed(() => (live.value ? stormy(seaState(live.value)) : weather.value));
-const skyAmount = computed(() => (live.value ? stormy(skyState(live.value)) : weather.value));
+const seaAmount = computed(() => (live.value ? seaState(live.value) : weather.value));
+const skyAmount = computed(() => (live.value ? skyState(live.value) : weather.value));
+const wavesLabel = computed(
+	() => live.value && `${live.value.waveHeight.toFixed(1)} m from the ${compassPoint(live.value.waveDirection)}, every ${Math.round(live.value.wavePeriod)} s`,
+);
+const windLabel = computed(
+	() => live.value && `${Math.round(live.value.windSpeed)} km/h from the ${compassPoint(live.value.windDirection)}, gusts ${Math.round(live.value.windGusts)}`,
+);
+// How far the weather models are apart on a figure, when they are.
+const between = (doubt?: [number, number]) => (doubt && doubt[1] - doubt[0] >= 1 ? ` (models ${doubt[0].toFixed(0)} to ${doubt[1].toFixed(0)})` : "");
+// Every live figure, for checking the picture against the data in the dev panel.
+const liveFigures = computed(() => {
+	const c = conditions.value;
+	if (!c) return [];
+	return [
+		["as of", `${c.observedAt.slice(11)} UTC`],
+		["waves", `${c.waveHeight.toFixed(1)} m · ${compassPoint(c.waveDirection)} · ${c.wavePeriod.toFixed(0)} s`],
+		["swell", `${c.swellHeight.toFixed(1)} m · ${compassPoint(c.swellDirection)} · ${c.swellPeriod.toFixed(0)} s`],
+		["2nd swell", `${c.secondSwellHeight.toFixed(1)} m · ${compassPoint(c.secondSwellDirection)} · ${c.secondSwellPeriod.toFixed(0)} s`],
+		["wind sea", `${c.windWaveHeight.toFixed(1)} m · ${compassPoint(c.windWaveDirection)} · ${c.windWavePeriod.toFixed(0)} s`],
+		["wind", `${c.windSpeed.toFixed(0)} km/h · ${compassPoint(c.windDirection)} · gusts ${c.windGusts.toFixed(0)}${between(c.doubt.windSpeed)}`],
+		["current", `${c.currentSpeed.toFixed(1)} km/h to ${compassPoint(c.currentDirection)}`],
+		["tide", `${c.tide.toFixed(2)} m`],
+		["cloud", `low ${c.cloudLow.toFixed(0)}%${between(c.doubt.cloudLow)} · mid ${c.cloudMid.toFixed(0)}% · high ${c.cloudHigh.toFixed(0)}%`],
+		["rain", `${(c.precipitation * 4).toFixed(1)} mm/h`],
+		["visibility", `${(c.visibility / 1000).toFixed(1)} km`],
+		["thunder", `code ${c.weatherCode} · ${c.cape.toFixed(0)} J/kg`],
+		["pressure", `${c.pressure.toFixed(0)} hPa`],
+		["air · sea", `${c.airTemperature.toFixed(1)} °C · ${c.seaTemperature.toFixed(1)} °C · ${c.humidity}%`],
+		["next 3 h", `wind ${c.windTrend >= 0 ? "+" : ""}${c.windTrend.toFixed(0)} km/h · waves ${c.waveTrend >= 0 ? "+" : ""}${c.waveTrend.toFixed(1)} m · pressure ${c.pressureTrend >= 0 ? "+" : ""}${c.pressureTrend.toFixed(1)} hPa`],
+		["picture", `sea ${Math.round(seaState(c) * 100)}% · sky ${Math.round(skyState(c) * 100)}% · storm ${Math.round(stormFury(c) * 100)}%`],
+		["channellers", `building ${Math.round(building(c) * 100)}% · called for ${Math.round(calling(c) * 100)}%`],
+	];
+});
 
 watchEffect(() => {
-	readout.value = {
-		time: hourLabel.value,
-		waves: live.value && `${live.value.waveHeight.toFixed(1)} m`,
-		wind: live.value && `${Math.round(live.value.windSpeed)} km/h`,
-	};
+	shownAt.value = dateAtBoatHour(hour.value, pretendDate.value ?? new Date()).getTime();
+	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value };
 });
 
 onMounted(() => {
-	showControls.value = new URLSearchParams(window.location.search).has("controls");
+	const query = new URLSearchParams(window.location.search);
+	showControls.value = query.has("controls");
+	// For seeing another time of day without the panel: ?hour=22 (or 21.5 for half past nine).
+	if (query.has("hour")) {
+		followClock.value = false;
+		hour.value = Number(query.get("hour"));
+	}
+	if (query.get("look") === "september") {
+		followClock.value = followLive.value = false;
+		stagedLight.value = true;
+		hour.value = SEPTEMBER.hour;
+		weather.value = SEPTEMBER.weather;
+		weaveLevel.value = SEPTEMBER.weave;
+		stormLevel.value = SEPTEMBER.storm;
+		bondLevel.value = SEPTEMBER.bond;
+	}
 	const el = container.value!;
 	const lerp = THREE.MathUtils.lerp;
 
@@ -126,13 +191,34 @@ onMounted(() => {
 	skyUniforms.cloudElevation.value = 0.5;
 	const vortexUniforms = addSkyVortex(sky);
 
-	// Moon disc, about 2° wide. Not tone-mapped so it stays bright at night exposure;
-	// the water's mirror reflection picks it up as a moon path.
+	// The moon's face, drawn for its phase with the lit edge to the right; the disc is then turned
+	// so that edge faces the sun. Redrawn only when the phase has moved on.
+	const moonCanvas = document.createElement("canvas");
+	moonCanvas.width = moonCanvas.height = 128;
+	const moonFace = new THREE.CanvasTexture(moonCanvas);
+	let drawnPhase = -1;
+	const drawMoon = (illuminated: number) => {
+		if (Math.abs(illuminated - drawnPhase) < 0.004) return;
+		drawnPhase = illuminated;
+		const context = moonCanvas.getContext("2d")!;
+		context.clearRect(0, 0, 128, 128);
+		context.beginPath();
+		// The lit edge is half a circle. The line between light and dark is half an ellipse:
+		// on the lit side of the middle for a crescent, on the dark side for a gibbous moon.
+		context.arc(64, 64, 62, -Math.PI / 2, Math.PI / 2);
+		context.ellipse(64, 64, 62 * Math.abs(1 - 2 * illuminated), 62, 0, Math.PI / 2, -Math.PI / 2, illuminated < 0.5);
+		context.fillStyle = "#fff";
+		context.fill();
+		moonFace.needsUpdate = true;
+	};
+	// Moon disc at its true size, half a degree wide (September's was 2°). Not tone-mapped so it
+	// stays bright at night exposure; the water's mirror reflection picks it up as a moon path.
 	const moon = new THREE.Mesh(
-		new THREE.CircleGeometry(70, 48),
-		new THREE.MeshBasicMaterial({ color: 0xf4f1e8, toneMapped: false, transparent: true, fog: false }),
+		new THREE.CircleGeometry(1, 48),
+		new THREE.MeshBasicMaterial({ color: 0xf4f1e8, map: moonFace, toneMapped: false, transparent: true, fog: false }),
 	);
 	scene.add(moon);
+	const towardsSun = new THREE.Vector3();
 
 	const NIGHT_EXPOSURE = 15;
 
@@ -152,9 +238,11 @@ onMounted(() => {
 	const nightWaterColor = new THREE.Color(0x021020).multiplyScalar(0.05);
 	const stormWaterColor = new THREE.Color(0x0a1214);
 
-	// Sun position is the real one at Cape Reinga for the time shown. The camera looks along the
-	// bearing to Hawai'i (scene azimuth 180°). The sun's angle off that bearing is halved, so it
-	// rises to the right and sets to the left but stays near the view instead of going behind it.
+	// The sun and moon are where they really are over the boat for the time shown, and the moon
+	// shows its real phase. The camera looks along the bearing to Hawai'i (scene azimuth 180°), so
+	// for much of the day the sun is out of the picture, and with no moon up the night is dark.
+	// (September halved the sun's angle off the bearing to keep it near the view, and hung a
+	// full moon in every night: stagedLight.)
 	// The sky shader's light falls about 20x from noon to the horizon and is zero below
 	// -2.3°, so day exposure is raised as the sun sets to keep dusk visible. At night the
 	// sky keeps the real (set) sun and shows only its faint ambient term, at high exposure.
@@ -171,32 +259,59 @@ onMounted(() => {
 	let cameraHeight = 18;
 	let exposure = 1;
 	let daylight = 1;
-	// Where the sun and moon are and how high the sun is, for lighting the ship.
-	let sunHeight = 45;
-	const sunVector = new THREE.Vector3(0, 1, -1);
-	const moonVector = new THREE.Vector3(0, 1, -1);
+	// 0..1 how far the four channellers are at work: at night, in the days about the new moon.
+	let darkness = 0;
+	// 0..1 how far night has fallen.
+	let nightfall = 0;
+	// The moment shown, and 0..1 how far the stars are out at it.
+	let shownMoment = new Date();
+	let starsOut = 0;
+	let milkyWayOut = 0;
 	const updateEnvironment = ([hour, sea, sky]: [number, number, number]) => {
-		const realSun = sunPosition(dateAtAotearoaHour(hour));
+		const when = dateAtBoatHour(hour, pretendDate.value ?? new Date());
+		// The boat is wherever its voyage has brought it by then.
+		sailTo(when);
+		const realSun = sunPosition(when);
 		const sunElevation = realSun.elevation;
 		const isNight = sunElevation < -2;
-		const offBearing = ((realSun.azimuth - BEARING_TO_HAWAII + 540) % 360) - 180;
-		const sunAzimuth = 180 - offBearing / 2;
-		const moonElevation = THREE.MathUtils.clamp(-sunElevation * 0.35, 8, 20);
-		const moonAzimuth = 120 + (((hour + 6) % 24) / 12) * 120;
+		const staged = stagedLight.value;
+		// Scene azimuth of a compass direction.
+		const offBearing = (azimuth: number) => ((azimuth - PLACE.bearing + 540) % 360) - 180;
+		const sunAzimuth = 180 - offBearing(realSun.azimuth) / (staged ? 2 : 1);
+		const realMoon = staged
+			? { elevation: isNight ? THREE.MathUtils.clamp(-sunElevation * 0.35, 8, 20) : -90, azimuth: 0, illuminated: 1 }
+			: moonPosition(when);
+		const moonAzimuth = staged ? 120 + (((hour + 6) % 24) / 12) * 120 : 180 - offBearing(realMoon.azimuth);
 		daylight = THREE.MathUtils.smoothstep(sunElevation, -2, 8);
 		const night = THREE.MathUtils.smoothstep(-sunElevation, 2, 12);
+		// 0..1 how much moonlight there is. It falls off far faster than the lit share of the face:
+		// a half moon gives less than a tenth of a full moon's light. And none from below the horizon.
+		const moonlight = realMoon.illuminated ** 3.5 * THREE.MathUtils.smoothstep(realMoon.elevation, -1, 8);
+
+		shownMoment = when;
+		nightfall = staged ? 0 : night;
+		// Stars need a dark sky: they are drowned by a bright moon and hidden by cloud. (The cloud
+		// here dims them all alike; it cannot yet hide the ones behind each cloud.)
+		starsOut = staged ? 0 : night * (1 - 0.6 * moonlight) * (1 - sky ** 0.8);
+		// The Milky Way needs full night and goes with any moon worth the name.
+		milkyWayOut = starsOut * THREE.MathUtils.smoothstep(-sunElevation, 12, 18) * (1 - Math.min(1, 4 * moonlight));
+		// The four work only in the phase when the moon's light is weakest: fully while less than
+		// a tenth of its face is lit (about three days either side of new), not at all past a quarter.
+		darkness = staged ? 0 : night * (1 - THREE.MathUtils.smoothstep(realMoon.illuminated, 0.1, 0.25));
 
 		const sun = directionFrom(sunElevation, sunAzimuth);
-		const moonDirection = directionFrom(moonElevation, moonAzimuth);
+		const moonDirection = directionFrom(realMoon.elevation, moonAzimuth);
 		skyUniforms.sunPosition.value.copy(sun);
-		waterUniforms.sunDirection.value.copy(isNight ? moonDirection : sun);
-		sunHeight = sunElevation;
-		sunVector.copy(sun);
-		moonVector.copy(moonDirection);
-		moon.visible = isNight;
+		waterUniforms.sunDirection.value.copy(isNight && moonlight > 0 ? moonDirection : sun);
+		// By day the moon is a pale mark in the sky; a new moon cannot be seen at all.
+		moon.visible = realMoon.elevation > -1 && realMoon.illuminated > 0.01;
 		moon.position.copy(moonDirection).multiplyScalar(4000).add(camera.position);
+		moon.scale.setScalar(staged ? 70 : 4000 * Math.tan(THREE.MathUtils.degToRad(0.26)));
 		moon.lookAt(camera.position);
-		moon.material.opacity = night * lerp(1, 0.15, sky);
+		drawMoon(realMoon.illuminated);
+		towardsSun.copy(sun).applyQuaternion(moon.quaternion.clone().invert());
+		moon.rotateZ(Math.atan2(towardsSun.y, towardsSun.x));
+		moon.material.opacity = lerp(0.35, 1, night) * lerp(1, 0.15, sky);
 
 		skyUniforms.turbidity.value = lerp(2, 20, sky);
 		skyUniforms.rayleigh.value = lerp(2, 0.5, sky);
@@ -207,10 +322,10 @@ onMounted(() => {
 		// Storm colours are scaled like the night colours so a night storm stays dark.
 		const brightness = lerp(0.05, 1, daylight);
 		waterUniforms.sunColor.value
-			.lerpColors(nightSunColor, daySunColor, daylight)
+			.lerpColors(nightSunColor.clone().multiplyScalar(moonlight), daySunColor, daylight)
 			.lerp(stormSunColor.clone().multiplyScalar(brightness), sky);
 		waterUniforms.waterColor.value
-			.lerpColors(nightWaterColor, dayWaterColor, daylight)
+			.lerpColors(nightWaterColor.clone().multiplyScalar(lerp(0.15, 1, moonlight)), dayWaterColor, daylight)
 			.lerp(stormWaterColor.clone().multiplyScalar(brightness), sky);
 		waterUniforms.distortionScale.value = lerp(2, 8, sea);
 		steepness = lerp(0.15, 0.85, sea);
@@ -220,17 +335,28 @@ onMounted(() => {
 		waveUniforms.foam.value = THREE.MathUtils.smoothstep(sea, 0.3, 1);
 
 		const duskBoost = Math.min(5, (skySunIntensity(8) / Math.max(skySunIntensity(sunElevation), 1e-3)) ** 0.7);
-		const clearExposure = isNight ? lerp(0.35, NIGHT_EXPOSURE, night) : 0.07 * Math.max(1, duskBoost);
-		exposure = clearExposure * lerp(1, 0.5, sky);
+		// Without the moon there is only starlight, about an eighth of what a full moon gives the picture.
+		const clearExposure = isNight ? lerp(0.35, NIGHT_EXPOSURE * lerp(0.12, 1, moonlight), night) : 0.07 * Math.max(1, duskBoost);
+		// The exposure was set with the sun in the picture. Now that it may be anywhere, the eye
+		// opens up as it looks away from it, as an eye or a camera does: up to about a stop and a half.
+		const awayFromSun = staged || isNight ? 0 : (1 + sun.z * Math.hypot(sun.x, sun.z)) / 2;
+		exposure = clearExposure * lerp(1, 0.5, sky) * lerp(1, 2.8, awayFromSun);
 	};
 	const clockInterval = setInterval(() => {
 		if (followClock.value) hour.value = clockHour();
 	}, 60_000);
 
 	// Keeps the last conditions if a request fails.
+	// For seeing another day: ?date=2026-10-26 (a full moon) or ?date=2027-03-01 (the boat near the
+	// equator). The sun, moon and stars are that day's and the boat is where it will be; the
+	// weather is today's forecast for that spot.
+	if (query.get("date")) pretendDate.value = new Date(`${query.get("date")}T00:00:00Z`);
+	// For trying weather that is not there today: ?pretend=waveHeight:6,windSpeed:70,windGusts:95
+	// replaces those live figures (names as in SeaConditions).
+	const pretend = Object.fromEntries((query.get("pretend") ?? "").split(",").filter(Boolean).map((pair) => [pair.split(":")[0], Number(pair.split(":")[1])]));
 	const loadConditions = () =>
-		fetchSeaConditions()
-			.then((result) => (conditions.value = result))
+		fetchSeaConditions(boatAt(pretendDate.value ?? new Date()))
+			.then((result) => (conditions.value = { ...result, ...pretend }))
 			.catch(() => {});
 	loadConditions();
 	const conditionsInterval = setInterval(loadConditions, 15 * 60_000);
@@ -243,10 +369,9 @@ onMounted(() => {
 	const strikeFrom = new THREE.Vector3();
 	const strikeTo = new THREE.Vector3();
 	const spread = THREE.MathUtils.randFloatSpread;
-	const ship = createShip(scene);
-	const shipSun = new THREE.Color();
-	const shipAmbient = new THREE.Color();
-	const fireScreen = { x: 0.5, y: 0.5, strength: 0 };
+	let measuredSea = false;
+	// Metres above the water on a measured sea. September looked down from 18 to 27.
+	const EYE_HEIGHT = 5;
 	const boltScreen = Array.from({ length: BOLT_POINTS }, () => ({ x: 0, y: 0 }));
 	// Watches the frame rate and gives the fluid less work if the machine is struggling
 	// (0 full, 2 lightest), then more again once it has kept up for a while.
@@ -265,12 +390,13 @@ onMounted(() => {
 
 	// Lightning: a double flash of the whole scene with a bolt. Strikes are at least two seconds
 	// apart even at the height of the storm, so it never strobes.
-	// Skipped, with the ship's sway and the rain, for visitors who ask for reduced motion.
+	// Skipped, with the sway and the rain, for visitors who ask for reduced motion.
+	// While the picture follows the live conditions there is lightning only if there is thunder there.
 	const calmMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 	let strikeAt = 4;
 	let struck = 0;
-	const lightning = (time: number, sky: number, fury: number) => {
-		if (calmMotion || !showThunder.value || sky < 0.5) return 0;
+	const lightning = (time: number, sky: number, fury: number, thunder: number) => {
+		if (calmMotion || !showThunder.value || sky < 0.5 || thunder <= 0) return 0;
 		if (time > strikeAt + 1) strikeAt = time + lerp(lerp(14, 5, sky), 1.8, fury) * lerp(0.7, 1.4, Math.random());
 		if (time < strikeAt) return 0;
 		if (struck !== strikeAt) {
@@ -301,6 +427,8 @@ onMounted(() => {
 	// The knot of the weave hangs over the sea straight ahead, about 15° above the horizon.
 	const knotPosition = new THREE.Vector3(0, 250, -800);
 	const weave = createWeave(scene, camera, knotPosition);
+	const channellers = createChannellers(scene, camera, waveUniforms);
+	const stars = createStars(scene, camera, PLACE, planetPositions);
 	waveUniforms.weaveCentre.value.set(knotPosition.x, knotPosition.z);
 	const projected = new THREE.Vector3();
 	const knotScreen = { x: 0.5, y: 0.25 };
@@ -338,8 +466,11 @@ onMounted(() => {
 			weaveLevel.value = moment.weave;
 			stormLevel.value = moment.fury;
 		} else {
+			if (live.value) stormLevel.value = stormFury(live.value);
 			moment = { weave: weaveLevel.value, fury: stormLevel.value, stillness: 0, veil: 0, white: 0 };
 		}
+		// The story and the sliders make their own weather; only the live picture waits for real thunder.
+		const liveOnly = followStory.value ? undefined : live.value;
 		const { fury } = moment;
 		const alive = 1 - moment.stillness;
 		// The weaving moves the sea before the weather does: the waves rise with the weave, and the storm takes them further.
@@ -347,13 +478,35 @@ onMounted(() => {
 		const sky = lerp(skyAmount.value, 1, fury);
 		updateEnvironment([hour.value, sea, sky]);
 
+		// The live sea is drawn to measure: each swell and the wind's waves at their real height,
+		// length and direction, and foam and fine roughness from the real wind. The dial and the
+		// story keep September's sea, which only ever ran away from the viewer.
+		let crosswind = 0;
+		let gustiness = 0;
+		if (liveOnly) {
+			const windSpeed = liveOnly.windSpeed / 3.6;
+			useMeasuredSea(waveUniforms, {
+				swell: { height: liveOnly.swellHeight, period: liveOnly.swellPeriod, from: liveOnly.swellDirection },
+				secondSwell: { height: liveOnly.secondSwellHeight, period: liveOnly.secondSwellPeriod, from: liveOnly.secondSwellDirection },
+				windSea: { height: liveOnly.windWaveHeight, period: liveOnly.windWavePeriod, from: liveOnly.windWaveDirection },
+				wind: { speed: windSpeed, from: liveOnly.windDirection },
+				facing: PLACE.bearing,
+			});
+			waveUniforms.foam.value = whitecaps(windSpeed);
+			steepness = 1;
+			crosswind = Math.sin(THREE.MathUtils.degToRad(liveOnly.windDirection + 180 - PLACE.bearing)) * Math.min(1, windSpeed / 15);
+			gustiness = THREE.MathUtils.clamp((liveOnly.windGusts / Math.max(liveOnly.windSpeed, 1) - 1) * 2, 0, 1);
+		} else if (measuredSea) useDialSea(waveUniforms);
+		measuredSea = !!liveOnly;
+
 		// At the height of the storm giant swells rise under the ordinary waves, which give up
-		// some steepness so the crests don't fold over themselves.
-		const surge = 0.55 * fury;
+		// some steepness so the crests don't fold over themselves. They belong to the story: a
+		// measured sea already has its real height.
+		const surge = liveOnly ? 0 : 0.55 * fury;
 		// The wind never holds steady: the whole sea swells and eases over a minute or two.
 		const lull = 0.5 * Math.sin(time * 0.11) + 0.5 * Math.sin(time * 0.047 + 1.3);
 		waveUniforms.surge.value = surge;
-		waveUniforms.waveSteepness.value = steepness * (1 + 0.2 * lull) * (1 - 0.3 * fury) * alive;
+		waveUniforms.waveSteepness.value = liveOnly ? alive : steepness * (1 + 0.2 * lull) * (1 - 0.3 * fury) * alive;
 		waveUniforms.gustiness.value = 0.8 * alive;
 		waveUniforms.foam.value *= alive;
 		waterUniforms.distortionScale.value *= lerp(0.15, 1, alive);
@@ -362,20 +515,29 @@ onMounted(() => {
 		const sway = calmMotion ? 0 : THREE.MathUtils.smoothstep(sea, 0.3, 1) * (1 + 0.6 * fury) * alive;
 		const heave = sway * (2 * Math.sin(time * 0.45) + Math.sin(time * 0.71 + 2));
 		const pitch = sway * 0.035 * Math.sin(time * 0.52 + 1);
-		const swell = giantWaveHeight(camera.position.x, camera.position.z, time, surge);
-		camera.position.y += (cameraHeight + swell + heave - camera.position.y) * 0.05;
+		if (liveOnly) {
+			// On a measured sea the viewer is on a small boat: eyes EYE_HEIGHT above the water, and
+			// carried up and down by the very waves that are drawn.
+			const surface = measuredSeaHeight(waveUniforms, camera.position.x, camera.position.z, time);
+			camera.position.y += (EYE_HEIGHT + surface - camera.position.y) * 0.2;
+		} else {
+			const swell = giantWaveHeight(camera.position.x, camera.position.z, time, surge);
+			camera.position.y += (cameraHeight + swell + heave - camera.position.y) * 0.05;
+		}
 		camera.rotation.z = sway * (0.06 * Math.sin(time * 0.33) + 0.025 * Math.sin(time * 0.83 + 0.7));
 		camera.rotation.y += (-pointer.x * maxYaw - camera.rotation.y) * 0.03;
 		camera.rotation.x += (-pointer.y * maxPitch + pitch - camera.rotation.x) * 0.03;
 
-		const flash = alive > 0.5 ? lightning(time, sky, fury) : 0;
+		const flash = alive > 0.5 ? lightning(time, sky, fury, liveOnly ? thunderAmount(liveOnly) : 1) : 0;
 		// The storm darkens the day. At night it is lifted instead, or the sea would be lost in black.
 		const steadyExposure = exposure * lerp(1, lerp(2.5, 0.6, daylight), fury);
 		renderer.toneMappingExposure = steadyExposure * (1 + 5 * flash) * (1 + 4 * moment.white * moment.veil);
 
 		// Fog thickens with the storm and fills the stillness. The fog colour is set before tone
 		// mapping, so it is divided by the exposure to land on the intended screen colour.
-		const stormFog = showFog.value ? 0.8 * THREE.MathUtils.smoothstep(fury, 0.2, 1) * air.fogginess : 0;
+		// And it is there whenever the air at the islands is thick, storm or no storm.
+		const liveMist = liveOnly ? mistAmount(liveOnly) : 0;
+		const stormFog = showFog.value ? 0.8 * Math.max(THREE.MathUtils.smoothstep(fury, 0.2, 1) * air.fogginess, liveMist) : 0;
 		const fogAmount = Math.max(stormFog, moment.stillness);
 		mist.lerpColors(nightMist, dayFog, daylight);
 		fog.density = 0.0025 * fogAmount;
@@ -386,20 +548,41 @@ onMounted(() => {
 		veil.value!.style.backgroundColor = mist.getStyle();
 		veil.value!.style.opacity = String(Math.max(0.15 * fogAmount, moment.veil));
 
-		const liveRain = live.value && live.value.precipitation > 0 ? 0.4 : 0;
+		const liveRain = liveOnly ? rainAmount(liveOnly) : 0;
 		const rain = calmMotion ? 0 : Math.max(THREE.MathUtils.smoothstep(fury, 0.15, 0.6), liveRain) * alive;
 		// The weave, and what its knot does to the sea and the clouds around it.
-		const formed = knotFormed(moment.weave);
+		const formed = knotFormed(moment.weave * (1 - darkness));
 		knotReady = formed > 0.8;
 		// The bond: how far the channelling has taken hold of the storm's wind, air and fog.
 		const bond = bondLevel.value * formed * alive;
+		// While the four are at work the weave to the knot is put away: nothing bright is to
+		// hang in the sky.
 		weave.update({
 			time,
 			delta,
-			amount: moment.weave,
+			amount: moment.weave * (1 - darkness),
 			spread: fury + 2 * moment.white * moment.veil,
 			gain: 0.5 / steadyExposure,
 		});
+		stars.update({ date: shownMoment, shown: starsOut * (1 - fogAmount) * alive, glow: milkyWayOut * (1 - fogAmount) * alive, gain: 2.2 / steadyExposure });
+		// In the dark the four channellers weave along the water, and their braids light it.
+		waveUniforms.channelWind.value.set(crosswind, gustiness);
+		// By the dial and the story there is no forecast to read, so the need goes with the weather set.
+		const need = liveOnly ? calling(liveOnly) : sea;
+		const channelling = channellers.update({
+			time,
+			delta,
+			energy: sea,
+			need,
+			waveHeight: liveOnly ? liveOnly.waveHeight : lerp(0.5, 6, sea),
+			strength: darkness * alive,
+			gain: 0.3 / steadyExposure,
+		});
+		waveUniforms.channelFeed.value = channelling.working * (0.6 + 0.4 * channelling.surge) * need * darkness * alive;
+		// Driven hard, the flow lights the sea more.
+		waveUniforms.channelLight.value = (0.06 * (1 + 0.5 * channelling.surge) * (0.45 + 0.55 * need) * darkness * alive) / steadyExposure;
+		// Whenever there is no channelling at night, the boat's electric lamps are all the light there is near by.
+		waveUniforms.boatLamp.value = (0.012 * nightfall * (1 - channelling.working) * alive) / steadyExposure;
 		waveUniforms.weavePull.value = formed * (0.6 + 0.8 * fury);
 		vortexUniforms.knotDirection.value.subVectors(knotPosition, camera.position).normalize();
 		vortexUniforms.vortex.value = formed;
@@ -408,43 +591,8 @@ onMounted(() => {
 		// The weave under the sea is always there, breathing slowly, and brightens as the weave is worked.
 		waveUniforms.weaveGlow.value = ((0.3 + 0.9 * moment.weave) * (0.75 + 0.25 * Math.sin(time * 0.9)) * alive * 1.3) / steadyExposure;
 
-		// The ship's light. Direct light is the sun's by day (orange when it is low) and the
-		// moon's by night, and little of either gets through storm cloud. The rest is skylight.
-		const lowSun = THREE.MathUtils.smoothstep(sunHeight, 2, 28);
-		const cloud = lerp(1, 0.25, sky);
-		shipSun
-			.setRGB(1, lerp(0.5, 0.97, lowSun), lerp(0.25, 0.9, lowSun))
-			.multiplyScalar(0.95 * daylight * cloud);
-		shipSun.r += 0.1 * (1 - daylight) * cloud;
-		shipSun.g += 0.13 * (1 - daylight) * cloud;
-		shipSun.b += 0.2 * (1 - daylight) * cloud;
-		shipAmbient.setRGB(lerp(0.035, 0.42, daylight), lerp(0.05, 0.5, daylight), lerp(0.085, 0.6, daylight)).multiplyScalar(lerp(1, 0.6, sky));
-		// She shows us one side. The light is behind her when it lies beyond her from here, and
-		// matters less the higher it stands.
-		const lamp = daylight > 0.5 ? sunVector : moonVector;
-		const backlit = THREE.MathUtils.clamp(-lamp.z / (Math.hypot(lamp.x, lamp.z) || 1), 0, 1) * (1 - 0.6 * THREE.MathUtils.smoothstep(sunHeight, 30, 70));
-		const voyage = ship.update({
-			time,
-			delta,
-			ambient: shipAmbient,
-			sun: shipSun,
-			backlit,
-			haze: fogTint,
-			hazeAmount: THREE.MathUtils.clamp(0.1 + 0.55 * stormFog, 0, 0.7),
-			gain: 1 / steadyExposure,
-			wind: sea * alive,
-			gust: lull,
-			rain,
-			swell: (x, z) => giantWaveHeight(x, z, time, surge),
-		});
-		// What the weave is doing in the sea under her bow.
-		waveUniforms.burst.value.set(voyage.under.x, voyage.under.z, voyage.under.height, voyage.under.glow);
-		waveUniforms.burstLight.value = (1.6 * voyage.under.glow) / steadyExposure;
 		waveUniforms.freshFlow.value = alive;
 		waveUniforms.internalWaves.value = (0.5 + 0.5 * moment.weave) * alive;
-		waveUniforms.shipWake.value.copy(voyage.wake);
-		toScreen(voyage.fire.position.x, voyage.fire.position.y, voyage.fire.position.z, fireScreen);
-		fireScreen.strength = voyage.fire.strength;
 		vortexUniforms.vortexSpin.value = time * 0.8;
 		vortexUniforms.vortexGlow.value.copy(knotGlow).multiplyScalar((0.06 * formed) / steadyExposure);
 		toScreen(knotPosition.x, knotPosition.y, knotPosition.z, knotScreen);
@@ -453,7 +601,7 @@ onMounted(() => {
 		toScreen(camera.position.x - Math.sin(camera.rotation.y) * 8000, 0, camera.position.z - Math.cos(camera.rotation.y) * 8000, horizonAhead);
 		document.documentElement.style.setProperty("--horizon", `${(horizonAhead.y * 100).toFixed(2)}vh`);
 		document.documentElement.style.setProperty("--roll", `${camera.rotation.z.toFixed(4)}rad`);
-		overlay.draw(delta, rain, flash, camera.rotation.z * 0.5, bond, knotScreen);
+		overlay.draw(delta, rain, flash, camera.rotation.z * 0.5 + 0.5 * crosswind, bond, knotScreen);
 		const strike = bolts.update(time, 4 / steadyExposure, air.vapour, stormFog);
 		if (strike > 0) {
 			for (let i = 0; i < BOLT_POINTS; i++) {
@@ -470,11 +618,11 @@ onMounted(() => {
 			fog: stormFog * alive,
 			air: showAir.value && !calmMotion ? lerp(0.25, 1, fury) * sea * alive : 0,
 			wind: sea * alive,
+			crosswind: crosswind * alive,
 			strike,
 			bolt: boltScreen,
 			vapour: air.vapour,
 			instability: air.instability,
-			fire: fireScreen,
 			quality,
 			bond,
 			// The threads drag the air after them while they race for the knot, and a little once they are laid.
@@ -591,7 +739,7 @@ onBeforeUnmount(() => dispose?.());
 				min="0"
 				max="1"
 				step="0.001"
-				@input="followStory = false"
+				@input="followStory = followLive = false"
 			/>
 			<span>{{ Math.round(stormLevel * 100) }}%</span>
 
@@ -604,15 +752,20 @@ onBeforeUnmount(() => dispose?.());
 				<label><input v-model="showAir" type="checkbox" /> air</label>
 				<label><input v-model="showThunder" type="checkbox" /> thunder</label>
 			</div>
+			<dl v-if="liveFigures.length" class="col-span-3 grid grid-cols-[auto_1fr] gap-x-3 border-t border-white/30 pt-2 text-xs">
+				<template v-for="[name, figure] in liveFigures" :key="name">
+					<dt>{{ name }}</dt>
+					<dd>{{ figure }}</dd>
+				</template>
+			</dl>
 		</div>
 		<!-- On an opaque ground, so the text keeps its contrast whatever the sky is doing. -->
 		<p v-if="!captionInNavigation" class="fixed top-0 right-0 z-10 max-w-[60vw] bg-[#041318] px-3 py-2 text-right text-sm text-[#c9f6f3]">
-			Te Rerenga Wairua · Cape Reinga, looking towards Hawaiʻi · {{ hourLabel }}
-			<template v-if="live">
-				· waves {{ live.waveHeight.toFixed(1) }} m · wind {{ Math.round(live.windSpeed) }} km/h
-			</template>
+			{{ placeLabel }} · human time {{ timeLabel }}
+			<template v-if="live">· waves {{ wavesLabel }} · wind {{ windLabel }}</template>
 			<br />
-			<a href="https://open-meteo.com/" class="underline" target="_blank" rel="noopener">Weather data by Open-Meteo</a>
+			<a href="https://open-meteo.com/" class="underline">Weather data by Open-Meteo</a>
+			· Milky Way: NASA/Goddard Space Flight Center Scientific Visualization Studio, ESA/Gaia/DPAC
 		</p>
 	</ClientOnly>
 </template>

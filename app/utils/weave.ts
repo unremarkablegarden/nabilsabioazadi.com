@@ -97,6 +97,8 @@ uniform float uTime;
 uniform float uGrow;
 // Seconds into the current call.
 uniform float uCall;
+// 0..1 how much of the knot has formed.
+uniform float uFormed;
 uniform vec3 uOrigin;
 uniform vec3 uKnot;
 uniform vec3 uTints[ 6 ];
@@ -203,7 +205,10 @@ void main() {
 	if ( aBraid.y > 0.5 ) present *= smoothstep( 0.35, 0.7, woven( t ) );
 
 	vTint = uTints[ int( element + 0.5 ) ];
-	vAlpha = step( t, grown ) * smoothstep( 0.0, 0.04, t ) * brightness * present;
+	// Until there is a knot for them to run into, the threads thin away to nothing before they
+	// reach its place. Gathered there they made a bright point in the sky, a false sun.
+	float ending = mix( 1.0 - smoothstep( 0.6, 0.95, t ), 1.0, uFormed );
+	vAlpha = step( t, grown ) * smoothstep( 0.0, 0.04, t ) * brightness * present * ending;
 	vEdge = aSide;
 }
 `;
@@ -320,6 +325,7 @@ function createThreads(shared: Record<string, THREE.IUniform>) {
 		...shared,
 		uGrow: { value: 0 },
 		uCall: { value: 0 },
+		uFormed: { value: 0 },
 		uOrigin: { value: new THREE.Vector3() },
 		uKnot: { value: new THREE.Vector3() },
 		uTints: { value: TINTS },
@@ -518,6 +524,9 @@ export function createWeave(scene: THREE.Scene, camera: THREE.Camera, knotPositi
 		threads.uniforms.uKnot.value.copy(knotPosition);
 
 		const formed = knotFormed(amount);
+		threads.uniforms.uFormed.value = formed;
+		// Before it has begun to form, the knot is not there at all: not even as a speck.
+		knot.visible = formed > 0;
 		knot.lookAt(camera.position);
 		knot.scale.setScalar(Math.max(1e-3, formed * 55 * (1 + 1.6 * spread)));
 		for (const { figure, mesh, axis } of figures) {

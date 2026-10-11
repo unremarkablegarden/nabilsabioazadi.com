@@ -80,6 +80,7 @@ uniform float uAspect;
 uniform float uBuoyancy;
 uniform float uInstability;
 uniform float uWind;
+uniform float uCross;
 uniform float uBond;
 uniform float uCharge;
 uniform vec2 uKnot;
@@ -100,7 +101,7 @@ void main() {
 
 	// Wind: eases the air near the horizon towards a drift that swings from side to side.
 	float nearHorizon = exp( - pow( ( vUv.y - uHorizon.y ) / 0.25, 2.0 ) );
-	vec2 drift = vec2( 0.07 * sin( uTime * 0.13 ) + 0.04 * sin( vUv.y * 9.0 + uTime * 0.4 ), 0.0 ) * uWind;
+	vec2 drift = vec2( 0.07 * sin( uTime * 0.13 ) + 0.04 * sin( vUv.y * 9.0 + uTime * 0.4 ), 0.0 ) * uWind + vec2( 0.06 * uCross, 0.0 );
 	velocity += ( drift * nearHorizon - velocity ) * min( 1.0, 0.5 * uDelta );
 	// A sea warmer than the air above it keeps that air turning over.
 	velocity += eddies( vUv, uTime ) * 0.02 * uWind * ( 1.0 + 2.0 * uInstability ) * uDelta;
@@ -218,8 +219,6 @@ uniform float uVapour;
 uniform float uInstability;
 uniform vec2 uKnot;
 uniform vec2 uHorizon;
-// A fire on the sea: screen position and strength.
-uniform vec3 uFire;
 varying vec2 vUv;
 ${boltShaderChunk}
 
@@ -251,13 +250,6 @@ void main() {
 		float foot = dot( fromFoot, fromFoot );
 		dye.r = min( 1.6, dye.r + uStrike * exp( - foot / 0.0009 ) * 6.0 * uDelta );
 		dye.b = max( dye.b, uStrike * exp( - foot / 0.0005 ) );
-	}
-	// Smoke pours off a burning ship, warm enough to climb.
-	if ( uFire.z > 0.0 ) {
-		vec2 fromFire = ( vUv - uFire.xy ) * vec2( uAspect, 1.0 );
-		float plume = uFire.z * exp( - dot( fromFire, fromFire ) / 0.0012 );
-		dye.r = min( 1.6, dye.r + plume * 2.5 * uDelta );
-		dye.b = max( dye.b, plume * 0.1 );
 	}
 	// Fog cannot stay as droplets in hot air.
 	dye.r *= exp( - dye.b * 8.0 * uDelta );
@@ -305,6 +297,8 @@ export interface FluidFrame {
 	fog: number;
 	air: number;
 	wind: number;
+	// -1..1 how hard the wind blows across the view: to the right when positive.
+	crosswind: number;
 	bond: number;
 	charge: number;
 	// Screen positions, 0..1 from the top left.
@@ -317,8 +311,6 @@ export interface FluidFrame {
 	// Water vapour in the air against a mild, humid day (1), and 0..1 how much warmer the sea is than the air.
 	vapour: number;
 	instability: number;
-	// A fire on the sea: screen position (0..1 from the top left) and 0..1 strength.
-	fire: { x: number; y: number; strength: number };
 	// 0 best .. 2 lightest on the machine.
 	quality: number;
 	// Colour of the fog as it should appear on screen, and the factor that undoes the exposure.
@@ -366,6 +358,7 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 		uDye: { value: null },
 		uBuoyancy: { value: 1.2 },
 		uWind: { value: 0 },
+		uCross: { value: 0 },
 		uCharge: { value: 0 },
 		uPointer: { value: new THREE.Vector2(0.5, 0.5) },
 		uPointerVelocity: { value: new THREE.Vector2() },
@@ -375,7 +368,7 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 	const divergencePass = pass(divergenceShader, { ...shared, uVelocity: { value: null } });
 	const pressurePass = pass(pressureShader, { ...shared, uPressure: { value: null }, uDivergence: { value: null } });
 	const gradient = pass(gradientShader, { ...shared, uPressure: { value: null }, uVelocity: { value: null } });
-	const source = pass(sourceShader, { ...shared, uDye: { value: null }, uFog: { value: 0 }, uAir: { value: 0 }, uStrike: { value: 0 }, uVapour: { value: 1 }, uFire: { value: new THREE.Vector3() } });
+	const source = pass(sourceShader, { ...shared, uDye: { value: null }, uFog: { value: 0 }, uAir: { value: 0 }, uStrike: { value: 0 }, uVapour: { value: 1 } });
 
 	const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
 	quad.frustumCulled = false;
@@ -418,7 +411,7 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 
 	const step = (frame: FluidFrame) => {
 		// With no fog, no air and no lightning, and what was there faded, the whole thing rests.
-		idle = frame.fog > 0 || frame.air > 0 || frame.strike > 0 || frame.fire.strength > 0 ? 0 : idle + frame.delta;
+		idle = frame.fog > 0 || frame.air > 0 || frame.strike > 0 ? 0 : idle + frame.delta;
 		display.visible = idle < 6;
 		if (!display.visible) return;
 		// A long pause (a hidden tab) must not become one huge step.
@@ -445,6 +438,7 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 		force.uniforms.uVelocity!.value = velocity.read.texture;
 		force.uniforms.uDye!.value = dye.read.texture;
 		force.uniforms.uWind!.value = frame.wind;
+		force.uniforms.uCross!.value = frame.crosswind;
 		force.uniforms.uCharge!.value = frame.charge;
 		force.uniforms.uPointer!.value.set(pointerX, pointerY);
 		force.uniforms.uPointerVelocity!.value.set(pointerX - lastPointer.x, pointerY - lastPointer.y).divideScalar(delta).clampLength(0, 1.5);
@@ -483,7 +477,6 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 		source.uniforms.uAir!.value = frame.air;
 		source.uniforms.uStrike!.value = frame.strike;
 		source.uniforms.uVapour!.value = frame.vapour;
-		source.uniforms.uFire!.value.set(frame.fire.x, 1 - frame.fire.y, frame.fire.strength);
 		run(source, dye.write);
 		swap(dye);
 

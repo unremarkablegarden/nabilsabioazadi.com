@@ -59,3 +59,9 @@
 	font-style: italic;
 	font-display: swap;
 }
+
+/* Google's reCAPTCHA badge would sit on the bare ocean. It is hidden, which Google allows where
+   its notice is shown in words beside the form (it is, under the newsletter field). */
+.grecaptcha-badge {
+	visibility: hidden;
+}

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 const prismic = usePrismic();
 const route = useRoute();
-const { data: page } = await useAsyncData(route.params.uid as string, () =>
-	prismic.client.getByUID("page", route.params.uid as string),
-);
+const uid = route.params.uid as string;
+const { data: page } = await useAsyncData(uid, () => prismic.client.getByUID("page", uid).catch(() => null));
+if (!page.value) throw createError({ statusCode: 404, statusMessage: "Page not found", fatal: true });
 </script>
 
 <template>

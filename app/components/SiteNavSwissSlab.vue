@@ -37,7 +37,7 @@
 // Shared with OceanBackground, which stops drawing while this is true.
 const paused = useState("motion-paused", () => false);
 // Filled in by OceanBackground. This slab shows it, so the floating caption is turned off.
-const readout = useState<{ time: string; waves?: string; wind?: string }>("scene-readout", () => ({ time: "" }));
+const readout = useState<{ place?: string; time: string; waves?: string; wind?: string }>("scene-readout", () => ({ time: "" }));
 const captionInNavigation = useState("caption-in-navigation", () => false);
 captionInNavigation.value = true;
 onBeforeUnmount(() => (captionInNavigation.value = false));
@@ -116,14 +116,10 @@ const links = [
 				<dl>
 					<div class="row rule">
 						<dt class="key">Place</dt>
-						<dd class="reading">Te Rerenga Wairua, Cape Reinga</dd>
-					</div>
-					<div class="row rule">
-						<dt class="key">Facing</dt>
-						<dd class="reading">Hawaiʻi</dd>
+						<dd class="reading">{{ readout.place }}</dd>
 					</div>
 					<div v-if="readout.time" class="row rule">
-						<dt class="key">Time there</dt>
+						<dt class="key">Human time</dt>
 						<dd class="reading">{{ readout.time }}</dd>
 					</div>
 					<div v-if="readout.waves" class="row rule">
@@ -137,7 +133,11 @@ const links = [
 				</dl>
 				<div class="row rule">
 					<span class="key">Data</span>
-					<a class="reading link" href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo (opens in a new tab)</a>
+					<a class="reading link" href="https://open-meteo.com/">Open-Meteo</a>
+				</div>
+				<div class="row rule">
+					<span class="key">Sky</span>
+					<span class="reading">Milky Way: NASA/Goddard Space Flight Center Scientific Visualization Studio, ESA/Gaia/DPAC</span>
 				</div>
 				<div class="row rule">
 					<span class="key">Motion</span>

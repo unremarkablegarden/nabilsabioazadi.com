@@ -23,7 +23,7 @@
 // Shared with OceanBackground, which stops drawing while this is true.
 const paused = useState("motion-paused", () => false);
 // Filled in by OceanBackground. This slab shows it, so the floating caption is turned off.
-const readout = useState<{ time: string; waves?: string; wind?: string }>("scene-readout", () => ({ time: "" }));
+const readout = useState<{ place?: string; time: string; waves?: string; wind?: string }>("scene-readout", () => ({ time: "" }));
 const captionInNavigation = useState("caption-in-navigation", () => false);
 captionInNavigation.value = true;
 onBeforeUnmount(() => (captionInNavigation.value = false));
@@ -93,14 +93,10 @@ const links = [
 				<dl class="small">
 					<div>
 						<dt>Place</dt>
-						<dd>Te Rerenga Wairua, Cape Reinga</dd>
-					</div>
-					<div>
-						<dt>Facing</dt>
-						<dd>Hawaiʻi</dd>
+						<dd>{{ readout.place }}</dd>
 					</div>
 					<div v-if="readout.time">
-						<dt>Time there</dt>
+						<dt>Human time</dt>
 						<dd>{{ readout.time }}</dd>
 					</div>
 					<div v-if="readout.waves">
@@ -112,7 +108,7 @@ const links = [
 						<dd>{{ readout.wind }}</dd>
 					</div>
 				</dl>
-				<p class="credit small"><a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo (opens in a new tab)</a></p>
+				<p class="credit small"><a href="https://open-meteo.com/">Weather data by Open-Meteo</a></p>
 				<button type="button" class="quiet small" :aria-pressed="paused" @click="paused = !paused">
 					{{ paused ? "Play the moving background" : "Pause the moving background" }}
 				</button>

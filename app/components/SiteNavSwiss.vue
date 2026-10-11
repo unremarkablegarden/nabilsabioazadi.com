@@ -44,21 +44,43 @@
 // Shared with OceanBackground, which stops drawing while this is true.
 const paused = useState("motion-paused", () => false);
 // Filled in by OceanBackground. This slab shows it, so the floating caption is turned off.
-const readout = useState<{ time: string; waves?: string; wind?: string }>("scene-readout", () => ({ time: "" }));
+const readout = useState<{ place?: string; time: string; waves?: string; wind?: string }>("scene-readout", () => ({ time: "" }));
 const captionInNavigation = useState("caption-in-navigation", () => false);
 captionInNavigation.value = true;
 onBeforeUnmount(() => (captionInNavigation.value = false));
 
-// The drawer starts shut: the page opens on the picture.
-const open = ref(false);
+// The drawer starts shut: the page opens on the picture. Shared, so that a page with a panel of
+// its own in the same place (About) can step aside while the drawer is open.
+const open = useState("menu-open", () => false);
+// The cut of the drawer's outer edge. ?shape= tries the others:
+//   moon      part of a great disc, its edge the lit limb of a moon (the first, and the default)
+//   straight  no cut: a plain upright slab
+//   wave      the edge is a swell, running in and out down its length
+//   sail      a straight edge leaning inward to the foot, like the leech of a sail
+//   corner    upright, with the lower outer corner rounded off in one large curve
+//   full      no edge at all: the drawer covers the whole picture
+const SHAPES = ["moon", "straight", "wave", "sail", "corner", "full"];
+const shape = computed(() => (SHAPES.includes(route.query.shape as string) ? (route.query.shape as string) : "moon"));
+// The faint figure behind the words: the sky over the boat (the owner's choice). ?figure= shows the others.
+const figure = computed(() => (route.query.figure as string) || "sky");
+// The swell, as points down the drawer's right edge.
+const wave = `polygon(0 0, ${Array.from({ length: 41 }, (_, i) => `${(89 + 10 * Math.sin((i / 40) * Math.PI * 2.6 + 0.6)).toFixed(1)}% ${(i * 2.5).toFixed(1)}%`).join(", ")}, 0 100%)`;
 const menuButton = ref<HTMLButtonElement>();
 onMounted(() => {
 	if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) paused.value = true;
 });
+// A page that is itself a panel over the picture (About) says so here. Closing the drawer on
+// such a page goes back to the main screen, the picture alone: to the owner the drawer and the
+// panel are one thing, and Close should put both away.
+const pageIsPanel = useState("page-is-panel", () => false);
+const toggle = () => {
+	if (open.value && pageIsPanel.value) navigateTo("/");
+	open.value = !open.value;
+};
 // Escape shuts the drawer and hands the keyboard back to the button that opened it.
 const shut = () => {
 	if (!open.value) return;
-	open.value = false;
+	toggle();
 	menuButton.value?.focus();
 };
 // The Newsletter item in the bar opens the drawer and goes straight to the field.
@@ -71,16 +93,38 @@ const toNewsletter = async () => {
 const route = useRoute();
 watch(() => route.path, () => (open.value = false));
 
-// The newsletter form has nowhere to send addresses yet, so it says so instead of pretending.
+// The newsletter form signs the address up on Kit and says, in words, how that went.
 const email = ref("");
 const notice = ref("");
-const join = () => {
-	notice.value = "Sign-up is not open yet. Your address was not sent anywhere.";
+const sending = ref(false);
+// Google's check is fetched when the visitor comes to the field, so it is ready by the time they press Join.
+const prepare = () => prepareNewsletter().catch(() => {});
+// Two quiet guards against programs that fill in every form they find, in place of a captcha.
+// A field no person can see or reach: only a program fills it in. And no person opens the page,
+// finds the form and types an address inside three seconds.
+const trap = ref("");
+let arrived = 0;
+onMounted(() => (arrived = Date.now()));
+const join = async () => {
+	if (sending.value) return;
+	if (trap.value || Date.now() - arrived < 3000) {
+		// It is told what a person would be told, and nothing is sent.
+		notice.value = NEWSLETTER_WELCOME;
+		return;
+	}
+	sending.value = true;
+	notice.value = "Sending…";
+	const joined = await joinNewsletter(email.value).catch(() => false);
+	sending.value = false;
+	notice.value = joined ? NEWSLETTER_WELCOME : "That did not go through, and your address was not saved. Please try again in a moment.";
+	if (joined) email.value = "";
 };
 
+// Writing and Art wait until there is work to show; their pages are still in the project.
 const links = [
-	{ to: "/writing", label: "Writing" },
-	{ to: "/art", label: "Art" },
+	{ to: "/about", label: "About" },
+	// The studio has a site of its own.
+	{ to: "https://www.tiraho.com.au", label: "Tîr Aho Studio" },
 	{ to: "/contact", label: "Contact" },
 ];
 </script>
@@ -91,17 +135,14 @@ const links = [
 
 		<div class="bar">
 			<div class="side">
-				<button ref="menuButton" type="button" class="item" :aria-expanded="open" aria-controls="menu" @click="open = !open">
+				<button ref="menuButton" type="button" class="item" :aria-expanded="open" aria-controls="menu" @click="toggle">
 					{{ open ? "Close" : "Menu" }}
 				</button>
 
 				<!-- The drawer comes straight after its button, so the keyboard goes from one into the other. -->
-				<div v-show="open" id="menu" class="slab">
-					<!-- Decoration only: the trine, an equilateral triangle in a circle, very faint behind the text. -->
-					<svg class="trine" viewBox="0 0 200 200" aria-hidden="true">
-						<circle cx="100" cy="100" r="96" />
-						<path d="M100 4 L183.1 148 L16.9 148 Z" />
-					</svg>
+				<div v-show="open" id="menu" class="slab" :data-shape="shape" :style="shape === 'wave' ? { clipPath: wave } : undefined">
+					<!-- Decoration only: a faint figure behind the text. ?figure= tries the others (see MenuFigure). -->
+					<MenuFigure class="trine" :kind="figure" />
 					<div class="body">
 			<div class="row">
 				<p class="name">Nabil<br />Sabio<br />Azadi</p>
@@ -118,30 +159,31 @@ const links = [
 				</ol>
 			</nav>
 
-			<form class="row rule" @submit.prevent="join">
+			<!-- Not on the two-column grid: the field is given the slab's whole width, and room above and below. -->
+			<form class="rule news" @submit.prevent="join">
 				<label for="news-email" class="key">Newsletter</label>
-				<div>
-					<p id="news-hint" class="reading">Your email address</p>
-					<div class="field">
-						<input id="news-email" v-model="email" type="email" required autocomplete="email" aria-describedby="news-hint news-status" />
-						<button type="submit" class="solid">Join</button>
-					</div>
-					<p id="news-status" class="reading" role="status">{{ notice }}</p>
-				</div>
+				<p id="news-hint" class="reading">Your email address</p>
+				<input id="news-email" v-model="email" type="email" required autocomplete="email" aria-describedby="news-hint news-status" @focus="prepare" />
+				<button type="submit" class="solid" :aria-disabled="sending">Join</button>
+				<p id="news-status" class="reading" role="status">{{ notice }}</p>
+				<!-- The trap: out of sight, out of the keyboard's way and hidden from screen readers. -->
+				<input v-model="trap" class="trap" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
+				<!-- Google asks for this wording wherever its badge is not shown. -->
+				<p v-if="NEWSLETTER_CAPTCHA" class="small">
+					This form is protected by reCAPTCHA. Google's
+					<a class="link" href="https://policies.google.com/privacy">Privacy Policy</a> and
+					<a class="link" href="https://policies.google.com/terms">Terms of Service</a> apply.
+				</p>
 			</form>
 
 			<div class="foot">
 				<dl>
 					<div class="row rule">
 						<dt class="key">Place</dt>
-						<dd class="reading">Te Rerenga Wairua, Cape Reinga</dd>
-					</div>
-					<div class="row rule">
-						<dt class="key">Facing</dt>
-						<dd class="reading">Hawaiʻi</dd>
+						<dd class="reading">{{ readout.place }}</dd>
 					</div>
 					<div v-if="readout.time" class="row rule">
-						<dt class="key">Time there</dt>
+						<dt class="key">Human time</dt>
 						<dd class="reading">{{ readout.time }}</dd>
 					</div>
 					<div v-if="readout.waves" class="row rule">
@@ -155,7 +197,11 @@ const links = [
 				</dl>
 				<div class="row rule">
 					<span class="key">Data</span>
-					<a class="reading link" href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo (opens in a new tab)</a>
+					<a class="reading link" href="https://open-meteo.com/">Open-Meteo</a>
+				</div>
+				<div class="row rule">
+					<span class="key">Sky</span>
+					<span class="reading">Milky Way: NASA/Goddard Space Flight Center Scientific Visualization Studio, ESA/Gaia/DPAC</span>
 				</div>
 				<div class="row rule">
 					<span class="key">Motion</span>
@@ -241,6 +287,11 @@ const links = [
 	   to their dark green at the foot. About 15:1 throughout; the dimmer tone about 9:1. */
 	--ground: #10211a;
 	--deep: #0b1f2e;
+	/* International Klein Blue, the ground of the bar. It is opaque, so the text on it keeps its
+	   contrast whatever the picture behind is doing: the off-white ink is 9.5:1 on it, the dimmer
+	   tone 5.7:1, the white focus ring 10.7:1 (WCAG 2.2 AA asks 4.5:1 for text and 3:1 for the
+	   ring). Should a light ground ever be wanted, the same blue serves as the ink: 10.7:1 on white. */
+	--klein: #002fa7;
 	--ink: #f4f1e8;
 	--dim: #b4c0b3;
 	/* The unit all spacing is a multiple of, the width of the narrow column, and the bar's height. */
@@ -262,7 +313,7 @@ const links = [
 	align-items: center;
 	height: var(--bar);
 	padding: 0 calc(var(--unit) * 3);
-	background: var(--deep);
+	background: var(--klein);
 }
 .side {
 	display: flex;
@@ -292,7 +343,10 @@ const links = [
 	text-underline-offset: 0.5em;
 }
 /* The signature, in the middle. Its loops are let hang a little below the bar. */
+/* It stays above the open drawer, with its disc, so the drawer never cuts across it. */
 .home {
+	position: relative;
+	z-index: 21;
 	display: block;
 	align-self: start;
 	padding: 0.35rem 0.75rem 0;
@@ -315,7 +369,7 @@ const links = [
 	width: 7rem;
 	height: 7rem;
 	border-radius: 50%;
-	background: var(--deep);
+	background: var(--klein);
 	transform: translateX(-50%);
 }
 
@@ -330,11 +384,39 @@ const links = [
 	/* Wide margins, and more on the right and at the foot, where the curved edge takes some of the slab away. */
 	padding: calc(var(--unit) * 7) 9.5rem calc(var(--unit) * 14) calc(var(--unit) * 6);
 	overflow-y: auto;
-	background: linear-gradient(to bottom, var(--deep), var(--ground));
+	/* It hangs from the bar in the bar's blue and deepens to the owner's dark green. */
+	background: linear-gradient(to bottom, var(--klein), var(--deep) 45%, var(--ground));
 	/* The slab is part of a great disc: its outer edge is a true arc of a circle, the lit limb of
 	   a moon, bowing out to the slab's full width at mid-height and falling well back at head and foot. */
 	--radius: 74vh;
 	clip-path: circle(var(--radius) at calc(100% - var(--radius)) 50%);
+}
+/* The other cuts (?shape=). Each sets the drawer's width, the room kept clear on its right
+   for the cut, and the cut itself. */
+.slab[data-shape="straight"] {
+	width: 28rem;
+	padding-right: calc(var(--unit) * 6);
+	clip-path: none;
+}
+.slab[data-shape="wave"] {
+	width: 34rem;
+	padding-right: 9.5rem;
+}
+.slab[data-shape="sail"] {
+	width: 40rem;
+	padding-right: 15.5rem;
+	clip-path: polygon(0 0, 100% 0, 66% 100%, 0 100%);
+}
+.slab[data-shape="corner"] {
+	width: 30rem;
+	padding-right: calc(var(--unit) * 8);
+	padding-bottom: 14rem;
+	clip-path: inset(0 round 0 0 16rem 0);
+}
+.slab[data-shape="full"] {
+	width: 100vw;
+	padding-right: calc(100vw - 30rem);
+	clip-path: none;
 }
 /* Faint enough to make no difference to the contrast of the text over it. */
 .trine {
@@ -342,11 +424,15 @@ const links = [
 	top: 22%;
 	left: 8%;
 	width: 70%;
-	fill: none;
-	stroke: var(--ink);
-	stroke-width: 0.4;
+	color: var(--ink);
 	opacity: 0.16;
-	pointer-events: none;
+}
+/* The figures drawn from the sky and the sea have more in them, and are let show a little more. */
+.trine:not([data-kind="trine"]) {
+	top: 16%;
+	left: 4%;
+	width: 78%;
+	opacity: 0.32;
 }
 
 /* The grid: a narrow column and a wide one. Every row of the slab is set on it. */
@@ -396,8 +482,27 @@ ol {
 }
 /* The next hairline, above the newsletter, closes the list. */
 form.rule {
-	padding-top: calc(var(--unit) * 4);
-	padding-bottom: calc(var(--unit) * 3);
+	padding-top: calc(var(--unit) * 5);
+	padding-bottom: calc(var(--unit) * 5);
+}
+/* A roomy field: the full width of the slab's text, tall, in the reading serif at a larger size,
+   with the button on a line of its own beneath it. */
+.news input {
+	display: block;
+	width: 100%;
+	box-sizing: border-box;
+	min-height: 3.75rem;
+	margin: calc(var(--unit) * 1.5) 0 calc(var(--unit) * 3);
+	padding: 0 calc(var(--unit) * 0.5);
+	font: 400 1.375rem/1.5 "Lyon Text", Georgia, "Times New Roman", serif;
+	letter-spacing: 0.01em;
+}
+.news .solid {
+	min-height: 3rem;
+	padding: 0 calc(var(--unit) * 5);
+}
+.news [role="status"] {
+	margin-top: calc(var(--unit) * 2);
 }
 nav a {
 	min-height: 5rem;
@@ -432,11 +537,6 @@ nav a[aria-current="page"] .key::after {
 	color: var(--ink);
 }
 
-.field {
-	display: flex;
-	gap: calc(var(--unit) * 2);
-	margin: var(--unit) 0;
-}
 input {
 	flex: 1;
 	min-width: 0;
@@ -469,6 +569,27 @@ button {
 .outline:focus-visible {
 	background: var(--ink);
 	color: var(--ground);
+}
+/* The trap for programs: there for them to find, not for anyone to see. */
+.trap {
+	position: absolute;
+	left: -200vw;
+	width: 1px;
+	height: 1px;
+	min-height: 0;
+	border: 0;
+	opacity: 0;
+}
+/* The small print under the form. Still 4.5:1 and more: the dimmer tone on the slab's ground. */
+.small {
+	margin-top: calc(var(--unit) * 2);
+	color: var(--dim);
+	font-size: 0.8125rem;
+	line-height: 1.6;
+}
+.small .link {
+	display: inline;
+	min-height: 0;
 }
 [role="status"] {
 	min-height: 1.5rem;
@@ -533,12 +654,14 @@ input:focus-visible {
 	.wide {
 		display: none;
 	}
-	.slab {
+	/* Whatever its cut on a wide screen, here it is a plain sheet. */
+	.slab,
+	.slab[data-shape] {
 		inset: var(--bar) 0 auto 0;
 		width: 100%;
 		max-height: calc(100dvh - var(--bar));
 		padding: calc(var(--unit) * 7) calc(var(--unit) * 3.5) calc(var(--unit) * 5);
-		clip-path: none;
+		clip-path: none !important;
 	}
 	.trine {
 		display: none;
