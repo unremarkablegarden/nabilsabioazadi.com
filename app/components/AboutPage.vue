@@ -38,7 +38,6 @@ const paragraphs = [
 const links: { label: string; href: string; title?: boolean; after?: string }[] = [
 	{ label: "Tîr Aho Studio", href: "https://www.tiraho.com.au" },
 	{ label: "Asia Pacific Art Papers", href: "https://apap.qagoma.qld.gov.au/", title: true, after: ", Queensland Art Gallery | Gallery of Modern Art" },
-	{ label: "Wikipedia", href: "https://en.wikipedia.org/wiki/Nabil_Sabio_Azadi" },
 ];
 </script>
 
