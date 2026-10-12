@@ -136,6 +136,8 @@ const liveFigures = computed(() => {
 		["unusual", `air ${Math.round(unusual(c).air * 100)}% · water ${Math.round(unusual(c).water * 100)}% (the strongest attends to 84% of it, and looks into it when that passes 50%)`],
 		["strongest", `${Math.round((1 - strengthBelow(c, PLACE.bearing)) * 100)}% ahead (${calling(c) >= 0.6 ? "linked" : "not linked"}) · ${Math.round(strengthBelow(c, PLACE.bearing) * 100)}% below, round the boat`],
 		["tomorrow", `wind ${c.tomorrowWindSpeed.toFixed(0)} km/h from the ${compassPoint(c.tomorrowWindDirection)} · quiet enough to scout ${Math.round(quietEnoughToScout(c) * 100)}%`],
+		["sky", windsAloft(c).map((layer, height) => `${["sea", "750 m", "1.5 km", "3 km", "5.5 km"][height]} ${layer.speed.toFixed(0)} ${compassPoint(layer.from)}`).join(" · ")],
+		["sky cools by", lapseAloft(c).map((lapse, layer) => `${["sea to 750 m", "to 1.5 km", "to 3 km", "to 5.5 km"][layer]} ${lapse.toFixed(1)}`).join(" · ") + " °C/km (9.8 rises freely · under 0 is a lid)"],
 		["air", thermal(c) > 0.1 ? `sea warmer by ${(c.seaTemperature - c.airTemperature).toFixed(1)} °C: thermals ${Math.round(thermal(c) * 100)}%` : thermal(c) < -0.1 ? `air warmer by ${(c.airTemperature - c.seaTemperature).toFixed(1)} °C: still, layered ${Math.round(-thermal(c) * 100)}%` : "sea and air alike: neither rising nor layered"],
 		["at the front", crewNow.value.split(" | ")[0] ?? ""],
 		["calling", crewNow.value.split(" | ")[1] ?? ""],
@@ -490,6 +492,22 @@ onMounted(() => {
 		const strength = Math.min(1, c.tomorrowWindSpeed / 40);
 		return { across: Math.sin(blowsTowards) * strength, along: Math.cos(blowsTowards) * strength };
 	};
+	// The wind now at five heights, lowest first, as the sky-scanning weave parts into it: each
+	// across and along the view and scaled by its speed, in true proportion (the owner's: "widen
+	// the speed"), an 80 km/h wind counting as 1. A wind four times as fast carries four times as far.
+	const STILL_AIR = [NO_WIND, NO_WIND, NO_WIND, NO_WIND, NO_WIND];
+	const windsOverhead = (c: SeaConditions) =>
+		windsAloft(c).map((layer) => {
+			const blowsTowards = THREE.MathUtils.degToRad(layer.from + 180 - PLACE.bearing);
+			const strength = Math.min(1.5, layer.speed / 80);
+			return { across: Math.sin(blowsTowards) * strength, along: Math.cos(blowsTowards) * strength };
+		});
+	// How long air takes to rise through each of the four layers between those heights, against
+	// an ordinary sky's 1: from how fast each layer cools with height (see `lapseAloft`). Through
+	// a layer that cools as fast as lifted air does (9.8 °C a kilometre) it rises freely, 0.75;
+	// under an inversion it all but stops, 2.9, and is carried sideways instead.
+	const ORDINARY_SKY = [1, 1, 1, 1];
+	const slowToRise = (c: SeaConditions) => lapseAloft(c).map((lapse) => 1 / (0.35 + THREE.MathUtils.clamp(lapse / 9.8, 0, 1)));
 	let controlLevel = 0;
 	// Metres above the water on a measured sea. September looked down from 18 to 27.
 	const EYE_HEIGHT = 5;
@@ -752,8 +770,10 @@ onMounted(() => {
 						away: Math.cos(THREE.MathUtils.degToRad(liveOnly.windDirection + 180 - PLACE.bearing)),
 						force: THREE.MathUtils.clamp((liveOnly.windSpeed / 3.6 / 15) * (1 + 0.6 * gustiness * gustNow), 0, 1),
 						gusty: gustiness,
+						// How much of a gust is blowing at this moment, 0 between gusts.
+						gust: gustiness * Math.max(0, gustNow),
 					}
-				: { across: 1, away: 0, force: sea, gusty: 0 },
+				: { across: 1, away: 0, force: sea, gusty: 0, gust: 0 },
 			heave: liveOnly ? seaAtBoat : 0,
 			swellFrom: liveOnly ? THREE.MathUtils.degToRad(((liveOnly.swellDirection - PLACE.bearing + 540) % 360) - 180) : 0,
 			// Enough to stand whiter than a day sky; less at night, where little is needed to read as white.
@@ -764,6 +784,8 @@ onMounted(() => {
 			// being held back, nor when the sea calls for nearly all four.
 			scout: liveOnly ? darkness * quietEnoughToScout(liveOnly) * (1 - controlLevel) * (1 - THREE.MathUtils.smoothstep(need, 0.45, 0.6)) * alive : 0,
 			tomorrow: liveOnly ? tomorrowsWind(liveOnly) : NO_WIND,
+			aloft: liveOnly ? windsOverhead(liveOnly) : STILL_AIR,
+			slowToRise: liveOnly ? slowToRise(liveOnly) : ORDINARY_SKY,
 			thermal: liveOnly ? thermal(liveOnly) : 0,
 			current: liveOnly ? Math.sin(THREE.MathUtils.degToRad(liveOnly.currentDirection - PLACE.bearing)) * Math.min(1, liveOnly.currentSpeed / 3) : 0,
 			strength: Math.max(darkness, controlLevel, gathering) * alive,

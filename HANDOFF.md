@@ -5,6 +5,9 @@ version is, where it is kept, how to run it, what was last worked on, and what i
 The README's "Notes for Claude Code" section has the detail on how each part works; read the
 entries on the channellers there before touching the weaving.
 
+**For the weaving itself, read `WEAVES.md` first**: one weave at a time, what each follows, how to
+see it, and the one the owner singled out on 12 October.
+
 ## Where things are kept
 
 - `~/Development/nabilsabioazadi.com`, git branch `october`. `main` is kept identical to it.

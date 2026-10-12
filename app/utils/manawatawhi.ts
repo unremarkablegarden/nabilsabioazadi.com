@@ -301,6 +301,24 @@ export interface SeaConditions {
 	// will come from. What the scout weave reaches up to feel for.
 	tomorrowWindSpeed: number;
 	tomorrowWindDirection: number;
+	// The wind higher up, now: its speed in km/h and the compass direction it comes from at four
+	// heights above the sea (about 750 m, 1.5 km, 3 km and 5.5 km: where the air's pressure is
+	// 925, 850, 700 and 500 hPa). What the sky-scanning weave parts into, one flow to each height.
+	// Missing in figures kept from before these were asked for.
+	windLowSpeed?: number;
+	windLowDirection?: number;
+	windCloudSpeed?: number;
+	windCloudDirection?: number;
+	windMidSpeed?: number;
+	windMidDirection?: number;
+	windHighSpeed?: number;
+	windHighDirection?: number;
+	// And how warm the air is at each of those four heights, in °C: from these and the air at the
+	// sea comes how readily air can rise through each layer of the sky (see `lapseAloft`).
+	airLowTemperature?: number;
+	airCloudTemperature?: number;
+	airMidTemperature?: number;
+	airHighTemperature?: number;
 	// Where the weather models disagree, the lowest and highest of their figures (see WEATHER_MODELS).
 	doubt: Partial<Record<keyof typeof BLENDED, [number, number]>>;
 }
@@ -377,6 +395,50 @@ const BLENDED = {
 	precipitation: WEATHER.precipitation,
 } as const;
 
+const ALOFT = {
+	windLowSpeed: "wind_speed_925hPa",
+	windLowDirection: "wind_direction_925hPa",
+	windCloudSpeed: "wind_speed_850hPa",
+	windCloudDirection: "wind_direction_850hPa",
+	windMidSpeed: "wind_speed_700hPa",
+	windMidDirection: "wind_direction_700hPa",
+	windHighSpeed: "wind_speed_500hPa",
+	windHighDirection: "wind_direction_500hPa",
+	airLowTemperature: "temperature_925hPa",
+	airCloudTemperature: "temperature_850hPa",
+	airMidTemperature: "temperature_700hPa",
+	airHighTemperature: "temperature_500hPa",
+} as const;
+
+// The wind at five heights, lowest first: at the sea, then the four heights above it. A height
+// with no figure is given the wind below it.
+export function windsAloft(c: SeaConditions) {
+	const layers = [{ speed: c.windSpeed, from: c.windDirection }];
+	for (const height of ["Low", "Cloud", "Mid", "High"] as const) {
+		const below = layers[layers.length - 1]!;
+		layers.push({ speed: c[`wind${height}Speed`] ?? below.speed, from: c[`wind${height}Direction`] ?? below.from });
+	}
+	return layers;
+}
+
+// How fast the air cools with height in each of the four layers between those five heights, in
+// °C for each kilometre up (the lapse rate), lowest layer first. It is what decides whether air
+// can rise there. Air that is lifted cools by 9.8 °C a kilometre of itself (less, about 6, once
+// cloud forms in it). Where the air round it cools faster than that with height, lifted air
+// stays the warmer and lighter and goes on up; where it cools more slowly, lifted air is soon
+// the colder and heavier and is held down; and where it grows warmer with height (below 0, an
+// inversion) it is a lid. With no figures, the ordinary 6.5. (The heights are the usual ones for
+// those pressures; on the day they stand a hundred metres or so higher or lower.)
+export function lapseAloft(c: SeaConditions) {
+	const metres = [0, 760, 1460, 3010, 5570];
+	const warmth = [c.airTemperature, c.airLowTemperature, c.airCloudTemperature, c.airMidTemperature, c.airHighTemperature];
+	return [0, 1, 2, 3].map((layer) => {
+		const below = warmth[layer];
+		const above = warmth[layer + 1];
+		return below == null || above == null ? 6.5 : ((below - above) / (metres[layer + 1]! - metres[layer]!)) * 1000;
+	});
+}
+
 const median = (values: number[]) => {
 	const sorted = [...values].sort((a, b) => a - b);
 	return (sorted[(sorted.length - 1) >> 1]! + sorted[sorted.length >> 1]!) / 2;
@@ -403,7 +465,7 @@ export async function fetchSeaConditions(at: { latitude: number; longitude: numb
 		$fetch<Current>(`https://api.open-meteo.com/v1/forecast?${place}&current=${Object.values(variables).join(",")}${model ? `&models=${model}` : ""}`);
 	const [marine, weather, ...models] = await Promise.all([
 		$fetch<Current>(`https://marine-api.open-meteo.com/v1/marine?${place}&current=${Object.values(MARINE).join(",")}${ahead}wave_height`),
-		$fetch<Current>(`https://api.open-meteo.com/v1/forecast?${place}&current=${Object.values(WEATHER).join(",")}${dayAhead}wind_speed_10m,wind_direction_10m,pressure_msl`),
+		$fetch<Current>(`https://api.open-meteo.com/v1/forecast?${place}&current=${[...Object.values(WEATHER), ...Object.values(ALOFT)].join(",")}${dayAhead}wind_speed_10m,wind_direction_10m,pressure_msl`),
 		// A model that cannot be reached is left out of the blend.
 		...WEATHER_MODELS.map((model) => forecast(BLENDED, model).catch(() => undefined)),
 	]);
@@ -430,6 +492,10 @@ export async function fetchSeaConditions(at: { latitude: number; longitude: numb
 	};
 	conditions.tomorrowWindSpeed = tomorrow("wind_speed_10m", conditions.windSpeed);
 	conditions.tomorrowWindDirection = tomorrow("wind_direction_10m", conditions.windDirection);
+	for (const [key, name] of Object.entries(ALOFT) as [keyof typeof ALOFT, string][]) {
+		const figure = weather.current[name];
+		if (figure != null) conditions[key] = figure;
+	}
 	for (const [key, name] of Object.entries(BLENDED) as [keyof typeof BLENDED, string][]) {
 		const answers = models.map((model) => model?.current[name]).filter((answer) => answer != null);
 		if (answers.length < 2) continue;
