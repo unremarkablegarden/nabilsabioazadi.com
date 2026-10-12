@@ -203,8 +203,16 @@ onMounted(() => {
 		pointer.set((event.clientX / window.innerWidth) * 2 - 1, (event.clientY / window.innerHeight) * 2 - 1);
 	};
 	window.addEventListener("pointermove", onPointerMove);
-	const maxYaw = THREE.MathUtils.degToRad(20);
-	const maxPitch = THREE.MathUtils.degToRad(6);
+	// How far the view turns with the pointer (the owner's, October: "viewing higher than we do
+	// and wider than we do, at least 180 degrees wide"). To either side 95°, so 190° from the far
+	// left of the screen to the far right; up 62°, to see what is sent into the sky; down 6°, as
+	// before. About the middle of the screen it turns as gently as it used to (20° and 6° for the
+	// whole way, were it kept up): it is towards the edges that the view swings wide.
+	const maxYaw = THREE.MathUtils.degToRad(95);
+	const maxUp = THREE.MathUtils.degToRad(62);
+	const maxDown = THREE.MathUtils.degToRad(6);
+	const lookAcross = (x: number) => x * (20 / 95 + (1 - 20 / 95) * x * x) * maxYaw;
+	const lookUp = (y: number) => (y > 0 ? y * maxDown : y * (6 / 62 + (1 - 6 / 62) * y * y) * maxUp);
 
 	const water = new Water(createFocusedPlane(10000, 512), {
 		textureWidth: 512,
@@ -581,7 +589,14 @@ onMounted(() => {
 	const horizonAhead = { x: 0.5, y: 0.5 };
 	// Writes where a world position falls on screen (0..1) into target.
 	const toScreen = (x: number, y: number, z: number, target: { x: number; y: number }) => {
-		projected.set(x, y, z).project(camera);
+		// (Something behind the viewer has no place on the screen: it is put well off to its side.)
+		projected.set(x, y, z).applyMatrix4(camera.matrixWorldInverse);
+		if (projected.z > -1) {
+			target.x = projected.x < 0 ? -3 : 4;
+			target.y = 0.5;
+			return;
+		}
+		projected.applyMatrix4(camera.projectionMatrix);
 		target.x = (projected.x + 1) / 2;
 		target.y = (1 - projected.y) / 2;
 	};
@@ -681,8 +696,8 @@ onMounted(() => {
 			camera.position.y += (cameraHeight + swell + heave - camera.position.y) * follow(0.05);
 		}
 		camera.rotation.z = sway * (0.06 * Math.sin(time * 0.33) + 0.025 * Math.sin(time * 0.83 + 0.7));
-		camera.rotation.y += (-pointer.x * maxYaw - camera.rotation.y) * 0.03;
-		camera.rotation.x += (-pointer.y * maxPitch + pitch - camera.rotation.x) * 0.03;
+		camera.rotation.y += (-lookAcross(pointer.x) - camera.rotation.y) * 0.03;
+		camera.rotation.x += (-lookUp(pointer.y) + pitch - camera.rotation.x) * 0.03;
 
 		const flash = alive > 0.5 ? lightning(time, sky, fury, liveOnly ? thunderAmount(liveOnly) : 1) : 0;
 		// The storm darkens the day. At night it is lifted instead, or the sea would be lost in black.
@@ -836,6 +851,8 @@ onMounted(() => {
 		toScreen(camera.position.x, 0, camera.position.z - 8000, horizonScreen);
 		// Where the horizon crosses the middle of the screen, and its tilt, for the navigation to stand on.
 		toScreen(camera.position.x - Math.sin(camera.rotation.y) * 8000, 0, camera.position.z - Math.cos(camera.rotation.y) * 8000, horizonAhead);
+		// (Turned far round, the point ahead of the boat is behind the viewer; the horizon is still where it is.)
+		horizonScreen.y = horizonAhead.y;
 		document.documentElement.style.setProperty("--horizon", `${(horizonAhead.y * 100).toFixed(2)}vh`);
 		document.documentElement.style.setProperty("--roll", `${camera.rotation.z.toFixed(4)}rad`);
 		overlay.draw(delta, rain, flash, camera.rotation.z * 0.5 + 0.5 * crosswind, bond, knotScreen);
