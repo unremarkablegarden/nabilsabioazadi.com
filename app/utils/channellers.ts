@@ -91,6 +91,27 @@ uniform vec4 uRestless;
 // what they weave is akasha, air and water: for each seat, the element its occupant is weaving.
 uniform float uDay;
 uniform vec4 uSeatElement;
+// Tending. For each seat: which reading its occupant is at (0 the water, 1 the wind, 2 the
+// pressure), and for how many seconds. And what is really there to be read, from the forecast:
+// the pressure's trend (-1 falling fast, 0 steady, 1 rising fast), the wind over the sea as it
+// crosses the view (x to the right, y away from the boat, z its force 0..1), and the heat between
+// sea and air (-1 the sea the colder, 1 the warmer).
+uniform vec4 uAct;
+uniform vec4 uAge;
+// Turning from one thing to another (the owner's: never a switch; the intention and the force
+// move steadily to the new place, and the turning is done at the boat). For each seat, the
+// reading it is turning from, and 0..1 how far the turn has gone. And for all four together,
+// between their readings and the healing flow: which way they are turning (1 towards their
+// readings) and how far out along the weave the turn has reached (0 at the boat, 1.6 all of it).
+uniform vec4 uWas;
+uniform vec4 uTurn;
+// Where each seat's reading is sent, in radians right of straight ahead.
+uniform vec4 uBearing;
+uniform float uToReading;
+uniform float uFront;
+uniform float uPressure;
+uniform vec3 uWindView;
+uniform float uWarm;
 uniform vec3 uTints[ 3 ];
 uniform vec3 uElements[ 6 ];
 uniform vec3 uBaseTone;
@@ -106,11 +127,42 @@ varying float vSoft;
 varying float vWhite;
 varying float vWide;
 varying float vShade;
+varying vec3 vSheath;
+uniform vec3 uSheath[ 4 ];
 ${ribbonShaderChunk}
 ${channelPathChunk}
 
 // Height of the sea under the last point worked out, for lighting the filaments by the waves.
 float seaUnder;
+// From the last reading worked out: how much of the filament is there, and the colour it has
+// taken from what it found, and how far.
+float formShown;
+vec3 formTint;
+float formTinted;
+// 0..1 how far the point last worked out is in its reading's form and not in the flow, and how
+// much of the force of a turn is on it.
+float formWeight;
+float formPush;
+// 0..1 how far a turn is under way at all (0 before and after it).
+float formGoing;
+
+// A turn begins at the hands and runs out along the weave: what is near the boat is in the new
+// place first, and the far end follows. 0..1 how far a point has turned, for a turn that has
+// reached "front". The force of it lies near the boat, where the turning is done, and on the
+// bend itself as it travels out.
+float turned( float tt, float front ) {
+	return smoothstep( tt, tt + 0.6, front );
+}
+
+// A point part-way from one place to another by way of a third: the path bends, it does not cut across.
+vec3 arced( vec3 from, vec3 by, vec3 to, float gone ) {
+	return mix( mix( from, by, gone ), mix( by, to, gone ), gone );
+}
+
+float pushed( float tt, float front ) {
+	float going = sin( 3.14159 * clamp( front / 1.6, 0.0, 1.0 ) );
+	return going * ( 0.45 * ( 1.0 - smoothstep( 0.0, 0.45, tt ) ) + 0.8 * exp( - pow( ( tt - front + 0.3 ) / 0.14, 2.0 ) ) );
+}
 
 float seaHeight( vec2 p ) {
 	float distanceToEye = length( p - cameraPosition.xz );
@@ -155,6 +207,136 @@ float drift( float x ) {
 // steps on the screen, more or less: each covers a fixed share of the distance already gone.
 float aheadAt( float t ) {
 	return 3.0 * pow( 1100.0, t ) - 5.0;
+}
+
+// A reading (the owner's: each act has its own form, and each answers to what is really there).
+// Where a point of this seat's weave lies while its occupant is at a reading of their own.
+//
+//   pressure   A slender stem up into the air, which at its top opens level in every direction
+//              and settles there, like a held breath. What the barometer is doing is in how it
+//              lies: steady, a flat still disc; falling, it sinks lower and its rim droops, a
+//              canopy settling; rising, it stands higher and its rim lifts, a cup. Faster change,
+//              wider. Falling it greys towards slate; rising it clears towards gold.
+//   wind       A stem up at a slant, and from its top the filaments stream away the way the wind
+//              is really blowing, flapping, spreading and torn off at their own lengths. In a
+//              light air they hang and droop; in a gale they lie out long and flat and flap fast;
+//              in gusts the tearing comes and goes.
+//   water      Out low on one side, under the surface, and back on the other. It goes in a close
+//              tress and comes back changed: loosened, and in the colour of what it found. Sea
+//              warmer than the air, rose-gold; colder, a violet ice; alike, aquamarine. The
+//              current carries the far end of it.
+vec3 formPoint( float t, float act, float age ) {
+	float who = aThread.x;
+	// (A reading is a near thing: the visible part of the thread is laid along the whole of it.)
+	float tt = clamp( t / 0.7, 0.0, 1.0 );
+	vec2 boat = channelBoat + vec2( ( who - 1.5 ) * 1.5, 0.0 );
+	float bearing = channelOf( uBearing, who ) + 0.03 * sin( channelTime * ( 0.04 + 0.01 * who ) + who * 2.4 );
+	vec2 dir = vec2( sin( bearing ), - cos( bearing ) );
+	vec2 side = vec2( - dir.y, dir.x );
+	float hands = cameraPosition.y - 1.2;
+	// Each filament's own small place in the tress.
+	float turn = aSeed.x * 6.28319 + tt * ( 4.0 + 5.0 * aSeed.y ) - channelTime * 0.15;
+	vec2 own = aSeed.z * vec2( cos( turn ), sin( turn ) );
+	formShown = smoothstep( 0.0, 0.06, tt );
+	formTint = vec3( 1.0 );
+	formTinted = 0.0;
+	vec2 xz;
+	float y;
+	// How a weave leaves the boat (the owner: "too angular... in how they heave in the early step
+	// from the boat. Weaves are rarely so angular"). Nothing goes straight from the hands to where
+	// it is going. It is cast out low and a little wide of its mark, on the other side from its
+	// neighbour, runs along over the water, and comes round and up in one curve, quickest in the
+	// middle and easing as it nears its top; and what it opens into at the top has already begun
+	// to open before it gets there, so there is no corner where the two meet.
+	float swing = mod( who, 2.0 ) < 0.5 ? 0.3 : - 0.3;
+	vec2 thrown = vec2( sin( bearing + swing ), - cos( bearing + swing ) );
+	if ( act > 1.5 ) {
+		float s = smoothstep( 0.0, 0.66, tt );
+		float u = smoothstep( 0.34, 1.0, tt );
+		float sag = - uPressure;
+		float breath = sin( channelTime * 0.33 + who );
+		float top = 36.0 - 11.0 * sag + 1.5 * breath;
+		// (It opens slowly once it is up, and then holds.)
+		float reach = ( 26.0 + 14.0 * abs( uPressure ) ) * ( 1.0 - exp( - age / 5.0 ) ) * ( 0.93 + 0.07 * breath );
+		vec2 bend = boat + thrown * 70.0;
+		xz = mix( mix( boat, bend, s ), mix( bend, boat + dir * 135.0, s ), s ) + side * own.x * ( 0.25 + 0.9 * s );
+		// (Faint by the boat and plain at its top: it is the top that is the reading.)
+		formShown = smoothstep( 0.04, 0.3, tt );
+		y = mix( hands, 2.4, smoothstep( 0.0, 0.22, s ) ) + ( top - 2.4 ) * pow( smoothstep( 0.1, 1.0, s ), 1.5 ) + own.y * ( 0.25 + 0.5 * s );
+		float spoke = aSeed.x * 6.28319 + 0.9 * u + channelTime * 0.03;
+		float r = reach * pow( u, 1.3 ) * ( 0.55 + 0.45 * fract( aSeed.y * 7.3 ) );
+		xz += vec2( cos( spoke ), sin( spoke ) ) * r;
+		y += - sag * 0.42 * r * r / max( reach, 1.0 ) + 0.35 * u * sin( r * 0.45 - channelTime * 0.45 );
+		formShown *= 1.0 - smoothstep( 0.75, 1.0, u );
+		// (Where all its filaments meet at the top of the stem they would make a point of light
+		// in the sky, which nothing of theirs may: each is drawn fainter there.)
+		formShown *= 1.0 - 0.8 * exp( - pow( ( tt - 0.5 ) / 0.07, 2.0 ) );
+		formTint = sag > 0.0 ? vec3( 0.5, 0.52, 0.72 ) : vec3( 1.0, 0.86, 0.6 );
+		formTinted = 0.75 * abs( sag ) * smoothstep( 0.0, 0.3, u );
+	} else if ( act > 0.5 ) {
+		float s = smoothstep( 0.0, 0.58, tt );
+		float u = smoothstep( 0.28, 1.0, tt );
+		u *= u;
+		float force = uWindView.z;
+		vec2 w = dot( uWindView.xy, uWindView.xy ) > 0.0001 ? normalize( vec2( uWindView.x, - uWindView.y ) ) : side;
+		vec2 crosswise = vec2( - w.y, w.x );
+		float top = 22.0 + 3.0 * sin( channelTime * 0.21 + who );
+		vec2 bend = boat + thrown * 54.0;
+		xz = mix( mix( boat, bend, s ), mix( bend, boat + dir * 105.0, s ), s ) + w * 12.0 * force * s * s + side * own.x * ( 0.25 + 0.9 * s );
+		formShown = smoothstep( 0.04, 0.26, tt );
+		y = mix( hands, 2.0, smoothstep( 0.0, 0.22, s ) ) + ( top - 2.0 ) * pow( smoothstep( 0.1, 1.0, s ), 1.5 ) + own.y * ( 0.25 + 0.5 * s );
+		float gust = 1.0 + 0.8 * channelWind.y * sin( channelTime * 0.7 + who );
+		float longness = ( 28.0 + 115.0 * force ) * ( 0.85 + 0.15 * gust );
+		float flap = u * 8.0 - channelTime * ( 1.0 + 4.5 * force ) + aSeed.x * 2.2 + who;
+		float sway = ( 0.4 + 4.0 * u ) * ( 0.35 + 0.9 * force ) * gust;
+		xz += w * longness * u + crosswise * ( sin( flap ) * sway + own.x * u * longness * 0.1 );
+		// (With no wind to carry it, it hangs.)
+		y += cos( flap * 0.8 ) * sway * 0.6 + own.y * u * longness * 0.06 - ( 1.0 - force ) * u * u * 16.0;
+		float torn = 0.4 + 0.6 * fract( aSeed.x * 13.7 ) - 0.25 * channelWind.y * ( 0.5 + 0.5 * sin( channelTime * 0.9 + aSeed.y * 30.0 ) );
+		formShown *= 1.0 - smoothstep( torn - 0.22, torn, u );
+		formShown *= 1.0 - 0.8 * exp( - pow( ( tt - 0.42 ) / 0.07, 2.0 ) );
+		y = max( y, 0.6 );
+	} else {
+		float sgn = mod( who, 2.0 ) < 0.5 ? 1.0 : - 1.0;
+		float back = smoothstep( 0.45, 0.62, tt );
+		xz = boat + dir * 70.0 * sin( 3.14159 * tt ) + side * ( 18.0 * sin( 6.28319 * tt ) * sgn + channelCurrent * 14.0 * sin( 3.14159 * tt ) );
+		float loosened = 0.3 + 1.3 * back;
+		xz += side * own.x * loosened;
+		float under = smoothstep( 0.24, 0.34, tt ) * ( 1.0 - smoothstep( 0.66, 0.76, tt ) );
+		y = seaHeight( xz ) + mix( 0.7 + own.y * loosened * 0.6 + 0.25 * sin( tt * 18.0 - channelTime * ( 1.0 - 0.6 * back ) ), - 0.9 - 0.5 * aSeed.z, under );
+		y = mix( hands, y, smoothstep( 0.0, 0.12, tt ) * smoothstep( 1.0, 0.88, tt ) );
+		formShown *= smoothstep( 1.0, 0.94, tt );
+		formTint = mix( vec3( 0.45, 1.0, 0.84 ), uWarm > 0.0 ? vec3( 1.0, 0.7, 0.55 ) : vec3( 0.66, 0.6, 1.0 ), smoothstep( 0.1, 0.7, abs( uWarm ) ) );
+		formTinted = 0.85 * back;
+	}
+	return vec3( xz.x, y, xz.y );
+}
+
+// Where a point of this seat's weave lies in its occupant's reading: the one they are at, or,
+// while they turn from another, part-way between the two, the near end first.
+vec3 readingPoint( float t ) {
+	float who = aThread.x;
+	float turn = channelOf( uTurn, who );
+	vec3 now = formPoint( t, channelOf( uAct, who ), channelOf( uAge, who ) );
+	if ( turn > 0.999 ) return now;
+	float shownNow = formShown;
+	vec3 tintNow = formTint;
+	float tintedNow = formTinted;
+	vec3 was = formPoint( t, channelOf( uWas, who ), 60.0 );
+	float tt = clamp( t / 0.7, 0.0, 1.0 );
+	float gone = turned( tt, turn * 1.6 );
+	formShown = mix( formShown, shownNow, gone );
+	formTint = mix( formTint, tintNow, gone );
+	formTinted = mix( formTinted, tintedNow, gone );
+	formPush = max( formPush, pushed( tt, turn * 1.6 ) );
+	formGoing = max( formGoing, sin( 3.14159 * turn ) );
+	// The turn itself is a curve (the owner's): a point does not go straight from its old place to
+	// its new one. It is drawn down and in, towards the water ahead of the boat, and goes out
+	// again from there: which is also where the one turning it puts their strength.
+	float bearing = channelOf( uBearing, who );
+	vec2 low = channelBoat + vec2( ( who - 1.5 ) * 1.5, 0.0 ) + vec2( sin( bearing ), - cos( bearing ) ) * ( 18.0 + 95.0 * tt );
+	vec3 by = mix( 0.5 * ( was + now ), vec3( low.x, 2.0, low.y ), 0.6 );
+	return arced( was, by, now, gone );
 }
 
 vec3 threadPoint( float t ) {
@@ -219,13 +401,39 @@ vec3 threadPoint( float t ) {
 	// go down into the water of each trough, so the weaving is seen entering wave after wave.
 	float crest = clamp( seaUnder / max( 0.25 * channelSea.y, 0.1 ), - 1.0, 1.0 );
 	low = mix( low, 0.2 + 0.7 * crest, channelControl * smoothstep( 6.0, 20.0, ahead ) );
+	// Healing (the owner's): linked, the one flow does not run on to the horizon. A little way out
+	// it sinks into the sea, each filament to its own depth, and is lost to sight in the water.
+	low = mix( low, - 0.8 - 0.012 * ahead - 2.5 * aSeed.z, channelHeal * smoothstep( 70.0, 150.0, ahead ) );
 	float height = mix( cameraPosition.y - 1.2, seaUnder + low, smoothstep( - 2.0, 14.0, ahead ) );
-	return vec3( p.x, height, p.y );
+	formShown = 1.0;
+	formTinted = 0.0;
+	vec3 flowing = vec3( p.x, height, p.y );
+	float tt = clamp( t / 0.7, 0.0, 1.0 );
+	formWeight = uToReading > 0.5 ? turned( tt, uFront ) : 1.0 - turned( tt, uFront );
+	formPush = pushed( tt, uFront );
+	formGoing = sin( 3.14159 * clamp( uFront / 1.6, 0.0, 1.0 ) );
+	if ( formWeight > 0.001 ) {
+		// (Between the flow and a reading the way is a curve too: it keeps low over the water for
+		// the first of it and rises late, and coming back it drops early and runs in low.)
+		vec3 reading = readingPoint( t );
+		vec3 by = vec3( mix( flowing.xz, reading.xz, 0.5 ), mix( flowing.y, reading.y, 0.12 ) ).xzy;
+		return arced( flowing, by, reading, formWeight );
+	}
+	return flowing;
 }
 
 void main() {
 	mat4 viewProjection = projectionMatrix * viewMatrix;
 	vec3 here = threadPoint( aT );
+	// (atReading: this point's own share of its reading's form, which is not the same all along
+	// a weave while it turns.)
+	float atReading = formWeight;
+	float push = formPush;
+	float going = formGoing;
+	// (The force of a turn shows what is near the boat, which a settled reading leaves faint.)
+	float shown = max( formShown, 0.6 * push );
+	vec3 found = formTint;
+	float finding = formTinted * atReading;
 	vec4 clip = viewProjection * vec4( here, 1.0 );
 	// (Soft only where it is seen against the sky; against the sea it keeps its fine, sharp line.)
 	float soften = uSoften * againstSky( here );
@@ -236,11 +444,15 @@ void main() {
 	// (Lingering, each filament is broad and soft: a blur, not a line.)
 	float lingering = channelPresence( aThread.x, aheadAt( aT ) ).y;
 	// (By day each filament has room beside it for its shade: see the fragment shader.)
-	vWide = 1.0 + 2.0 * uDay * soften * ( 1.0 - aSoft );
-	vShade = uDay * soften;
+	vWide = 1.0 + 1.6 * uDay * ( 1.0 - aSoft );
+	vShade = uDay;
 	// (A hair of colour needs a pixel and a half to be seen at all; a hair of light does not.)
 	float body = mix( 1.0, max( 1.0, 2.5 / uPixelRatio ), uDay * ( 1.0 - aSoft ) );
-	gl_Position = ribbonPosition( clip, clipAhead, aSide, body * vWide * aThread.w * ( 1.0 + 4.0 * lingering + 3.0 * soften * ( 1.0 - aSoft ) ) );
+	// (A reading by night is drawn broad and soft, as it is against the day sky: hair-fine lines
+	// spread over so much dark could not be seen at all.)
+	// (Not by the boat, where a broad ribbon so close to the eye is a bar of light.)
+	float nightReading = atReading * ( 1.0 - uDay ) * ( 1.0 - aSoft ) * smoothstep( 0.1, 0.45, aT / 0.7 );
+	gl_Position = ribbonPosition( clip, clipAhead, aSide, body * vWide * aThread.w * ( 1.0 + 4.0 * lingering + 3.0 * soften * ( 1.0 - aSoft ) + 3.5 * nightReading ) );
 
 	float ahead = max( aheadAt( aT ), 0.0 );
 	float q = log( ahead + 12.0 );
@@ -280,7 +492,8 @@ void main() {
 	int element = int( aKind.w + 0.5 );
 	// By day they weave akasha, air and water, for the good of the sea and the sky (the owner's):
 	// each their own while they work apart, all three together in the flow when they link.
-	if ( uDay > 0.5 ) {
+	float tendingNow = clamp( channelReading + channelHeal, 0.0, 1.0 );
+	if ( uDay > 0.5 || tendingNow > 0.5 ) {
 		int third = element - 3 * ( element / 3 );
 		element = channelLink > 0.5 ? ( third == 0 ? 0 : third == 1 ? 1 : 4 ) : int( channelOf( uSeatElement, aThread.x ) + 0.5 );
 	}
@@ -299,6 +512,13 @@ void main() {
 	// akasha a warm pearl.
 	vec3 byDay = element == 4 ? vec3( 0.2, 0.74, 0.76 ) : element == 1 ? vec3( 0.42, 0.62, 1.0 ) : vec3( 1.0, 0.95, 0.85 );
 	vTint = mix( vTint, mix( byDay, vTint, 0.25 + 0.3 * leaning ), uDay );
+	// By night, tending, the light of each leans to its element's colour.
+	// (The same colour as its sheath by day, at its fullest and then paled.)
+	vec3 dye = uSheath[ element == 4 ? 1 : element == 1 ? 0 : 2 ];
+	vec3 byNight = mix( vec3( 1.0 ), dye / max( max( dye.r, dye.g ), max( dye.b, 0.001 ) ), 0.62 );
+	vTint = mix( vTint, byNight, 0.85 * tendingNow * ( 1.0 - uDay ) );
+	// A reading takes the colour of what it finds.
+	vTint = mix( vTint, found, finding );
 	// Fainter all the way down the dive, and gone before the horizon: they must not gather
 	// into a light there.
 	// (Driven hard there are more filaments alight at once, so each is drawn a little fainter,
@@ -306,25 +526,58 @@ void main() {
 	vAlpha = uStrength * aKind.x * ( 1.0 - 0.4 * channelSurge ) * lit * ( 0.55 + 1.1 * channelPulse( aThread.x, ahead ) ) * smoothstep( 0.0, 0.05, aT )
 		* ( 1.0 - smoothstep( 0.7, 1.0, channelWay( ahead ) ) * ( 1.0 - 0.8 * lingering ) ) / ( 1.0 + ahead / 1500.0 ) / ( 1.0 + 2.0 * lingering ) / ( 1.0 + 1.6 * soften );
 	vEdge = aSide;
-	vSoft = max( aSoft, max( lingering, 0.9 * soften ) );
+	vSoft = max( aSoft, max( lingering, max( 0.9 * soften, 0.85 * nightReading ) ) );
 	// The strongest's own weaves show white against anything. By day they are not thinned away
 	// with the rest, or there would be nothing to turn the sky white with.
 	vWhite = aThread.x > ${STRONGEST - 0.5} && aThread.x < ${STRONGEST + 0.5} ? 1.0 : 0.0;
+	vSheath = mix( element == 4 ? uSheath[ 1 ] : element == 1 ? uSheath[ 0 ] : uSheath[ 2 ], uSheath[ 3 ], vWhite );
 	vAlpha *= mix( 1.0, 1.0 + 0.7 * soften, vWhite * ( 1.0 - aSoft ) );
 	// By day the others' weaves are colour, not light, and colour needs more of itself to be seen.
 	vAlpha *= mix( 1.0, ${DAY_BODY}, uDay * ( 1.0 - vWhite ) );
 	// By day it is gone well before the horizon: pale colour gathering there shows as glints.
-	vAlpha *= 1.0 - uDay * smoothstep( 0.3, 0.7, channelWay( ahead ) );
+	vAlpha *= 1.0 - uDay * ( 1.0 - atReading ) * smoothstep( 0.3, 0.7, channelWay( ahead ) );
+	// At a reading, only as much of the filament as the reading's form has.
+	vAlpha *= mix( 1.0, shown * ( 1.0 - smoothstep( 0.66, 0.7, aT ) ), atReading );
+	// (And up against the day sky a reading is given more of itself: spread thin over all that
+	// air it was hardly there.)
+	vAlpha *= 1.0 + 1.2 * atReading * soften * uDay;
+	// (By night too: its filaments are spread over far more dark than a tress's are.)
+	vAlpha = min( vAlpha * ( 1.0 + 7.0 * atReading * ( 1.0 - uDay ) ), mix( 4.0, 0.5, atReading * ( 1.0 - uDay ) ) );
+	// Turning, they put more into it: most by the boat, where the turning is done, and along the
+	// bend as it runs out.
+	vAlpha *= 1.0 + 1.1 * push * ( 0.3 + 0.7 * uDay );
+	// (By night a weave in mid-turn has its filaments lying on one another, and light on light
+	// adds up to a glare: so each is drawn much fainter while the turn lasts.)
+	vAlpha *= 1.0 - 0.65 * ( 1.0 - uDay ) * going;
+	// (By night, never more than a soft glow, however the turn is pressed.)
+	vAlpha = min( vAlpha, mix( 4.0, mix( 0.95, 0.75, atReading ), ( 1.0 - uDay ) * clamp( channelReading + channelHeal, 0.0, 1.0 ) ) );
+	// (By night the healing flow is given more light: as colour and not white it carries less.)
+	vAlpha *= 1.0 + 1.4 * channelHeal * ( 1.0 - uDay );
+	// Healing, it is gone where it has sunk.
+	vAlpha *= 1.0 - channelHeal * smoothstep( 130.0, 240.0, ahead );
+	// (In a storm by day the linked flow is thrown wide over the waves; as colour it is far too much.)
+	vAlpha *= 1.0 - 0.65 * uDay * channelControl;
 	// (Not the veils: a broad veil of colour lies on the day sea as a stain.)
 	vAlpha *= 1.0 - 0.8 * uDay * step( 0.9, aSoft );
 }
 `;
 
+// The elements' colours (the owner, 12 October: the elements had lost all distinction, and
+// agreed to try this). By day it is the sheath beside each thread that is seen, so the element is
+// put there: air a violet-blue, water a sea green, akasha a warm bronze-gold. The
+// strongest's alone is white, edged in the deep blue of the site's own bar. By night, as light,
+// each leans to a paler colour of the same family.
+// (Air is not the sky's own blue, which cannot be seen against the sky: it leans to violet.)
+// (They are uniforms, uSheath, in this order, so that the owner can change them on the page:
+// /?colours shows a strip of four swatches, and the choice is kept in the address.)
+export const ELEMENT_COLOURS = { air: "#9e7bf3", water: "#00b0a2", akasha: "#e0b065", strongest: "#0050cb" };
+export type ElementColours = typeof ELEMENT_COLOURS;
+
 // By day: how much more of itself a weave of colour needs than one of light, how deep that
 // colour is against white, and how strong the shade beside each filament.
 const DAY_BODY = "1.8";
 const DAY_TONE = "0.6";
-const DAY_SHADE = "0.7";
+const DAY_SHADE = "1.6";
 
 const fragmentShader = /* glsl */ `
 uniform float uGain;
@@ -338,6 +591,7 @@ varying float vSoft;
 varying float vWhite;
 varying float vWide;
 varying float vShade;
+varying vec3 vSheath;
 
 void main() {
 	// A filament has a hard edge, softened by no more than it takes to stop it shimmering.
@@ -363,15 +617,21 @@ void main() {
 	// never quite white (white is the strongest's alone). On the sea they lie over water their
 	// own work has cleared and deepened (channelBalm in gerstner-waves.ts), and show against that.
 	vec3 hue = vTint / max( max( vTint.r, vTint.g ), max( vTint.b, 0.001 ) );
-	vec3 body = mix( mix( vec3( 1.0 ), hue * hue, ${DAY_TONE} ) * 0.94, pale, vWhite ) * uWhite;
+	// (The thread itself is a pale tint of its element's colour, leaning to whatever it has found:
+	// where many lie together, as in the healing flow, there is no room for sheaths, and the
+	// threads must carry the colour themselves.)
+	vec3 body = mix( mix( mix( vec3( 1.0 ), vSheath, 0.42 ), hue * hue, 0.4 ) * 0.96, pale, vWhite ) * uWhite;
 	float solid = max( vWhite, uDay );
 	vec3 colour = mix( gl_FragColor.rgb, body, solid ) * amount;
 	float cover = amount * solid;
-	// Against the day sky there is no such help, and pale on pale is nothing. There each filament
-	// has a shade beside it, soft and blue, wider than itself: the air about a weave gives a
-	// little of its light to it.
-	float shade = vShade * ${DAY_SHADE} * clamp( vAlpha, 0.0, 1.0 ) * pow( max( 1.0 - vEdge * vEdge, 0.0 ), 1.5 ) * ( 1.0 - cover );
-	colour += vec3( 0.16, 0.3, 0.62 ) * 0.5 * uWhite * shade;
+	// Pale on pale is nothing (the owner: "white on white is ugly"), and the day sea and sky are
+	// both pale. So by day every filament is two things: its pale thread, and close on both sides
+	// of it a sheath of deeper colour, its element's. It is the sheath that is seen against the
+	// sky and the glare, and the thread against deep water.
+	float beside = pow( max( 1.0 - vEdge * vEdge, 0.0 ), mix( 0.6, 1.5, vSoft ) );
+	float shade = vShade * clamp( ${DAY_SHADE} * vAlpha, 0.0, 0.85 ) * beside * ( 1.0 - cover );
+	vec3 deep = vSheath;
+	colour += deep * uWhite * shade;
 	cover += shade;
 	gl_FragColor = vec4( colour, cover );
 }
@@ -443,6 +703,8 @@ uniform float uSoften;
 uniform float uDay;
 varying float vWide;
 varying float vShade;
+varying vec3 vSheath;
+uniform vec3 uSheath[ 4 ];
 // 1 when it is the strongest's own weave.
 uniform float uOwn;
 // The real surface current across the view, and the real wind across it now (both -1..1, to
@@ -570,8 +832,8 @@ void main() {
 	float loose = uTail < 1.09 ? smoothstep( uTail - 0.2, uTail, aT ) : 0.0;
 	float inHand = 1.0 - smoothstep( uHead - 0.05, uHead, aT );
 	float lingering = loose * uFade * ( 1.0 - inHand );
-	vWide = 1.0 + 2.0 * uDay * soften * ( 1.0 - aSoft );
-	vShade = uDay * soften;
+	vWide = 1.0 + 1.6 * uDay * ( 1.0 - aSoft );
+	vShade = uDay;
 	gl_Position = ribbonPosition( clip, clipAhead, aSide, vWide * aKind.w * ( 1.0 + 3.0 * lingering + 3.0 * soften * ( 1.0 - aSoft ) ) );
 
 	// The light in it runs downward: what is sensed comes back to the one who sent it.
@@ -588,6 +850,7 @@ void main() {
 	// The strongest's own weaves show white against anything. By day they are not thinned away
 	// with the rest, or there would be nothing to turn the sky white with.
 	vWhite = uOwn;
+	vSheath = mix( uSheath[ 0 ], uSheath[ 3 ], vWhite );
 	vAlpha *= mix( 1.0, 1.0 + 0.7 * soften, vWhite * ( 1.0 - aSoft ) );
 	// (Seeking into the day sky it is hardly there: nothing of theirs may hang bright in the sky.)
 	vAlpha *= 1.0 - 0.55 * uDay * ( 1.0 - vWhite );
@@ -634,6 +897,8 @@ uniform float uSoften;
 uniform float uDay;
 varying float vWide;
 varying float vShade;
+varying vec3 vSheath;
+uniform vec3 uSheath[ 4 ];
 // 1 when the strongest is sounding alone: that tress is their own weave.
 uniform float uOwn;
 // 0..1 how far they are doing it together just now.
@@ -741,8 +1006,8 @@ void main() {
 	float cut = tail < 1.5 ? 1.0 : 0.0;
 	float kept = mix( 1.0, smoothstep( tail - 0.1, tail + 0.02, aT ), cut );
 	float loose = cut * ( 1.0 - smoothstep( tail, tail + 0.3, aT ) );
-	vWide = 1.0 + 2.0 * uDay * soften;
-	vShade = uDay * soften;
+	vWide = 1.0 + 1.6 * uDay;
+	vShade = uDay;
 	gl_Position = ribbonPosition( clip, clipAhead, aSide, mix( 1.0, max( 1.0, 2.5 / uPixelRatio ), uDay ) * vWide * aBraid.w * ( 1.0 + 2.5 * loose + 3.0 * soften ) );
 	// What is felt runs along it towards the hands.
 	float lit = smoothstep( - 0.25, 0.4, drift( aT * aKind.y - uTime * aKind.z + aBraid.z * 91.0 ) );
@@ -758,6 +1023,7 @@ void main() {
 	// The strongest's own weaves show white against anything. By day they are not thinned away
 	// with the rest, or there would be nothing to turn the sky white with.
 	vWhite = uOwn * step( ${STRONGEST - 0.5}, who ) * step( who, ${STRONGEST + 0.5} );
+	vSheath = mix( uSheath[ 1 ], uSheath[ 3 ], vWhite );
 	vAlpha *= mix( 1.0, 1.0 + 0.7 * soften, vWhite );
 	// (A sounding is a light touch, by day as by night.)
 	vAlpha *= 1.0 - 0.7 * uDay;
@@ -786,6 +1052,9 @@ export interface ChannellerState {
 	showMasters?: boolean;
 	// The same for the soundings.
 	showSoundings?: boolean;
+	// And for one kind of reading (?show=pressure, wind or water), or the healing (?show=healing):
+	// all four at the front do that, and nothing else.
+	showOnly?: string;
 	// 0..1 how far it is dawn or dusk. Then all thirteen link (the owner's): it is when there is
 	// most qi in the air for them to draw upon. Nobody is below, sounding or scouting: all are in it.
 	gathering: number;
@@ -796,6 +1065,14 @@ export interface ChannellerState {
 	tending: number;
 	// 0..1 how far it is day: then their weaving is seen as colour, not as light.
 	day: number;
+	// What is really there for them to read: the pressure's trend (-1 falling fast .. 1 rising
+	// fast), and the wind as it crosses the view (to the right, away, and its force 0..1).
+	pressure: number;
+	wind: { across: number; away: number; force: number; gusty: number };
+	// The height of the sea under the boat just now, in metres, and where the swell comes from,
+	// in radians right of straight ahead.
+	heave: number;
+	swellFrom: number;
 	// How much scene light comes out as white on the screen just now (see uWhite).
 	white: number;
 	// 0..1 how far something out of the ordinary is happening in the air and in the water (`unusual`).
@@ -877,6 +1154,17 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uWhite: { value: 1 },
 		uDay: { value: 0 },
 		uSeatElement: { value: new THREE.Vector4() },
+		uSheath: { value: [new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color()] },
+		uAct: { value: new THREE.Vector4() },
+		uAge: { value: new THREE.Vector4() },
+		uWas: { value: new THREE.Vector4() },
+		uBearing: { value: new THREE.Vector4() },
+		uTurn: { value: new THREE.Vector4(1, 1, 1, 1) },
+		uToReading: { value: 0 },
+		uFront: { value: 1.6 },
+		uPressure: { value: 0 },
+		uWindView: { value: new THREE.Vector3() },
+		uWarm: { value: 0 },
 		uGain: { value: 1 },
 		uRestless: { value: new THREE.Vector4() },
 		uTints: { value: TINTS },
@@ -902,6 +1190,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		channelStream: sea.channelStream,
 		channelLink: sea.channelLink,
 		channelInto: sea.channelInto,
+		channelReading: sea.channelReading,
+		channelHeal: sea.channelHeal,
 		waves: sea.waves,
 		waveSteepness: sea.waveSteepness,
 		waveScale: sea.waveScale,
@@ -976,6 +1266,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uSeat: { value: 2.25 },
 		uOwn: { value: 0 },
 		uSoften: uniforms.uSoften,
+		uSheath: uniforms.uSheath,
 		uDay: uniforms.uDay,
 		uWhite: uniforms.uWhite,
 		uThermal: { value: 0 },
@@ -1081,6 +1372,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uStrength: { value: 1 },
 		uGain: uniforms.uGain,
 		uSoften: uniforms.uSoften,
+		uSheath: uniforms.uSheath,
 		uDay: uniforms.uDay,
 		uWhite: uniforms.uWhite,
 		uOwn: { value: 0 },
@@ -1221,49 +1513,231 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		surge += ((driven ? 1 : 0) - surge) * Math.min(1, delta / (part === "working" ? 1.6 : 0.4));
 	};
 
-	// By day (the owner's): they are on a pilgrimage, and what they channel into the ocean and the
-	// air is for its well-being. Each of those at the front tends it in their own way, with a
-	// weave of akasha, of air or of water, going their own way over the sea ahead: the one of water
-	// lies along the surface, the one of air climbs. And every 12 to 22 seconds they link and
-	// combine what they have, never twice running in the same way:
-	//   water    all of them, driven along the surface into the sea
-	//   sky      all of them, lightly, so that the one flow climbs into the air
-	//   few      two or three of them only; the others let their weaves go and begin again after
-	// How a visit opens is a matter of chance: they may be linked, about to link, or far from it,
-	// and one of them may be resting.
+	// Tending (the owner's). They are on a pilgrimage, and what they channel into the ocean and the
+	// air is for its well-being. Each at the front reads the weather in their own way, in a form of
+	// its own (see `formPoint`), and they come together to heal the water.
+	//
+	// None of it runs to a clock (the owner: "too loopy and repetitive instead of responsive to
+	// actual wind, wave, air, air pressure etc data"). What they do, how many of them, where they
+	// turn to and for how long all come from what is there:
+	//   the wind      how hard it blows, how gusty it is, and each gust as it comes
+	//   the pressure  how fast the barometer is moving; steady, it is hardly looked at
+	//   the water     each set of higher waves as it passes under the boat (from the very sea that
+	//                 is drawn), the heat between sea and air, and the current
+	// Each of these "calls" 0..1. One of them turns to whatever calls loudest for someone of their
+	// temperament that nobody else has in hand, holds it for as long as it goes on calling, and
+	// lets go when it has gone quiet. What nobody has looked at for some minutes is looked at once,
+	// briefly. When nothing calls, they sit: on a still day there may be one weave out, or none.
+	// A wind reading is sent towards where the wind comes from, a water reading towards where the
+	// swell comes from.
+	// And they heal in the sea's own time: when a set of waves has passed and the water eases,
+	// they link, and hold it until the next set is on them.
+	type Reading = "pressure" | "wind" | "water" | "rest";
+	type Kind = Exclude<Reading, "rest">;
+	const KINDS: Kind[] = ["pressure", "wind", "water"];
+	const INTO: Record<Reading, number> = { pressure: 1, wind: 0.6, water: 0, rest: 0.3 };
+	const ACT: Record<Reading, number> = { water: 0, wind: 1, pressure: 2, rest: 0 };
+	// (`act` is the form the seat's weave now has, `was` the one it is turning from and `turn`
+	// 0..1 how far that turn has gone; `bearing` is where it is sent, in radians right of ahead.)
+	const seats = [0, 1, 2, 3].map(() => ({ doing: "rest" as Reading, act: 0, was: 0, turn: 1, age: 0, until: between(0, 6), bearing: 0, heard: 0 }));
+	const into = seats.map(() => 0.3);
+	const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+	const calls: Record<Kind, number> = { pressure: 0, wind: 0, water: 0 };
+	const towards: Record<Kind, number> = { pressure: 0, wind: 0, water: 0 };
+	let clock = 0;
+	// When each was last in someone's hands. (As a visit opens, each has gone unread for a
+	// different while: so no two visits begin alike, though nothing is thrown by chance after this.)
+	const lastRead: Record<Kind, number> = { pressure: -between(20, 220), wind: -between(20, 220), water: -between(20, 220) };
+	// The sea under the boat: how far it is swinging just now against how far it has been, which
+	// tells a set of higher waves from the lull after it; and the wind against its own late average.
+	const sensed = { level: 0, short: -1, long: 0, set: 0, peak: 0, windMean: -1, gust: 0 };
+	let sinceStart = 0;
+	interface Weather {
+		heave: number;
+		energy: number;
+		need: number;
+		pressure: number;
+		wind: { across: number; away: number; force: number; gusty: number };
+		thermal: number;
+		current: number;
+		swellFrom: number;
+	}
+	const sense = (delta: number, weather: Weather) => {
+		const swing = Math.abs(weather.heave - sensed.level);
+		sensed.level += (weather.heave - sensed.level) * Math.min(1, delta / 40);
+		if (sensed.short < 0) sensed.short = sensed.long = swing;
+		sensed.short += (swing - sensed.short) * Math.min(1, delta / 5);
+		// (It learns what is usual quickly in the first seconds of a visit, then slowly.)
+		sensed.long += (swing - sensed.long) * Math.min(1, delta / Math.min(45, 4 + clock + sinceStart));
+		sinceStart += delta;
+		sensed.set = sensed.long > 0.01 ? clamp01((sensed.short / sensed.long - 0.8) / 0.5) : 0;
+		sensed.peak = Math.max(sensed.peak, sensed.set);
+		if (sensed.windMean < 0) sensed.windMean = weather.wind.force;
+		sensed.windMean += (weather.wind.force - sensed.windMean) * Math.min(1, delta / 25);
+		sensed.gust = clamp01(((weather.wind.force - sensed.windMean) / Math.max(0.06, sensed.windMean)) * 1.5);
+		// (Each call is taken in slowly, over some ten seconds: nobody turns for a single gust or a
+		// single wave, only for something that goes on.)
+		const taken = Math.min(1, delta / 10);
+		calls.wind += (clamp01(0.55 * weather.wind.force + 0.3 * weather.wind.gusty + 0.7 * sensed.gust) - calls.wind) * taken;
+		// (A barometer moving 3 hPa in three hours calls as loudly as anything can.)
+		calls.pressure += (clamp01(0.55 * Math.abs(weather.pressure)) - calls.pressure) * taken;
+		calls.water += (clamp01(0.45 * sensed.set + 0.4 * Math.abs(weather.thermal) + 0.5 * Math.abs(weather.current) + 0.25 * weather.energy) - calls.water) * taken;
+		// Where each is to be read. The wind from where it comes, if that is anywhere ahead; the
+		// water from where the swell comes; the pressure overhead.
+		const ahead = (angle: number, most: number) => (Math.abs(angle) > 1.3 ? Math.sign(angle || 1) * most : Math.max(-most, Math.min(most, angle)));
+		towards.wind = ahead(Math.atan2(-weather.wind.across, -weather.wind.away), 0.5);
+		towards.water = ahead(weather.swellFrom, 0.42);
+	};
+	// How much something not looked at for a while asks to be: nothing for the first minute, then
+	// more, up to a point.
+	const unread = (kind: Kind) => 0.4 * THREE.MathUtils.smoothstep(clock - lastRead[kind], 60, 240);
+	const NAMES: Record<Reading, string> = { pressure: "the pressure", wind: "the wind", water: "the water", rest: "" };
+	// What one of them turns to now, if anything.
+	const hears = (who: number): Reading => {
+		const temper = TEMPERS[memberAt(who)]!;
+		// (The strongest attends to all of it alike.)
+		const leaning: Record<Kind, number> = who === STRONGEST ? { pressure: 1, wind: 1, water: 1 } : { pressure: 0.35 + 0.65 * temper.air, wind: 0.3 + 0.7 * temper.air, water: 0.3 + 0.7 * temper.water };
+		let best: Reading = "rest";
+		let loudest = 0.25 - 0.09 * temper.curious;
+		for (const kind of KINDS) {
+			const taken = seats.some((seat, other) => other !== who && seat.doing === kind);
+			// (What they already have in hand they do not drop for something only a little louder.)
+			const heard = (calls[kind] + unread(kind)) * leaning[kind] * (taken ? 0.4 : 1) * (seats[who]!.doing === kind ? 1.5 : 1);
+			if (heard > loudest) [best, loudest] = [kind, heard];
+		}
+		seats[who]!.heard = best === "rest" ? 0 : loudest;
+		return best;
+	};
 	type Way = "water" | "sky" | "few";
-	const WAYS: Way[] = ["water", "sky", "few"];
-	let way: Way = WAYS[Math.floor(Math.random() * 3)]!;
-	let linked = Math.random() < 0.35;
-	let linkTurns = linked ? between(2, 7) : between(1, 16);
-	let tended = 0;
-	// Seats that are not weaving just now: resting between links, or left out of this one.
-	let sitsOut: number[] = Math.random() < 0.4 ? [[0, 1, 3][Math.floor(Math.random() * 3)]!] : [];
+	let way: Way = "water";
+	let linked = false;
+	let sinceLink = between(0, 50);
+	let linkedFor = 0;
+	// Seats left out of this link.
+	let sitsOut: number[] = [];
 	let link = 1;
-	const others = () => [0, 1, 3].sort(() => Math.random() - 0.5);
-	// (All of it unhurried, the owner's "elegant, Odyssey-like": they come together and part as
-	// a crew's oars do, in long even strokes.)
-	const tend = (delta: number, linkNow: boolean) => {
-		tended += delta;
-		if (linkNow && !linked) tended = linkTurns;
-		if (tended >= linkTurns) {
-			tended = 0;
-			linked = !linked;
+	// 0..1 how far each is at their own reading, and how far they are linked to heal.
+	let reading = 0;
+	let healing = 0;
+	// Seconds a turn takes to run from the hands to the far end of a weave: one reading to another,
+	// or all of them between their readings and the healing flow.
+	// (The owner found 6.5 seconds erratic, not intentional: a turn is a slow, meant thing.)
+	const TURNS_IN = 12;
+	let toReading = false;
+	let front = 1.6;
+	// Water they have healed stays altered for minutes (the owner's): up to four places.
+	const mended = [0, 1, 2, 3].map(() => ({ x: 0, z: 0, reach: 0, left: 0, growing: false }));
+	const flowAt = new THREE.Vector3();
+	// (All of it unhurried, the owner's "elegant, Odyssey-like".)
+	const tend = (delta: number, linkNow: boolean, weather: Weather, only?: string) => {
+		sense(delta, weather);
+		const { need, energy } = weather;
+		// Healing, in the sea's own time: a set of waves has passed and the water eases. (If the
+		// sea gives no such sign for over a minute, they do it anyway.)
+		const eased = sensed.peak > 0.6 && sensed.set < 0.3;
+		let wanted = linked;
+		if (!linked) {
+			sinceLink += delta;
+			if ((eased && sinceLink > 32) || sinceLink > 90 || linkNow) wanted = true;
+		} else {
+			linkedFor += delta;
+			// Until the next set is on them.
+			if ((linkedFor > 20 && sensed.set > 0.55) || linkedFor > 34) wanted = false;
+		}
+		// (For looking at one thing: ?show=...)
+		if (only === "healing") wanted = true;
+		else if (only === "pressure" || only === "wind" || only === "water") {
+			wanted = false;
+			seats.forEach((seat) => {
+				if (seat.act !== ACT[only]) Object.assign(seat, { doing: only, act: ACT[only], was: ACT[only], turn: 1, age: 0 });
+				seat.doing = only;
+				seat.until = clock + 5;
+			});
+		}
+		if (wanted !== linked) {
+			linked = wanted;
 			if (linked) {
-				// Linked for 5 to 8 seconds of each 12 to 22.
-				linkTurns = between(5, 8);
-				way = linkNow ? "water" : WAYS.filter((one) => one !== way)[Math.floor(Math.random() * 2)]!;
-				sitsOut = way === "few" ? others().slice(0, Math.random() < 0.5 ? 1 : 2) : [];
+				linkedFor = 0;
+				sensed.peak = 0;
+				// How they do it is the weather's too: a working sea is healed by driving the flow
+				// into it; a quiet one lightly, and by fewer of them when little is called for.
+				way = energy > 0.4 ? "water" : need < 0.3 ? "few" : "sky";
+				sitsOut = way === "few" ? [0, 1, 3].filter((who) => seats[who]!.doing === "rest").slice(0, 2) : [];
+				// Where the flow will sink into the sea, the water begins to mend: in the place of
+				// whichever of the four has faded most.
+				const place = mended.reduce((least, one) => (one.left < least.left ? one : least));
+				flowPoint(115, flowAt);
+				Object.assign(place, { x: flowAt.x, z: flowAt.z, reach: 12, left: Math.max(place.left * 0.3, 0.02), growing: true });
 			} else {
-				linkTurns = between(12, 22) - linkTurns;
-				// Parted, one of them may rest until the next link.
-				sitsOut = Math.random() < 0.35 ? others().slice(0, 1) : [];
+				sinceLink = 0;
+				mended.forEach((one) => (one.growing = false));
+				// Parting, each listens again.
+				seats.forEach((seat) => (seat.until = Math.min(seat.until, clock + 1 + 2 * Math.random())));
 			}
 		}
-		for (let who = 0; who < CHANNELLERS; who++) want[who] = !sitsOut.includes(who);
-		const driven = !linked ? 0 : way === "water" ? 0.75 : way === "sky" ? 0.18 : 0.45;
+		// (Their own time stands still while they are linked.)
+		if (!linked) clock += delta;
+		// How many weave at once is a matter of how much the sea and wind call for.
+		const room = workingFor(need);
+		seats.forEach((seat, who) => {
+			if (!linked && clock > seat.until && !only) {
+				const temper = TEMPERS[memberAt(who)]!;
+				const next = hears(who);
+				const busy = seats.filter((one) => one.doing !== "rest").length;
+				if (next === "rest" || (seat.doing === "rest" && busy >= room)) {
+					// Nothing calls them (or enough are at it already): they let go, and sit.
+					seat.doing = "rest";
+					seat.until = clock + (4 + 5 * (1 - temper.eager)) * (1.5 - 0.5 * need);
+				} else if (seat.doing === "rest") {
+					// (Not until the last one's cut end has run off the end of its form.)
+					if (tail[who]! < 0.72) return;
+					seat.doing = next;
+					seat.act = seat.was = ACT[next];
+					seat.turn = 1;
+					seat.age = 0;
+					seat.bearing = towards[next] + (who - 1.5) * 0.08;
+				} else if (next !== seat.doing && seat.age > 18) {
+					// (And never before they have given the one in hand its time.)
+					// They do not let go to take up another (the owner's): they turn the weave they
+					// have to it, steadily, from the boat outward.
+					seat.was = seat.act;
+					seat.doing = next;
+					seat.act = ACT[next];
+					seat.turn = 0;
+					seat.age = 0;
+				}
+				// They hold it for as long as it is loud: a thing only glanced at because nobody had
+				// for a while is let go again in a few breaths.
+				if (seat.doing !== "rest") seat.until = clock + (10 + 24 * clamp01(seat.heard)) * (0.7 + 0.5 * temper.stamina);
+			}
+			if (seat.doing !== "rest") {
+				lastRead[seat.doing] = clock;
+				// (Where it is sent follows the wind and the swell as they come round, slowly.)
+				seat.bearing += (towards[seat.doing] + (who - 1.5) * 0.08 - seat.bearing) * Math.min(1, delta / 16);
+			}
+			seat.age += delta;
+			seat.turn = Math.min(1, seat.turn + delta / TURNS_IN);
+			want[who] = linked ? !sitsOut.includes(who) : seat.doing !== "rest";
+			// (Eased: a weave let go keeps its way while it fades, and bends only slowly to the next.)
+			into[who] = into[who]! + (INTO[seat.doing] - into[who]!) * Math.min(1, delta / 2.5);
+		});
+		const driven = !linked ? 0 : way === "water" ? 0.45 + 0.4 * clamp01(energy * 1.5) : way === "sky" ? 0.18 : 0.4;
 		surge += (driven - surge) * Math.min(1, delta / 3.5);
 		link += ((linked ? 1 : 0) - link) * Math.min(1, delta / (linked ? 2.6 : 4.5));
+	};
+	// In words, for /?controls: who is at what, and how loudly each thing is calling.
+	const told = () =>
+		`${linked ? "linked, healing" : seats.map((seat, who) => `${TEMPERS[memberAt(who)]!.name}${seat.doing === "rest" ? " sits" : `: ${NAMES[seat.doing]}`}`).join(" · ")} | calling: wind ${Math.round(calls.wind * 100)}% · pressure ${Math.round(calls.pressure * 100)}% · water ${Math.round(calls.water * 100)}% (a set of waves ${Math.round(sensed.set * 100)}%)`;
+	// (Whether or not they are tending just now: what is mended fades in its own time, over minutes.)
+	const tendMended = (delta: number, current: number) => {
+		mended.forEach((one, i) => {
+			if (one.growing) one.left += (1 - one.left) * Math.min(1, delta / 4);
+			else one.left *= Math.exp(-delta / 100);
+			// It spreads in the water as it fades, and the current takes it.
+			one.reach = Math.min(70, one.reach + delta * (one.growing ? 3 : 0.18));
+			one.x += current * delta * 0.25;
+			sea.healed.value[i]!.set(one.x, one.z, one.reach, one.left);
+		});
 	};
 	// Now and then by day one of them seeks into the sky, to understand the wind (the owner's):
 	// for half a minute or so, and at the opening of some visits.
@@ -1472,16 +1946,19 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		return target.set(camera.position.x + side, 1.3 + rise, camera.position.z - ahead);
 	};
 
-	const update = ({ time, delta, energy, waveHeight, need, hold: slowing, current, control, scout, showMasters, showSoundings, gathering, soften, tending, day, white, unusual, below, tomorrow, thermal, strength, gain }: ChannellerState) => {
+	const update = ({ time, delta, energy, waveHeight, need, hold: slowing, current, control, scout, showMasters, showSoundings, showOnly, gathering, soften, tending, day, pressure, wind, heave, swellFrom, white, unusual, below, tomorrow, thermal, strength, gain }: ChannellerState) => {
 		// (`byDay` is from when this was only done by day. It is now every hour but dawn and dusk.)
 		const byDay = tending > 0.5 && control <= 0.05;
+		// (As it comes in, `strength` is how far it is one of the nights without a moon.)
+		const moonless = strength;
 		const linkedAll = gathering > 0.05 && !byDay;
 		const probing = tendOccurrence(delta, time, unusual);
 		if (byDay && day > 0.5 && time > skyFrom) {
 			skyUntil = time + between(25, 40);
 			skyFrom = skyUntil + between(50, 120);
 		}
-		const seeking = byDay && day > 0.5 && time < skyUntil ? 0.7 : 0;
+		// (The readers at the front now do the seeking into the day sky; the scout is the night's.)
+		const seeking = 0;
 		tendScout(delta, time, probing === "air" ? 1 : Math.max(scout * (1 - gathering), seeking), tomorrow, thermal, probing === "air");
 		const calls = { air: unusual.air, water: unusual.water, need };
 		takeTurns(delta, time, linkedAll, calls);
@@ -1502,7 +1979,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		// is still looking into it, nobody begins anything on its account.
 		const answering = responding && !probing;
 		if (answering) strength = Math.max(strength, 0.8);
-		if (byDay) strength = Math.max(strength, 0.75 * tending);
+		if (byDay) strength = Math.max(strength, (0.95 - 0.2 * day) * tending);
 		const called = strength > 0.12;
 		// By day, when the strongest has found what it is, they all link on it at once.
 		const found = wasProbing && !probing;
@@ -1515,7 +1992,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			surge = 0;
 		}
 		wasProbing = probing !== undefined;
-		if (called && byDay) tend(delta, found);
+		if (called && byDay) tend(delta, found, { heave, energy, need, pressure, wind, thermal, current, swellFrom }, showOnly);
 		else if (called && linkedAll && control <= 0.05) {
 			// Dawn or dusk: all linked, drawing on what is in the air. It is not force for the sea's
 			// sake, so the flow is not driven harder than the sea and wind call for.
@@ -1569,7 +2046,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 				}
 			}
 			if (tail[who]! < NONE) {
-				if (tail[who]! < LINGERS_FROM) tail[who] = tail[who]! + delta * CUT_TRAVELS * (0.6 + 1.2 * energy);
+				if (tail[who]! < LINGERS_FROM) tail[who] = tail[who]! + delta * CUT_TRAVELS * (0.6 + 1.2 * energy) * (1 + 1.6 * reading);
 				else {
 					tail[who] = tail[who]! + delta * 0.008;
 					linger[who] = linger[who]! + delta / LINGERS_FOR;
@@ -1596,15 +2073,43 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		// What the strongest give below is not given ahead: the linked flow is driven that much less hard.
 		sea.channelSurge.value = surge * (1 - masters);
 		// At any other hour they are one flow, as they always were.
-		if (!byDay) link += (1 - link) * Math.min(1, delta / 1.5);
+		if (!byDay) {
+			link += (1 - link) * Math.min(1, delta / 1.5);
+			mended.forEach((one) => (one.growing = false));
+		}
 		sea.channelLink.value = link;
+		// (Wholly the one or the other but for a second or two between: a weave half-way between its
+		// reading's form and the flow is neither.)
+		// (The turn between the two runs out along the weaves from the boat: see `turned`.)
+		if ((byDay && !linked) !== toReading) {
+			toReading = !toReading;
+			front = Math.max(0, 1.6 - front);
+		}
+		front = Math.min(1.6, front + (delta * 1.6) / (byDay ? TURNS_IN : 1.5));
+		uniforms.uToReading.value = toReading ? 1 : 0;
+		uniforms.uFront.value = front;
+		const apart = byDay && !linked ? 1 : 0;
+		reading += Math.sign(apart - reading) * Math.min(Math.abs(apart - reading), delta / 4);
+		const together = byDay && linked ? 1 : 0;
+		healing += Math.sign(together - healing) * Math.min(Math.abs(together - healing), delta / 4);
+		sea.channelReading.value = reading;
+		sea.channelHeal.value = healing;
+		tendMended(delta, current);
+		seats.forEach((seat, who) => {
+			uniforms.uAct.value.setComponent(who, seat.act);
+			uniforms.uWas.value.setComponent(who, seat.was);
+			uniforms.uBearing.value.setComponent(who, seat.bearing);
+			// (Eased at both ends: a turn begins and ends gently.)
+			uniforms.uTurn.value.setComponent(who, seat.turn * seat.turn * (3 - 2 * seat.turn));
+			uniforms.uAge.value.setComponent(who, seat.age);
+		});
+		uniforms.uPressure.value += (pressure - uniforms.uPressure.value) * Math.min(1, delta / 4);
+		uniforms.uWindView.value.set(wind.across, wind.away, wind.force);
+		uniforms.uWarm.value += (thermal - uniforms.uWarm.value) * Math.min(1, delta / 4);
 		for (let seat = 0; seat < CHANNELLERS; seat++) {
-			// What each weaves by day is in their temperament: the air-minded air, the water-minded
-			// water, those between the two akasha; and the strongest akasha, which is nearest white.
-			const temper = TEMPERS[memberAt(seat)]!;
-			const lean = seat === STRONGEST ? 0.5 : temper.air / (temper.air + temper.water);
-			sea.channelInto.value.setComponent(seat, lean);
-			uniforms.uSeatElement.value.setComponent(seat, lean > 0.58 ? 1 : lean < 0.42 ? 4 : 0);
+			// What each is reading: the air (pressure, wind) or the water.
+			sea.channelInto.value.setComponent(seat, into[seat]!);
+			uniforms.uSeatElement.value.setComponent(seat, seat === STRONGEST ? 0 : seats[seat]!.act > 0.5 ? 1 : 4);
 		}
 		uniforms.uDay.value = day;
 		sea.channelSea.value.set(energy, waveHeight);
@@ -1620,6 +2125,11 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		sea.channelTime.value = time;
 		// No more light than the work calls for. (A weave being cut keeps the light it had.)
 		uniforms.uStrength.value = (called ? strength : lastStrength) * (0.45 + 0.55 * Math.max(need, hold, control, gathering));
+		// (Tending by night, each alone, there is far less light out than when the four were one
+		// flow, and it could hardly be seen: so each weave is given more.)
+		// (And three times as much again on a night without a moon, when the picture is shown at so
+		// low an exposure that their light all but vanished.)
+		if (byDay) uniforms.uStrength.value *= (1 + 1.6 * (1 - day) * (1 - 0.6 * link)) * (1 + 1.2 * moonless * (1 - day));
 		uniforms.uSoften.value = soften;
 		for (let seat = 0; seat < CHANNELLERS; seat++) uniforms.uRestless.value.setComponent(seat, 1 - TEMPERS[memberAt(seat)]!.steady);
 		uniforms.uWhite.value = white;
@@ -1631,8 +2141,13 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		const pull = weaving.some(Boolean) ? Math.max(...gate) * (called ? strength : lastStrength) * (0.5 + 0.5 * Math.max(need, control, gathering)) * (1 - hold) : 0;
 		// (`anything`: 1 while any weave at all is out, the scout's and the soundings' too. The boat's
 		// lamps are only the light there is when nobody is channelling.)
-		return { working: any ? 1 : 0, anything: any || scoutMesh.visible || soundingMesh.visible ? 1 : 0, surge: surge * (1 - masters), pull, flowPoint, masters };
+		return { told, working: any ? 1 : 0, anything: any || scoutMesh.visible || soundingMesh.visible ? 1 : 0, surge: surge * (1 - masters), pull, flowPoint, masters };
 	};
 
-	return { update };
+	// The elements' colours, as the owner picks them (CSS colours, as seen on a screen).
+	const setColours = (colours: ElementColours) => {
+		[colours.air, colours.water, colours.akasha, colours.strongest].forEach((colour, i) => uniforms.uSheath.value[i]!.set(colour));
+	};
+	setColours(ELEMENT_COLOURS);
+	return { update, setColours };
 }

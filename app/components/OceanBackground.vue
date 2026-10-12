@@ -35,6 +35,19 @@ const showThunder = ref(true);
 // The dev sliders are hidden for now (the owner's request, for looks). Adding ?controls to the
 // address brings them back.
 const showControls = ref(false);
+// The elements' colours, for talking about them with the owner: /?colours shows a strip of four
+// swatches at the foot of the page. A change shows at once and is kept in the address
+// (?air=9e7bf3&water=...), so an address is a palette and can be kept, compared or sent.
+const showColours = ref(false);
+const colours = reactive({ ...ELEMENT_COLOURS });
+const COLOUR_NAMES = ["air", "water", "akasha", "strongest"] as const;
+let applyColours: ((picked: typeof ELEMENT_COLOURS) => void) | undefined;
+const pickColour = () => {
+	applyColours?.(colours);
+	const address = new URL(window.location.href);
+	for (const name of COLOUR_NAMES) address.searchParams.set(name, colours[name].slice(1));
+	window.history.replaceState(null, "", address);
+};
 // Set by the navigation's pause button (WCAG 2.2.2): while true nothing is redrawn.
 const motionPaused = useState("motion-paused", () => false);
 // The navigation can show the place, time and conditions itself, in which case the caption here is left out.
@@ -95,6 +108,8 @@ const windLabel = computed(
 // How far the weather models are apart on a figure, when they are.
 const between = (doubt?: [number, number]) => (doubt && doubt[1] - doubt[0] >= 1 ? ` (models ${doubt[0].toFixed(0)} to ${doubt[1].toFixed(0)})` : "");
 // Every live figure, for checking the picture against the data in the dev panel.
+// Who at the front is at what, and what is calling them, in words (from channellers.ts).
+const crewNow = ref("");
 const liveFigures = computed(() => {
 	const c = conditions.value;
 	if (!c) return [];
@@ -122,6 +137,8 @@ const liveFigures = computed(() => {
 		["strongest", `${Math.round((1 - strengthBelow(c, PLACE.bearing)) * 100)}% ahead (${calling(c) >= 0.6 ? "linked" : "not linked"}) · ${Math.round(strengthBelow(c, PLACE.bearing) * 100)}% below, round the boat`],
 		["tomorrow", `wind ${c.tomorrowWindSpeed.toFixed(0)} km/h from the ${compassPoint(c.tomorrowWindDirection)} · quiet enough to scout ${Math.round(quietEnoughToScout(c) * 100)}%`],
 		["air", thermal(c) > 0.1 ? `sea warmer by ${(c.seaTemperature - c.airTemperature).toFixed(1)} °C: thermals ${Math.round(thermal(c) * 100)}%` : thermal(c) < -0.1 ? `air warmer by ${(c.airTemperature - c.seaTemperature).toFixed(1)} °C: still, layered ${Math.round(-thermal(c) * 100)}%` : "sea and air alike: neither rising nor layered"],
+		["at the front", crewNow.value.split(" | ")[0] ?? ""],
+		["calling", crewNow.value.split(" | ")[1] ?? ""],
 	];
 });
 
@@ -133,6 +150,11 @@ watchEffect(() => {
 onMounted(() => {
 	const query = new URLSearchParams(window.location.search);
 	showControls.value = query.has("controls");
+	showColours.value = query.has("colours");
+	for (const name of COLOUR_NAMES) {
+		const given = query.get(name);
+		if (given && /^[0-9a-f]{6}$/i.test(given)) colours[name] = `#${given.toLowerCase()}`;
+	}
 	// For seeing another time of day without the panel: ?hour=22 (or 21.5 for half past nine).
 	if (query.has("hour")) {
 		followClock.value = false;
@@ -285,6 +307,8 @@ onMounted(() => {
 	let skyLightNow = 0;
 	// 0..1 how far they are tending the sea and the air, each in their own way, linking every so
 	// often: always (the owner's: moon or no moon), but for dawn and dusk, when all thirteen link.
+	let seaAtBoat = 0;
+	let toldAt = -1;
 	let tending = -1;
 	let tendingNow = 0;
 	// 0..1 how far it is day: then their weaving is seen as colour and not as light.
@@ -529,6 +553,8 @@ onMounted(() => {
 	const knotPosition = new THREE.Vector3(0, 250, -800);
 	const weave = createWeave(scene, camera, knotPosition);
 	const channellers = createChannellers(scene, camera, waveUniforms);
+	applyColours = channellers.setColours;
+	channellers.setColours(colours);
 	const stars = createStars(scene, camera, PLACE, planetPositions);
 	waveUniforms.weaveCentre.value.set(knotPosition.x, knotPosition.z);
 	const projected = new THREE.Vector3();
@@ -630,6 +656,7 @@ onMounted(() => {
 			// On a measured sea the viewer is on a small boat: eyes EYE_HEIGHT above the water, and
 			// carried up and down by the very waves that are drawn.
 			const surface = measuredSeaHeight(waveUniforms, camera.position.x, camera.position.z, time);
+			seaAtBoat = surface;
 			camera.position.y += (EYE_HEIGHT + surface - camera.position.y) * follow(0.2);
 		} else {
 			const swell = giantWaveHeight(camera.position.x, camera.position.z, time, surge);
@@ -698,6 +725,7 @@ onMounted(() => {
 		tending += (tendingWanted - tending) * Math.min(1, delta / 25);
 		if (day < 0) day = dayNow;
 		day += (dayNow - day) * Math.min(1, delta / 25);
+		const gustNow = 0.5 * Math.sin(time * 0.37) + 0.3 * Math.sin(time * 0.13 + 1.3) + 0.2 * Math.sin(time * 0.83 + 4);
 		const channelling = channellers.update({
 			time,
 			delta,
@@ -708,11 +736,26 @@ onMounted(() => {
 			control: controlLevel,
 			showMasters: query.get("show") === "masters",
 			showSoundings: query.get("show") === "soundings",
+			showOnly: query.get("show") ?? undefined,
 			gathering,
 			// Soft against a light sky, fine against a dark one.
 			soften: skyLight,
 			tending: tending * alive,
 			day,
+			// What is really there for them to read (a barometer moving 1.5 hPa in three hours is "fast").
+			pressure: liveOnly ? THREE.MathUtils.clamp(liveOnly.pressureTrend / 1.5, -1, 1) : 0,
+			// (The wind's force, direction and gustiness are the forecast's. When each gust comes is
+			// not in any forecast: that is made here, and its size is the real gust factor.)
+			wind: liveOnly
+				? {
+						across: Math.sin(THREE.MathUtils.degToRad(liveOnly.windDirection + 180 - PLACE.bearing)),
+						away: Math.cos(THREE.MathUtils.degToRad(liveOnly.windDirection + 180 - PLACE.bearing)),
+						force: THREE.MathUtils.clamp((liveOnly.windSpeed / 3.6 / 15) * (1 + 0.6 * gustiness * gustNow), 0, 1),
+						gusty: gustiness,
+					}
+				: { across: 1, away: 0, force: sea, gusty: 0 },
+			heave: liveOnly ? seaAtBoat : 0,
+			swellFrom: liveOnly ? THREE.MathUtils.degToRad(((liveOnly.swellDirection - PLACE.bearing + 540) % 360) - 180) : 0,
 			// Enough to stand whiter than a day sky; less at night, where little is needed to read as white.
 			white: lerp(0.5, 3.5, daylight) / steadyExposure,
 			unusual: liveOnly ? unusual(liveOnly) : NOTHING_UNUSUAL,
@@ -725,8 +768,13 @@ onMounted(() => {
 			current: liveOnly ? Math.sin(THREE.MathUtils.degToRad(liveOnly.currentDirection - PLACE.bearing)) * Math.min(1, liveOnly.currentSpeed / 3) : 0,
 			strength: Math.max(darkness, controlLevel, gathering) * alive,
 			// More light by day, when it has a bright sea to show against.
-			gain: (0.3 + 0.6 * daylight) / steadyExposure,
+			// (And more under a moon, whose light on the sea would otherwise drown it.)
+			gain: (0.3 + 0.6 * daylight + 0.6 * nightfall * (1 - darkness)) / steadyExposure,
 		});
+		if (showControls.value && Math.floor(time) !== toldAt) {
+			toldAt = Math.floor(time);
+			crewNow.value = channelling.told();
+		}
 		FLOW_DISTANCES.forEach((ahead, i) => {
 			channelling.flowPoint(ahead, flowWorld);
 			toScreen(flowWorld.x, flowWorld.y, flowWorld.z, flowScreen[i]!);
@@ -736,7 +784,8 @@ onMounted(() => {
 		waveUniforms.deepWeave.value = (0.3 * Math.max(holdLevel, 0.6 * channelling.masters) * alive) / steadyExposure;
 		waveUniforms.deepMaster.value = channelling.masters;
 		waveUniforms.channelLoss.value = lightIsLoss;
-		waveUniforms.channelBalm.value = 0.9 * channelling.working * tending * day * alive;
+		waveUniforms.channelBalm.value = 0.9 * channelling.working * tending * lerp(0.5, 1, day) * alive;
+		waveUniforms.channelBalmGlow.value = (lerp(0.012, 0.05, day) * channelling.working * tending * alive) / steadyExposure;
 		waveUniforms.channelFeed.value = channelling.working * (0.6 + 0.4 * channelling.surge) * need * darkness * (1 - controlLevel) * alive;
 		// Driven hard, the flow lights the sea more.
 		// (In the trial the flow sheds far less light on the sea.)
@@ -844,6 +893,12 @@ onBeforeUnmount(() => dispose?.());
 	</div>
 	<!-- Client only: the server's clock and time zone differ from the visitor's. -->
 	<ClientOnly>
+		<div v-if="showColours" class="fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 bg-black/80 px-3 py-2 font-mono text-sm text-white">
+			<label v-for="name in COLOUR_NAMES" :key="name" class="flex items-center gap-2">
+				<input v-model="colours[name]" type="color" class="h-7 w-9 cursor-pointer border-0 bg-transparent p-0" @input="pickColour" />
+				<span>{{ name === "strongest" ? "the strongest's edge" : name }} {{ colours[name] }}</span>
+			</label>
+		</div>
 		<div
 			v-if="showControls"
 			class="fixed top-4 right-4 z-30 grid grid-cols-[auto_12rem_auto] items-center gap-x-3 gap-y-2 rounded bg-black/50 px-3 py-2 font-mono text-sm text-white"

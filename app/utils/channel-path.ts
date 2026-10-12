@@ -39,6 +39,11 @@ uniform float channelLink;
 // For each seat, where its occupant's own weave goes when they are not linked: 0 into the water
 // (it lies along the surface), 1 into the air (it climbs), between the two for akasha.
 uniform vec4 channelInto;
+// Tending: 0..1 how far each of them is at a reading of their own (the weave is then drawn in
+// that reading's own form, see channellers.ts, and not along the lines below), and 0..1 how far
+// they are linked to heal the water: the one flow then keeps low and sinks into the sea.
+uniform float channelReading;
+uniform float channelHeal;
 
 // A weave is begun at its source, the boat, and runs out from there. When it ends it is cut off
 // at the source (the owner's rule) and is not wiped away: it has power enough of its own to go
@@ -133,7 +138,9 @@ float channelLine( float k, float ahead ) {
 	// They fan out evenly, like the strings of a lyre, and the whole fan breathes slowly wider and
 	// closer; each bends a little as it goes, in one long curve, as anything laid on moving water does.
 	float own = ( k - 1.5 ) * ( 0.12 + 0.03 * sin( channelTime * 0.045 ) )
-		+ 0.035 * sin( log( ahead + 12.0 ) * 1.6 + k * 1.7 - channelTime * 0.05 );
+		+ 0.035 * sin( log( ahead + 12.0 ) * 1.6 + k * 1.7 - channelTime * 0.05 )
+		// (One sent up to read the wind is carried aside by it, the more the higher it has gone.)
+		+ channelWind.x * 0.22 * channelOf( channelInto, k ) * ( 1.0 - channelOf( channelInto, k ) ) * 4.0 * smoothstep( 20.0, 200.0, ahead );
 	float towards = ( k - 1.5 ) * 1.5 * apart + own * ahead * apart * ( 1.0 - channelLink ) + channelFlow( ahead ) + cos( turn ) * within * ( 1.0 - apart );
 	// Holding the boat back they do not join. Each lays their tress out on the water to their own
 	// side, the four spread like the lines of a sea anchor, and the current draws them the way it runs.
@@ -149,7 +156,7 @@ float channelRise( float k, float ahead ) {
 	// Driven with their whole strength it does not climb: it keeps to the surface all the way.
 	// Each for themselves, a weave meant for the water lies along it and one meant for the air climbs.
 	return 0.06 * ( 1.0 - 0.92 * channelSurge ) * ( 1.0 - channelHold ) * ahead * pow( sin( 3.14159 * pow( channelWay( ahead ), 0.7 ) ), 1.5 )
-		* mix( 0.12 + 1.6 * channelOf( channelInto, k ), 1.0, channelLink );
+		* mix( 0.1 + 5.5 * channelOf( channelInto, k ) * channelOf( channelInto, k ), 1.0, channelLink ) * ( 1.0 - 0.9 * channelHeal );
 }
 
 // A wave of brightness that travels out along a tress, 0..1.

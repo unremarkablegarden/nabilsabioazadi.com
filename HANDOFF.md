@@ -48,13 +48,67 @@ All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerst
   strings, coming together and parting like a crew's oars. Only dawn and dusk (all thirteen
   linked) and storms are otherwise. The old night story (`tell`) is no longer reached, and the
   boat's lamps never come on now, since some weave is always out.
-- **How they tend** (`tend` in `channellers.ts`): each of the four at the
-  front tends the sea in their own way with a weave of akasha, air or water (by temperament),
-  going their own bending way over the sea; every 12 to 22 seconds they link for 5 to 8 seconds,
-  in one of three ways (all driven into the water; all lightly, climbing into the air; only two
-  or three of them). By day (sun over about 8°) weaves are drawn as pale colour, not light, and
-  the water clears to a green-blue where a weave lies (`channelBalm`); now and then one seeks
-  into the day sky. By night they are light, as before.
+- **How they tend** (`tend` and `readingPoint` in `channellers.ts`; the owner, 12 October: "it
+  should feel like there are individuals reading the weather", then: each act its own form, and
+  each tied to what is really there). Each of the four at the front does their own reading in
+  their own time, lets go (the cut runs along the form), rests a few breaths, and takes up
+  another. Who reads what is in their temperament.
+  - **Pressure**: a stem up into the air that opens level at its top and settles, like a held
+    breath. From `pressureTrend`: steady, a flat disc; falling, lower with a drooping rim and
+    greyer; rising, higher with a lifted rim and golden. 1.5 hPa in three hours counts as fast.
+  - **Wind**: a stem up at a slant whose filaments stream off the way the real wind blows, long
+    and flat in a strong wind, short and drooping in a light air, torn at their own lengths,
+    more raggedly in gusts.
+  - **Water**: out low on one side, under the surface, back on the other, loosened and in the
+    colour of what it found (`thermal`: sea warmer than air rose-gold, colder violet, alike
+    aquamarine); the current carries its far end.
+  - **Healing**: every 12 to 22 seconds they link for 6 to 9 seconds; the one flow keeps low and
+    sinks into the sea about 100 m out, and the water there turns a little bluer and glows
+    faintly, spreading and fading over some minutes after they let go (`healed`, up to four
+    places, `channelBalm`, `channelBalmGlow`).
+  - **No corners** (the owner: "too angular... in how they heave in the early step from the boat.
+    Weaves are rarely so angular"). A sky reading is cast out low and a little wide of its mark,
+    runs along over the water and comes round and up in one curve, and what it opens into at the
+    top has already begun to open before it arrives (`thrown`, `bend` in `formPoint`). Do not
+    name a GLSL variable `cast`: it is a reserved word and the shader silently fails.
+    A turn is a curve as well: a point goes from its old place to its new by way of a place low
+    over the water ahead of the boat (`arced`), never straight across.
+  - **Nothing runs to a clock** (the owner, 12 October: "too loopy and repetitive instead of
+    responsive to actual wind, wave, air, air pressure etc data"). `sense` and `hears` in
+    `channellers.ts`. Three things "call", 0..1: the wind (force, gust factor, and each gust as it
+    comes), the pressure (how fast the barometer moves; 3 hPa in three hours is full), the water
+    (each set of higher waves passing under the boat, measured from the drawn sea itself; the
+    heat between sea and air; the current). One of them turns to whatever calls loudest for their
+    temperament that nobody else has, holds it while it is loud, lets go when it is quiet. What
+    nobody has read for some minutes is glanced at once. When nothing calls they sit: on a still
+    day only the strongest weaves. How many weave at once follows `calling()`. A wind reading is
+    sent towards where the wind comes from, a water reading towards where the swell comes from.
+    They link to heal when a set of waves has passed and the water eases (or after 75 seconds
+    without such a sign), and hold it until the next set, 9 to 20 seconds. The earlier "every 12
+    to 22 seconds" is gone. Chance is used only for how long each thing has gone unread as a
+    visit opens. Not from data: the moment each gust arrives (its size is the real gust factor).
+    `/?controls` has rows "at the front" and "calling" that say who is at what and why.
+  - **Turning** (the owner: "they switch a little too quickly... the intention and force needs to
+    steadily move to the new focal point with the weavers applying more energy towards POV to
+    redirect"). Nothing switches. Three times in four a channeller does not let go at the end of a
+    reading but turns the same weave to the next one; and all four turn together between their
+    readings and the healing flow. A turn takes 12 seconds (`TURNS_IN`; 6.5 was "too erratic instead of intentional", the owner; calls are also taken in over ten seconds, nobody turns before 18 seconds on one thing, and links last 20 to 34 seconds) and runs out along the
+    weave from the boat, the near end in its new place first (`turned`), with more of the weave
+    showing near the boat and along the bend while it lasts (`pushed`). They are now apart for
+    12 to 22 seconds and linked for 8 to 11, turning included, so links begin 20 to 33 seconds
+    apart, not the 12 to 22 first asked for.
+  - To look at one alone: `/?show=pressure`, `/?show=wind`, `/?show=water`, `/?show=healing`,
+    with `&pretend=pressureTrend:-1.4`, `windSpeed:30,windGusts:42`, `seaTemperature:22`.
+- **The elements' colours** (tried 12 October with the owner's agreement, after the elements
+  had lost all distinction to earlier visibility fixes; the README's older note that the owner
+  did not want them strongly coloured is superseded for now). By day every weave is a pale
+  thread with a deeper sheath on both sides (the owner: "white on white is ugly"), and the
+  sheath and a tint of the thread carry the element: air a violet-blue (sky blue cannot be seen
+  against the sky), water a sea green, akasha a bronze-gold; the strongest's alone is white,
+  edged in the deep blue of the site's bar (`SHEATH_*` in `channellers.ts`). A sky reading is
+  air, a water reading water; the healing flow braids all three with the strongest's white. On
+  top of that a reading's thread takes the colour of what it finds. By night the same colours,
+  paler, as light.
 - **No two visits open alike**: who of the twelve is at the front, whether they are linked, who
   is resting, how far each weave has run, and whether a sounding or a seeking is about to begin
   are all drawn by chance as the page opens.
@@ -92,15 +146,19 @@ All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerst
 | `/?pretend=windTrend:20` | weather that is not there (names as in `SeaConditions`); this one is an unusual wind |
 | `/?pretend=waveTrend:1.2` | an unusual sea |
 | `/?show=soundings`, `/?show=masters` | a sounding, or the strongest's deep weaving, at once |
+| `/?colours` | a strip of four swatches at the foot of the page (air, water, akasha, the strongest's edge); a change shows at once and is kept in the address as `&air=9e7bf3&water=00b0a2&akasha=e0b065&strongest=0050cb`, so an address is a palette |
+| `/?show=pressure`, `wind`, `water`, `healing` | all four at the front at that one thing |
 | `/?light=0..1` | the "light is loss" dial (default 0.5; the owner has not chosen a value) |
 | `/?look=september` | September's look |
 
 ## Unfinished, in the order the owner last cared about
 
-1. **Tending** (reworked 12 October, see the rules above). Still wrong: by day the parted weaves
-   are sometimes too faint to see on an ordinary (1x) screen and the linked flow is bold white;
-   all four look white, their element colours hardly show; soundings by day and under a moon
-   stand out of the water as small hoops; never watched in motion.
+1. **Tending** (reworked through 12 October, see the rules above). Still wrong: all forms are
+   soft and blurred against the sky, so the wind reading's tearing cannot be seen; the middle
+   of a water reading is simply out of sight, not seen going under; the strongest's weave is not
+   set apart by day; `/?show=wind` and `/?show=pressure` showed nothing on a moonless night
+   though the ordinary night does (not understood); storm by day was toned down blind; soundings
+   stand out of the water as small hoops; nothing says who is doing what; never watched in motion.
 2. **Dusk**: the strongest's white weave is bold there; ask whether it is too much.
 3. **The linked flow at high need is very bright**, against "strong weaves do not equal brightness".
 4. **No visible drawing-in of qi** at dawn and dusk; the owner may want one.

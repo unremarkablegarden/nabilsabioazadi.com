@@ -256,7 +256,14 @@ export interface GerstnerUniforms {
 	channelLink: THREE.IUniform<number>;
 	channelInto: THREE.IUniform<THREE.Vector4>;
 	// 0..1 how far the water shows the good their weaving does it by day: clearer where a weave lies.
+	channelReading: THREE.IUniform<number>;
+	channelHeal: THREE.IUniform<number>;
+	// Water they have healed, which stays altered for minutes: for each of four places, world x
+	// and z, how far it has spread in metres, and 0..1 how much of it is left.
+	healed: THREE.IUniform<THREE.Vector4[]>;
 	channelBalm: THREE.IUniform<number>;
+	// The glow of healed water from within, before tone mapping.
+	channelBalmGlow: THREE.IUniform<number>;
 	// The boat's electric lamps on the water round it, before tone mapping. 0 is unlit.
 	boatLamp: THREE.IUniform<number>;
 	channelLight: THREE.IUniform<number>;
@@ -452,6 +459,8 @@ uniform float freshFlow;
 uniform float internalWaves;
 uniform float channelLight;
 uniform float channelBalm;
+uniform vec4 healed[ 4 ];
+uniform float channelBalmGlow;
 uniform float boatLamp;
 uniform float deepWeave;
 uniform float deepMaster;
@@ -553,7 +562,8 @@ const fragmentFoam = /* glsl */ `
 	// the water: bright in a band beneath it, fainter in a wide pool about it, and coming from the
 	// side, so the faces of the waves that are turned to it show and the far faces stay dark.
 	// Water gives light back from within where it is not acting as a mirror; foam gives back most.
-	if ( channelLight > 0.0 || channelBalm > 0.0 ) {
+	float mended = 0.0;
+	if ( channelLight > 0.0 || channelBalm > 0.0 || channelBalmGlow > 0.0 ) {
 		float ahead = channelBoat.y - worldPosition.z;
 		if ( ahead > - 6.0 ) {
 			float out_ = max( ahead, 0.0 );
@@ -571,15 +581,25 @@ const fragmentFoam = /* glsl */ `
 				// (A wider reach than its light: what is done to the water spreads in it.)
 				tended += exp( - off * off / ( 25.0 * reach * reach ) ) * channelStrength( k ) * channelShown( k, out_ ) / ( 1.0 + climbed / 5.0 );
 			}
-			// By day there is no light of theirs to see on the sea. What shows is the good it does
-			// (the owner's: they channel into the ocean for its well-being): where a weave lies along
-			// the water, the water is a little clearer and greener-blue, as over clean sand.
-			tended = min( tended, 1.0 ) * channelBalm * smoothstep( 2.0, 14.0, ahead ) * ( 1.0 - smoothstep( 0.55, 0.9, channelWay( out_ ) ) );
-			outgoingLight *= mix( vec3( 1.0 ), vec3( 0.5, 1.2, 1.12 ), tended * ( 1.0 - foamMask ) * ( 1.0 - 0.6 * reflectance ) );
+			// (While each is at a reading of their own there is no flow on the sea to light it.)
+			lit *= 1.0 - 0.85 * channelReading;
+			tended = 0.3 * min( tended, 1.0 ) * channelHeal * smoothstep( 2.0, 14.0, ahead ) * ( 1.0 - smoothstep( 120.0, 220.0, out_ ) );
 			lit *= smoothstep( - 6.0, 5.0, ahead ) / ( 1.0 + out_ / 500.0 );
 			outgoingLight += vec3( 0.74, 0.92, 1.0 ) * lit * channelLight * ( 0.3 + 0.7 * ( 1.0 - reflectance ) + 1.5 * foamMask );
+			mended += tended;
 		}
 	}
+	// Where they have healed the water it shows (the owner's), and goes on showing for minutes
+	// after they have let go: it is a little clearer and bluer there, and glows faintly from within.
+	for ( int i = 0; i < 4; i ++ ) {
+		vec2 off = worldPosition.xz - healed[ i ].xy;
+		// (Not a round stain: its edge is drawn out along the waves' own faces.)
+		float reach = healed[ i ].z * ( 1.0 + 0.25 * surfaceNormal.x + 0.25 * surfaceNormal.z );
+		mended += healed[ i ].w * exp( - dot( off, off ) / max( reach * reach, 1.0 ) );
+	}
+	mended = min( mended, 1.0 ) * ( 1.0 - foamMask );
+	outgoingLight *= mix( vec3( 1.0 ), vec3( 0.46, 0.94, 1.34 ), channelBalm * mended * ( 1.0 - 0.6 * reflectance ) );
+	outgoingLight += vec3( 0.03, 0.2, 0.75 ) * channelBalmGlow * mended * ( 1.0 - reflectance );
 
 	// Slowing the boat is the work of the weaker channellers (the owner's). They do not weave out
 	// towards Hawai'i but down: plaits laid in rings close round the boat, just under the level of
@@ -725,7 +745,11 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		channelStream: { value: 0 },
 		channelLink: { value: 1 },
 		channelInto: { value: new THREE.Vector4(0.5, 0.5, 0.5, 0.5) },
+		channelReading: { value: 0 },
+		channelHeal: { value: 0 },
+		healed: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
 		channelBalm: { value: 0 },
+		channelBalmGlow: { value: 0 },
 		boatLamp: { value: 0 },
 		channelLight: { value: 0 },
 		foam: { value: 0 },
