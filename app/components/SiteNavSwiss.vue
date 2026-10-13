@@ -87,11 +87,33 @@ const figure = computed(() => (route.query.figure as string) || "sky");
 //   lines   as it was, for comparison
 const MENUS = ["within", "within-caps", "within-left", "within-name", "field", "clear", "seal", "lines"];
 const menu = computed(() => (MENUS.includes(route.query.menu as string) ? (route.query.menu as string) : "within"));
+// How the name is set where the links are centred. The owner chose the stack (12 October 2026):
+// three centred lines in the links' serif, large and set solid, larger than the links, so the
+// name is the title. They then asked that Azadi be marked as the family name, apart from the
+// two given names. A first round of ways to do it was turned down, and rightly: it dressed the
+// family name up (capitals made smaller, a text face blown up to display size) and left the
+// real fault alone, which is that three equal lines break the name by its shape and not by its
+// sense. So, by the book: break where the sense breaks; let lines differ plainly in length;
+// space capitals out and never the lower case; use each face at the size it was drawn for.
+// ?name= tries them (and opens the drawer, to save a press):
+//   stack   as first chosen: three equal lines, the middle name in italic
+//   apart   the stack kept: the given names in italic and close together, the family name upright and a little apart
+//   sense   two lines, as the mark itself has it (N S over A): the given names in italic on one long line, the family name upright beneath (the owner's choice, and the default)
+//   grid    each of the three names has five letters: capitals on a grid of five by three, a hairline over the family name
+//   credit  one small line in the reading serif, the family name in its true small capitals: how a bibliography marks a surname
+const NAMES = ["stack", "apart", "sense", "grid", "credit"];
+const name = computed(() => (NAMES.includes(route.query.name as string) ? (route.query.name as string) : "sense"));
+const NAME = [
+	{ word: "Nabil", part: "given" },
+	{ word: "Sabio", part: "given" },
+	{ word: "Azadi", part: "family" },
+];
 // The swell, as points down the drawer's right edge.
 const wave = `polygon(0 0, ${Array.from({ length: 41 }, (_, i) => `${(89 + 10 * Math.sin((i / 40) * Math.PI * 2.6 + 0.6)).toFixed(1)}% ${(i * 2.5).toFixed(1)}%`).join(", ")}, 0 100%)`;
 const menuButton = ref<HTMLButtonElement>();
 onMounted(() => {
 	if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) paused.value = true;
+	if (route.query.name) open.value = true;
 });
 // A page that is itself a panel over the picture (About) says so here. Closing the drawer on
 // such a page goes back to the main screen, the picture alone: to the owner the drawer and the
@@ -173,12 +195,17 @@ const links = [
 
 				<!-- The drawer comes straight after its button, so the keyboard goes from one into the other. -->
 				<Transition name="tide" @after-enter="settled" @after-leave="settled" @enter-cancelled="settled" @leave-cancelled="settled">
-				<div v-show="open" id="menu" class="slab" :data-shape="shape" :data-menu="menu" :style="shape === 'wave' ? { clipPath: wave } : undefined">
+				<div v-show="open" id="menu" class="slab" :data-shape="shape" :data-menu="menu" :data-name="name" :style="shape === 'wave' ? { clipPath: wave } : undefined">
 					<!-- Decoration only: a faint figure behind the text. ?figure= tries the others (see MenuFigure). -->
 					<MenuFigure class="trine" :kind="figure" :ring="menu !== 'field'" />
 					<div class="body">
 			<div class="row">
-				<p class="name">Nabil<br /> Sabio<br /> Azadi</p>
+				<!-- The grid sets the name letter by letter, so there it is drawn for the eye and said once, whole, for screen readers. -->
+				<p v-if="name === 'grid'" class="name">
+					<span class="said">Nabil Sabio Azadi</span>
+					<span class="set" aria-hidden="true"><span v-for="n in NAME" :key="n.word" :class="n.part"><i v-for="(letter, k) in n.word" :key="k">{{ letter }}</i></span></span>
+				</p>
+				<p v-else class="name"><span class="given">Nabil</span><br /> <span class="given">Sabio</span><br /> <span class="family">Azadi</span></p>
 			</div>
 
 			<nav aria-label="Main">
@@ -545,7 +572,10 @@ const links = [
 	--ring: 26rem;
 }
 .slab[data-menu^="within"] .trine:not([data-kind="trine"]) {
-	top: 12.5rem;
+	/* Below the name, whatever its height: the drawer's margin, the name (--name), and the
+	   room the list of links leaves above itself. The circle is not in the run of the text,
+	   so it has to be told; without this a taller name pushed the links down out of it. */
+	top: calc(6rem + var(--name, 6.5rem));
 	left: calc(var(--unit) * 6 + (20.5rem - var(--ring)) / 2);
 	width: var(--ring);
 	opacity: 0.45;
@@ -581,6 +611,103 @@ const links = [
 	text-decoration: underline;
 	text-decoration-thickness: 1px;
 	text-underline-offset: 0.2em;
+}
+
+/* The name, where the links are centred. Hung on the grid's second line in the light sans and
+   broken over three lines, it stood beside the centred serif links without belonging to them
+   (the owner: it "ruins the menu"). Here it is on the links' own axis, straight under the signed
+   mark, in the links' serif, large and set solid: the title, and the links what follows it.
+   ?name= marks the family name in different ways (see NAMES above). */
+.slab:is([data-menu="within"], [data-menu="within-caps"]) .body > .row:first-child {
+	display: block;
+	text-align: center;
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"]) .name {
+	font: 300 3.5rem/1 "Lyon Display", "Lyon Text", Georgia, serif;
+	letter-spacing: 0;
+}
+/* The height of each setting of the name, for the circle to hang below (see --name above). */
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="stack"] {
+	--name: 10.5rem;
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="apart"] {
+	--name: 11.5rem;
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="sense"] {
+	--name: 8.65rem;
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="grid"] {
+	--name: 11.65rem;
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="credit"] {
+	--name: 2.05rem;
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="stack"] .given:nth-of-type(2) {
+	font-style: italic;
+}
+/* Apart: the given names are one thing, in the italic, and the family name another, upright
+   and with a little more room above it than there is between the two of them. */
+.slab:is([data-menu="within"], [data-menu="within-caps"]):is([data-name="apart"], [data-name="sense"]) .given {
+	font-style: italic;
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="apart"] .family {
+	display: inline-block;
+	margin-top: 0.28em;
+}
+/* Sense: the line breaks once, where the name does. A long line over a short one. The size
+   gives way on a narrow screen so the long line never has to turn. */
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="sense"] .name {
+	font-size: min(4rem, 17vw);
+	line-height: 1.08;
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="sense"] .name br:first-of-type {
+	display: none;
+}
+/* Grid: capitals, each in a cell of its own, so the fifteen letters stand in five columns.
+   The hairline is the one the drawer uses everywhere to part one thing from the next. */
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="grid"] .name {
+	font-size: min(2.5rem, 10.5vw);
+	line-height: 1.4;
+	text-transform: uppercase;
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="grid"] .set {
+	display: inline-block;
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="grid"] .set > span {
+	display: block;
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="grid"] .set i {
+	display: inline-block;
+	width: 1.2em;
+	font-style: normal;
+	text-align: center;
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="grid"] .family {
+	margin-top: 0.22em;
+	padding-top: 0.22em;
+	border-top: 1px solid rgb(180 192 179 / 0.45);
+}
+.said {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+/* Credit: the reading serif at a reading size, where its small capitals belong. The family
+   name keeps its capital A; the small capitals after it are spaced out a little, as they ask. */
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="credit"] .name {
+	font: 400 1.375rem/1.5 "Lyon Text", Georgia, "Times New Roman", serif;
+	letter-spacing: 0.01em;
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="credit"] .name br {
+	display: none;
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"])[data-name="credit"] .family {
+	font-variant-caps: small-caps;
+	letter-spacing: 0.07em;
+	margin-right: -0.07em;
 }
 
 /* Capitals: the links as small capitals in the sans, set wide: the voice of a chart's labels. */
@@ -941,6 +1068,15 @@ input:focus-visible {
 	}
 	.title {
 		font-size: 2.5rem;
+	}
+	/* The links' square was a fixed width hung from the left, so on any screen but one its
+	   middle was not the screen's: the links sat a little left of the mark and the name. Here it
+	   takes the drawer's own width, and all three share one axis. */
+	.slab[data-menu="within"] ol,
+	.slab[data-menu="within-caps"] ol,
+	.slab[data-menu="within-name"] ol {
+		width: auto;
+		margin-left: 0;
 	}
 }
 </style>
