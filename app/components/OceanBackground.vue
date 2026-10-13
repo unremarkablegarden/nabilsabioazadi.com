@@ -324,9 +324,11 @@ onMounted(() => {
 	// 0..1 how far it is day: then their weaving is seen as colour and not as light.
 	let dayNow = 0;
 	let day = -1;
-	// The moment shown, and 0..1 how far the stars are out at it.
+	// The moment shown, 0..1 how much of the stars' light the cloud lets through at it, and the
+	// magnitude of the faintest star the sky then leaves to be seen.
 	let shownMoment = new Date();
 	let starsOut = 0;
+	let faintestStar = -6;
 	let milkyWayOut = 0;
 	const updateEnvironment = ([hour, sea, sky]: [number, number, number]) => {
 		const when = dateAtBoatHour(hour, pretendDate.value ?? new Date());
@@ -363,9 +365,11 @@ onMounted(() => {
 		tendingNow = staged ? 0 : 1 - gatheringNow;
 		dayNow = staged ? 0 : THREE.MathUtils.smoothstep(sunElevation, 3, 8);
 
-		// Stars need a dark sky: they are drowned by a bright moon and hidden by cloud. (The cloud
-		// here dims them all alike; it cannot yet hide the ones behind each cloud.)
-		starsOut = staged ? 0 : night * (1 - 0.6 * moonlight) * (1 - sky ** 0.8);
+		// Stars need a dark sky. As it darkens the brightest come out first, and a bright moon
+		// drowns the faint ones (faintestSeen in stars.ts). Cloud hides them. (The cloud here dims
+		// them all alike; it cannot yet hide the ones behind each cloud.)
+		starsOut = staged ? 0 : 1 - sky ** 0.8;
+		faintestStar = faintestSeen(sunElevation, moonlight);
 		// The Milky Way needs full night and goes with any moon worth the name.
 		milkyWayOut = starsOut * THREE.MathUtils.smoothstep(-sunElevation, 12, 18) * (1 - Math.min(1, 4 * moonlight));
 		// The four work only in the phase when the moon's light is weakest: fully while less than
@@ -736,7 +740,7 @@ onMounted(() => {
 			spread: fury + 2 * moment.white * moment.veil,
 			gain: 0.5 / steadyExposure,
 		});
-		stars.update({ date: shownMoment, shown: starsOut * (1 - fogAmount) * alive, glow: milkyWayOut * (1 - fogAmount) * alive, gain: 2.2 / steadyExposure });
+		stars.update({ date: shownMoment, shown: starsOut * (1 - fogAmount) * alive, faintest: faintestStar, glow: milkyWayOut * (1 - fogAmount) * alive, gain: 2.2 / steadyExposure });
 		// In the dark the four channellers weave along the water, and their braids light it.
 		waveUniforms.channelWind.value.set(crosswind, gustiness);
 		// By the dial and the story there is no forecast to read, so the need goes with the weather set.

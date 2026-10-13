@@ -41,6 +41,8 @@ attribute float aLight;
 uniform float uPixelRatio;
 uniform float uGain;
 uniform float uShown;
+// The magnitude of the faintest star that can be made out against the sky as it is now.
+uniform float uFaintest;
 varying vec3 vColour;
 
 void main() {
@@ -51,7 +53,11 @@ void main() {
 	gl_PointSize = size * uPixelRatio;
 	// A star a hundred times fainter does not look a hundred times fainter: the eye squeezes
 	// the range, and so does this, or only a handful of stars would show on a screen.
-	vColour = aColour * uGain * uShown * pow( aLight, 0.45 ) * step( 0.0, position.y );
+	// A star shows once it is brighter than the sky can hide, so the brightest come out first as
+	// the sky darkens. It is not there at a stroke: it comes up over the next magnitude and a half.
+	float magnitude = - 1.0857 * log( max( aLight, 1e-9 ) );
+	float seen = smoothstep( - 0.5, 1.0, uFaintest - magnitude );
+	vColour = aColour * uGain * uShown * seen * pow( aLight, 0.45 ) * step( 0.0, position.y );
 }
 `;
 
@@ -98,11 +104,45 @@ void main() {
 }
 `;
 
+// The magnitude of the faintest star that can be made out, from how high the sun stands (in
+// degrees; under the horizon is negative) and how much moonlight there is (0..1). A star is seen
+// when it is brighter than the sky behind it can hide, and the sky darkens by about a magnitude
+// for each degree and a half the sun sinks. So Venus is there at sunset and Jupiter just after;
+// Sirius and Canopus come some ten minutes later, with the sun 2 degrees under; the stars of
+// the first magnitude by 4 or 5 degrees, the second by 6 (the end of civil twilight), the fourth
+// by 8, and the faintest the eye can find by 13. (Rounded from what observers report: Claude's
+// figures, not worked out from the sky's own light.) By full night the figure passes 6.5, the
+// catalogue's faintest, so that every star in it is fully out. A full moon high up takes away
+// the faintest two and a half magnitudes.
+const FAINTEST_BY_SUN: [number, number][] = [
+	[6, -6],
+	[0, -3.2],
+	[-2, -1.2],
+	[-4, 0.5],
+	[-6, 2],
+	[-8, 3.8],
+	[-10, 5],
+	[-12, 6],
+	[-15, 7.2],
+	[-18, 8],
+];
+export function faintestSeen(sunElevation: number, moonlight: number) {
+	const after = FAINTEST_BY_SUN.findIndex(([elevation]) => sunElevation >= elevation);
+	const dark = FAINTEST_BY_SUN[FAINTEST_BY_SUN.length - 1]![1];
+	if (after === 0) return FAINTEST_BY_SUN[0]![1];
+	if (after < 0) return dark - 2.5 * moonlight;
+	const [high, atHigh] = FAINTEST_BY_SUN[after - 1]!;
+	const [low, atLow] = FAINTEST_BY_SUN[after]!;
+	return Math.min(atHigh + ((atLow - atHigh) * (high - sunElevation)) / (high - low), dark - 2.5 * moonlight);
+}
+
 export interface StarState {
 	// The moment shown.
 	date: Date;
-	// 0..1 how far the stars are out: none by day, fewer under cloud or a bright moon.
+	// 0..1 how much of the stars' light gets through: less under cloud and in fog.
 	shown: number;
+	// The magnitude of the faintest star that can be made out now (faintestSeen).
+	faintest: number;
 	// 0..1 the same for the Milky Way, which needs a darker sky than the stars do.
 	glow: number;
 	// Multiplies the light so it holds its brightness at any exposure.
@@ -121,6 +161,7 @@ export function createStars(
 		uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
 		uGain: { value: 1 },
 		uShown: { value: 0 },
+		uFaintest: { value: Number.NaN },
 	};
 	const material = new THREE.ShaderMaterial({
 		uniforms,
@@ -250,8 +291,11 @@ export function createStars(
 		colours.needsUpdate = true;
 	};
 
-	const update = ({ date, shown, glow: glowShown, gain }: StarState) => {
-		const out = shown > 0.001;
+	const update = ({ date, shown, faintest, glow: glowShown, gain }: StarState) => {
+		// (The clock moves the sun once a minute, so the figure is eased, or the stars would come up in steps.)
+		uniforms.uFaintest.value = Number.isNaN(uniforms.uFaintest.value) ? faintest : uniforms.uFaintest.value + (faintest - uniforms.uFaintest.value) * 0.03;
+		// Nothing in the sky is brighter than magnitude -5.
+		const out = shown > 0.001 && uniforms.uFaintest.value > -5;
 		if (points) points.visible = out;
 		glow.visible = glowShown > 0.001 && !!glowUniforms.uMap.value;
 		if (!out && !glow.visible) return;
