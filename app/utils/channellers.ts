@@ -35,7 +35,7 @@
 import * as THREE from "three";
 import { CHANNELLERS, channelPathChunk } from "./channel-path";
 import type { GerstnerUniforms } from "./gerstner-waves";
-import { ribbonShaderChunk, stripIndices, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, WEAVE_RENDER_ORDER } from "./weave";
 
 // What the weaving looks like follows the owner's reference (the women channelling together in
 // The Wheel of Time): not a few drawn lines but a great many hair-fine filaments streaming
@@ -117,8 +117,9 @@ uniform vec3 uElements[ 6 ];
 uniform vec3 uBaseTone;
 // The sea, to ride on it: the same wave trains the water is drawn with.
 uniform vec4 waves[ ${trains} ];
+uniform vec4 waveForm[ ${trains} ];
+uniform float waveFade[ ${trains} ];
 uniform float waveSteepness;
-uniform float waveScale;
 uniform float waveTime;
 varying vec3 vTint;
 varying float vAlpha;
@@ -167,13 +168,14 @@ float pushed( float tt, float front ) {
 float seaHeight( vec2 p ) {
 	float distanceToEye = length( p - cameraPosition.xz );
 	float height = 0.0;
+	// (The way each train runs, its wave number, its pace and where it fades out are worked out
+	// once a frame: see workOutTrains in gerstner-waves.ts.)
 	for ( int i = 0; i < ${trains}; i ++ ) {
-		float wavelength = waves[ i ].w * waveScale;
-		float k = 6.28319 / wavelength;
-		vec2 d = vec2( sin( waves[ i ].x ), - cos( waves[ i ].x ) );
 		float steepness = waves[ i ].z * waveSteepness
-			* ( 1.0 - smoothstep( 0.5 * pow( wavelength, 1.5 ), pow( wavelength, 1.5 ), distanceToEye ) );
-		height += steepness / k * sin( k * ( dot( d, p ) - sqrt( 9.8 / k ) * waveTime ) + waves[ i ].y );
+			* ( 1.0 - smoothstep( 0.5 * waveFade[ i ], waveFade[ i ], distanceToEye ) );
+		if ( steepness <= 0.0 ) continue;
+		float k = waveForm[ i ].z;
+		height += steepness / k * sin( k * dot( waveForm[ i ].xy, p ) - waveForm[ i ].w * waveTime + waves[ i ].y );
 	}
 	return height;
 }
@@ -339,8 +341,14 @@ vec3 readingPoint( float t ) {
 	return arced( was, by, now, gone );
 }
 
-vec3 threadPoint( float t ) {
+// (onlyPlace: nothing but the place is wanted, as for the point a little further along that
+// gives a filament its direction. Wholly in its reading's form, a point's place is the reading's
+// alone, and the flow, with the sea under it, need not be worked out for it.)
+vec3 threadPoint( float t, bool onlyPlace ) {
 	float who = aThread.x;
+	float tt = clamp( t / 0.7, 0.0, 1.0 );
+	formWeight = uToReading > 0.5 ? turned( tt, uFront ) : 1.0 - turned( tt, uFront );
+	if ( onlyPlace && formWeight >= 1.0 ) return readingPoint( t );
 	float ahead = aheadAt( t );
 	float along = max( ahead, 0.0 );
 	// Distance as the eye counts it; everything that varies along a filament varies with this.
@@ -408,8 +416,6 @@ vec3 threadPoint( float t ) {
 	formShown = 1.0;
 	formTinted = 0.0;
 	vec3 flowing = vec3( p.x, height, p.y );
-	float tt = clamp( t / 0.7, 0.0, 1.0 );
-	formWeight = uToReading > 0.5 ? turned( tt, uFront ) : 1.0 - turned( tt, uFront );
 	formPush = pushed( tt, uFront );
 	formGoing = sin( 3.14159 * clamp( uFront / 1.6, 0.0, 1.0 ) );
 	if ( formWeight > 0.001 ) {
@@ -423,8 +429,24 @@ vec3 threadPoint( float t ) {
 }
 
 void main() {
+	// What cannot be seen is not worked out: a seat with no weave out; the part of a filament that
+	// its weave has not yet run out to, or that has been cut away behind it; and, while all are
+	// settled at their readings, the far part of the thread, which a reading does not use. (With a
+	// little to spare on every side, so that a filament still thins away to nothing as it did.)
+	float head_ = channelOf( channelHead, aThread.x );
+	float tail_ = channelOf( channelTail, aThread.x );
+	bool unseen = channelOf( channelGate, aThread.x ) <= 0.0
+		|| ( uToReading > 0.5 && uFront >= 1.6 && aT > 0.71 )
+		|| ( aSoft < 0.9 && aT - 0.01 >= head_ && ( tail_ >= 1.09 || aT + 0.01 <= tail_ - 0.16 ) );
+	if ( unseen ) {
+		gl_Position = vec4( 0.0, 0.0, 2.0, 1.0 );
+		vTint = vSheath = vec3( 0.0 );
+		vAlpha = vEdge = vSoft = vWhite = vShade = 0.0;
+		vWide = 1.0;
+		return;
+	}
 	mat4 viewProjection = projectionMatrix * viewMatrix;
-	vec3 here = threadPoint( aT );
+	vec3 here = threadPoint( aT, false );
 	// (atReading: this point's own share of its reading's form, which is not the same all along
 	// a weave while it turns.)
 	float atReading = formWeight;
@@ -440,7 +462,7 @@ void main() {
 	// They work with the waves: each crest that passes under the flow lifts its light, each trough dims it.
 	// (Far more so in a storm, when the waves are what they are working on.)
 	float withWaves = 1.0 + ( 0.7 + 0.3 * channelControl ) * clamp( seaUnder / max( 0.25 * channelSea.y, 0.1 ), - 1.0, 1.0 );
-	vec4 clipAhead = viewProjection * vec4( threadPoint( aT + 0.002 ), 1.0 );
+	vec4 clipAhead = viewProjection * vec4( threadPoint( aT + 0.002, true ), 1.0 );
 	// (Lingering, each filament is broad and soft: a blur, not a line.)
 	float lingering = channelPresence( aThread.x, aheadAt( aT ) ).y;
 	// (By day each filament has room beside it for its shade: see the fragment shader.)
@@ -1250,7 +1272,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uTints: { value: TINTS },
 		uElements: { value: ELEMENTS },
 		uBaseTone: { value: BASE },
-		uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+		uPixelRatio: pixelRatio,
 		uResolution: { value: new THREE.Vector2(1, 1) },
 		// The same objects the water uses, so both always agree.
 		channelBoat: sea.channelBoat,
@@ -1273,8 +1295,9 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		channelReading: sea.channelReading,
 		channelHeal: sea.channelHeal,
 		waves: sea.waves,
+		waveForm: sea.waveForm,
+		waveFade: sea.waveFade,
 		waveSteepness: sea.waveSteepness,
-		waveScale: sea.waveScale,
 		waveTime: sea.waveTime,
 	};
 	const mesh = new THREE.Mesh(

@@ -10,6 +10,7 @@
 // and ESA/Gaia/DPAC), laid out by right ascension and declination like the catalogue.
 // The planets are worked out (planetPositions). Shooting stars are not drawn.
 import * as THREE from "three";
+import { pixelRatio } from "./weave";
 
 const RAD = Math.PI / 180;
 // Far beyond the sea, inside the sky's box.
@@ -158,7 +159,7 @@ export function createStars(
 	wanderers: (date: Date) => Wanderer[],
 ) {
 	const uniforms = {
-		uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+		uPixelRatio: pixelRatio,
 		uGain: { value: 1 },
 		uShown: { value: 0 },
 		uFaintest: { value: Number.NaN },

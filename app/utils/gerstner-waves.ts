@@ -172,6 +172,20 @@ export function useMeasuredSea(
 	uniforms.ripple.value = Math.sqrt(0.003 + 0.00512 * sea.wind.speed) / 0.3;
 }
 
+// Works out, for every train, what does not differ from one point of the sea to the next: the
+// way it runs, its wave number (2π over its length), how fast its phase turns (in deep water a
+// wave of that length travels at the root of g over its wave number), and the distance at which
+// it has faded out of the picture. Called once a frame, after the sea has been set: the shaders
+// used to work all this out again for every train at every point, which was most of their work.
+export function workOutTrains(uniforms: GerstnerUniforms) {
+	uniforms.waves.value.forEach((train, i) => {
+		const wavelength = train.w * uniforms.waveScale.value;
+		const k = (2 * Math.PI) / wavelength;
+		uniforms.waveForm.value[i]!.set(Math.sin(train.x), -Math.cos(train.x), k, Math.sqrt(9.8 * k));
+		uniforms.waveFade.value[i] = wavelength ** 1.5;
+	});
+}
+
 // Height of a measured sea at a point, for carrying the viewer on it. (It leaves out the small
 // sideways shift of the surface and the gusts' unevenness, so it is right to within the chop.)
 export function measuredSeaHeight(uniforms: GerstnerUniforms, x: number, z: number, time: number) {
@@ -220,6 +234,11 @@ export interface GerstnerUniforms {
 	// metres. And for each, 0..1 how far it is wind-raised chop and not swell.
 	waves: THREE.IUniform<THREE.Vector4[]>;
 	waveWind: THREE.IUniform<number[]>;
+	// What the shaders need of each train, worked out from the above once a frame and not at
+	// every point of the sea (see workOutTrains): the way it runs (world x and z), its wave
+	// number, and how fast its phase turns; and the distance at which it has faded out.
+	waveForm: THREE.IUniform<THREE.Vector4[]>;
+	waveFade: THREE.IUniform<number[]>;
 	// Which way the wind blows over the sea (a unit vector, world x and z) and how fast its gusts
 	// cross the water, in metres a second.
 	windHeading: THREE.IUniform<THREE.Vector2>;
@@ -300,6 +319,8 @@ uniform float weavePull;
 uniform float gustSwirl;
 uniform vec4 waves[${TRAIN_COUNT}];
 uniform float waveWind[${TRAIN_COUNT}];
+uniform vec4 waveForm[${TRAIN_COUNT}];
+uniform float waveFade[${TRAIN_COUNT}];
 uniform vec2 windHeading;
 uniform float windDrift;
 uniform float crestWarp;
@@ -389,16 +410,17 @@ vec3 gerstner( vec3 p, out vec3 normal, out float crest, out float gust ) {
 	) - 0.5;
 	crest = 0.0;
 	for ( int i = 0; i < ${TRAIN_COUNT}; i ++ ) {
-		vec2 d = vec2( sin( waves[ i ].x ), - cos( waves[ i ].x ) );
+		vec2 d = waveForm[ i ].xy;
 		float wavelength = waves[ i ].w * waveScale;
 		// Gusts act on the wind-driven chop, not on the long swell.
 		float windSea = waveWind[ i ];
 		float steepness = waves[ i ].z * waveSteepness * ( 1.0 + 0.35 * fed )
 			* mix( 1.0, mix( 0.35, 1.5, gust ), gustiness * windSea )
-			* ( 1.0 - smoothstep( 0.5 * pow( wavelength, 1.5 ), pow( wavelength, 1.5 ), distanceToEye ) );
-		float k = 2.0 * PI / wavelength;
-		float c = sqrt( 9.8 / k );
-		float f = k * ( dot( d, p.xz + warp * wavelength * 0.7 * crestWarp ) - c * waveTime ) + waves[ i ].y;
+			* ( 1.0 - smoothstep( 0.5 * waveFade[ i ], waveFade[ i ], distanceToEye ) );
+		// (A train that has faded out with distance, or has no height, adds nothing.)
+		if ( steepness <= 0.0 ) continue;
+		float k = waveForm[ i ].z;
+		float f = k * dot( d, p.xz + warp * wavelength * 0.7 * crestWarp ) - waveForm[ i ].w * waveTime + waves[ i ].y;
 		float a = steepness / k;
 		offset += vec3( d.x * a * cos( f ), a * sin( f ), d.y * a * cos( f ) );
 		tangent += vec3( - d.x * d.x * steepness * sin( f ), d.x * steepness * cos( f ), - d.x * d.y * steepness * sin( f ) );
@@ -441,7 +463,19 @@ vec3 gerstner( vec3 p, out vec3 normal, out float crest, out float gust ) {
 
 // Runs after the original flat-plane transform and overwrites its results.
 const vertexMain = /* glsl */ `
-	worldPosition.xyz = gerstner( worldPosition.xyz, vWaveNormal, vCrest, vGust );
+	// The sea reaches all round the boat, and most of it is behind the viewer or off to the side
+	// at any moment. Water well outside the picture is left flat: the waves are only worked out
+	// where they can be seen (with room to spare, for a wave shifts the water it lifts, and far
+	// out one triangle of the grid is wide).
+	vec4 flatSea = projectionMatrix * viewMatrix * worldPosition;
+	float room = 100.0 + 0.25 * abs( flatSea.w );
+	if ( flatSea.w < - room || abs( flatSea.x ) > flatSea.w + room || abs( flatSea.y ) > flatSea.w + room ) {
+		vWaveNormal = vec3( 0.0, 1.0, 0.0 );
+		vCrest = 0.0;
+		vGust = 0.0;
+	} else {
+		worldPosition.xyz = gerstner( worldPosition.xyz, vWaveNormal, vCrest, vGust );
+	}
 	mirrorCoord = textureMatrix * worldPosition;
 	mvPosition = viewMatrix * worldPosition;
 	gl_Position = projectionMatrix * mvPosition;
@@ -571,6 +605,8 @@ const fragmentFoam = /* glsl */ `
 			float tended = 0.0;
 			for ( int i = 0; i < ${CHANNELLERS}; i ++ ) {
 				float k = float( i );
+				// (A seat with no weave out lights nothing and mends nothing.)
+				if ( channelOf( channelGate, k ) <= 0.0 ) continue;
 				float off = worldPosition.x - channelBoat.x - channelLine( k, out_ );
 				// The higher a braid climbs, the wider and fainter its light falls on the sea.
 				float climbed = channelRise( k, out_ );
@@ -720,6 +756,8 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		waveScale: { value: 1 },
 		waves: { value: Array.from({ length: TRAIN_COUNT }, () => new THREE.Vector4(0, 0, 0, 1)) },
 		waveWind: { value: new Array<number>(TRAIN_COUNT).fill(0) },
+		waveForm: { value: Array.from({ length: TRAIN_COUNT }, () => new THREE.Vector4(0, -1, 1, 1)) },
+		waveFade: { value: new Array<number>(TRAIN_COUNT).fill(1) },
 		crestWarp: { value: 1 },
 		windHeading: { value: new THREE.Vector2(0, -1) },
 		windDrift: { value: 14 },

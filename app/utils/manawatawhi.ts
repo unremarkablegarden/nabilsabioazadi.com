@@ -319,8 +319,33 @@ export interface SeaConditions {
 	airCloudTemperature?: number;
 	airMidTemperature?: number;
 	airHighTemperature?: number;
+	// How much haze (dust, salt, smoke) stands in the whole depth of air overhead: its optical
+	// depth for green light. About 0.05 is very clean sea air, 0.3 hazy. From the Copernicus
+	// atmosphere model; missing if that could not be reached.
+	aerosolDepth?: number;
 	// Where the weather models disagree, the lowest and highest of their figures (see WEATHER_MODELS).
 	doubt: Partial<Record<keyof typeof BLENDED, [number, number]>>;
+}
+
+// The air as the twilight sky is worked out from it (twilight-sky.ts), from the figures for
+// where the boat is. With no conditions it is the standard air the sky was first made with,
+// but for the haze, which is then that of clean sea air.
+export function twilightAir(conditions?: SeaConditions) {
+	// How much air there is: the pressure, against the standard 1013.25 hPa.
+	const density = (conditions?.pressure || 1013.25) / 1013.25;
+	// How fast it thins with height: warm air stands taller. The height in metres over which it
+	// thins to 37% is 29.27 times its temperature in kelvin (the temperature at the sea is used
+	// for the whole depth, which overstates it a little).
+	const height = 29.27 * ((conditions?.airTemperature ?? 0) + 273.15);
+	// Haze at the sea, per metre, from how far one can see: Koschmieder's rule, that the limit
+	// of sight is where 2% of contrast is left. (The models report no more than about 24 to 28 km
+	// however clear it is, so clean air is somewhat hazier here than in life.)
+	const atSea = 3.912 / Math.max(conditions?.visibility || 30_000, 500);
+	// And how high the haze stands: such that haze at the sea, thinning upward, adds up to all
+	// the haze overhead. A shallow layer lies in a band on the horizon; a deep one whitens the sky.
+	const overhead = conditions?.aerosolDepth ?? 0.08;
+	const hazeHeight = Math.min(4000, Math.max(250, overhead / atSea));
+	return { density, height, haze: overhead / hazeHeight, hazeHeight, overhead };
 }
 
 // The state of the air as the storm's physics uses it. With no live conditions it is a mild,
@@ -463,6 +488,8 @@ export async function fetchSeaConditions(at: { latitude: number; longitude: numb
 	const dayAhead = "&forecast_hours=25&hourly=";
 	const forecast = (variables: object, model?: string) =>
 		$fetch<Current>(`https://api.open-meteo.com/v1/forecast?${place}&current=${Object.values(variables).join(",")}${model ? `&models=${model}` : ""}`);
+	// The haze overhead is a different service's. The picture can do without it.
+	const haze = $fetch<Current>(`https://air-quality-api.open-meteo.com/v1/air-quality?${place}&current=aerosol_optical_depth`).catch(() => undefined);
 	const [marine, weather, ...models] = await Promise.all([
 		$fetch<Current>(`https://marine-api.open-meteo.com/v1/marine?${place}&current=${Object.values(MARINE).join(",")}${ahead}wave_height`),
 		$fetch<Current>(`https://api.open-meteo.com/v1/forecast?${place}&current=${[...Object.values(WEATHER), ...Object.values(ALOFT)].join(",")}${dayAhead}wind_speed_10m,wind_direction_10m,pressure_msl`),
@@ -490,6 +517,8 @@ export async function fetchSeaConditions(at: { latitude: number; longitude: numb
 		tomorrowWindDirection: 0,
 		doubt: {},
 	};
+	const aerosolDepth = (await haze)?.current.aerosol_optical_depth;
+	if (aerosolDepth != null) conditions.aerosolDepth = aerosolDepth;
 	conditions.tomorrowWindSpeed = tomorrow("wind_speed_10m", conditions.windSpeed);
 	conditions.tomorrowWindDirection = tomorrow("wind_direction_10m", conditions.windDirection);
 	for (const [key, name] of Object.entries(ALOFT) as [keyof typeof ALOFT, string][]) {

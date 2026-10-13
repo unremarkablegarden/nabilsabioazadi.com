@@ -37,6 +37,12 @@ const smooth = THREE.MathUtils.smoothstep;
 // Drawn after the fog (see fluid.ts), so the threads stay sharp.
 export const WEAVE_RENDER_ORDER = 10;
 
+// How many pixels of the picture are drawn to each pixel of the page. One object, shared by
+// everything whose size is counted in pixels (the widths of threads, the sizes of stars),
+// because the picture is drawn with fewer when the machine cannot keep up: see watchFrameRate
+// in OceanBackground.vue, which sets it.
+export const pixelRatio = { value: 1 };
+
 // Shared by both shaders: turns a centre line into a ribbon of a set width in pixels, facing the screen.
 export const ribbonShaderChunk = /* glsl */ `
 uniform vec2 uResolution;
@@ -503,7 +509,7 @@ export function createWeave(scene: THREE.Scene, camera: THREE.Camera, knotPositi
 		uGain: { value: 1 },
 		uOpacity: { value: 0 },
 		uBase: { value: new THREE.Color(0xf4ecd6) },
-		uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+		uPixelRatio: pixelRatio,
 		uResolution: { value: new THREE.Vector2(1, 1) },
 	};
 	const threads = createThreads(shared);

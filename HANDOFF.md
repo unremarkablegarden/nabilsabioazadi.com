@@ -148,9 +148,11 @@ All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerst
 | `/?date=2027-03-01` | another day of the voyage |
 | `/?pretend=windTrend:20` | weather that is not there (names as in `SeaConditions`); this one is an unusual wind |
 | `/?pretend=waveTrend:1.2` | an unusual sea |
+| `/?hour=19.7&pretend=aerosolDepth:0.35,visibility:9000` | dusk on a hazy evening (the twilight sky follows the live air) |
 | `/?show=soundings`, `/?show=masters` | a sounding, or the strongest's deep weaving, at once |
 | `/?colours` | a strip of four swatches at the foot of the page (air, water, akasha, the strongest's edge); a change shows at once and is kept in the address as `&air=9e7bf3&water=00b0a2&akasha=e0b065&strongest=0050cb`, so an address is a palette |
 | `/?show=pressure`, `wind`, `water`, `healing` | all four at the front at that one thing |
+| `/?ratio=2`, `1.5`, `1.25`, `1` | holds the picture at that many pixels to one of the page (it otherwise drops them itself when a machine cannot keep up; the row "drawing" in `/?controls` says how fast it is going and at what) |
 | `/?light=0..1` | the "light is loss" dial (default 0.5; the owner has not chosen a value) |
 | `/?look=september` | September's look |
 
@@ -171,6 +173,10 @@ All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerst
 7. **September's old threads**: put away (12 October), except at `/?look=september`, in the story
    and by the dev slider.
 8. Older flaws: heavy overcast too dark and brown; clouds dim all stars alike.
+9. **The new twilight sky** (`twilight-sky.ts`, see the README): not yet looked at under cloud or
+   storm, and its drawing cost on a phone is unmeasured. The owner has seen none of it yet.
+
+10. **Speed** (13 October; the README's entry "Keeping the picture moving smoothly" has what was done and what is left). Measured only on the owner's M1 laptop, in a headless browser at 2560 by 1326: never on a phone, nor on a slow machine. The owner has not yet said whether the softer picture a slow machine now gets (down to 1 pixel to 1) is acceptable, or whether sharpness should be held and smoothness given up; `/?ratio=` shows each.
 
 ## Things only the owner can do
 

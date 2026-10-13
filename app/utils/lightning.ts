@@ -110,7 +110,7 @@ export function createLightning(scene: THREE.Scene) {
 		uBranches: { value: 0 },
 		uWidth: { value: 1 },
 		uTint: { value: new THREE.Color() },
-		uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+		uPixelRatio: pixelRatio,
 		uResolution: { value: new THREE.Vector2(1, 1) },
 	};
 	const mesh = new THREE.Mesh(

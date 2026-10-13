@@ -181,6 +181,14 @@ const links = [
 	{ to: "https://www.tiraho.com.au", label: "Tîr Aho Studio" },
 	{ to: "/contact", label: "Contact" },
 ];
+// Where else the owner is to be found: one quiet line under the links. Cyberspace, the owner's
+// best friend's platform, is written the way it writes its own name, and said plainly for
+// screen readers. One with no address yet is left out (none has one yet: the owner is to give them).
+const elsewhere = [
+	{ to: "", label: "Instagram" },
+	{ to: "", label: "ᑕ¥ΒЄЯรקค¢Є", said: "Cyberspace" },
+	{ to: "", label: "Signal" },
+].filter((place) => place.to);
 </script>
 
 <template>
@@ -215,6 +223,14 @@ const links = [
 							<span class="key" aria-hidden="true">0{{ i + 1 }}</span>
 							<span class="title" aria-hidden="true">{{ link.label }}</span>
 						</NuxtLink>
+					</li>
+					<li v-if="elsewhere.length" class="row rule elsewhere">
+						<span class="key" aria-hidden="true">Elsewhere</span>
+						<ul aria-label="Elsewhere">
+							<li v-for="place in elsewhere" :key="place.to">
+								<a :href="place.to" rel="me" :aria-label="place.said">{{ place.label }}</a>
+							</li>
+						</ul>
 					</li>
 				</ol>
 			</nav>
@@ -930,6 +946,48 @@ nav a:focus-visible .key {
 nav a[aria-current="page"] .key::after {
 	content: " ■";
 	color: var(--ink);
+}
+
+/* Elsewhere: the last line of the list, and its quietest. Small capitals, as the bar's words
+   are, each as tall as a finger needs, marked on hover as the bar marks its own. */
+.elsewhere {
+	align-items: center;
+}
+.elsewhere ul {
+	display: flex;
+	flex-wrap: wrap;
+	column-gap: calc(var(--unit) * 4);
+}
+.slab nav .elsewhere a {
+	display: inline-flex;
+	align-items: center;
+	min-height: 2.75rem;
+	padding: 0;
+	border-top: 0;
+	font-size: 0.75rem;
+	font-weight: 400;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+}
+.slab nav .elsewhere a:hover,
+.slab nav .elsewhere a:focus-visible {
+	background: none;
+	color: var(--ink);
+	box-shadow: none;
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.5em;
+}
+/* Where the links are centred in the circle, so is this, beneath them and with no hairline. */
+.slab:is([data-menu="clear"], [data-menu^="within"]) .elsewhere {
+	border-top: 0;
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"], [data-menu="within-name"]) .elsewhere {
+	display: block;
+	margin-top: calc(var(--unit) * 2);
+}
+.slab:is([data-menu="within"], [data-menu="within-caps"], [data-menu="within-name"]) .elsewhere ul {
+	justify-content: center;
 }
 
 input {

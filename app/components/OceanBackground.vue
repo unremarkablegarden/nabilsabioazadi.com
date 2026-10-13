@@ -110,6 +110,8 @@ const between = (doubt?: [number, number]) => (doubt && doubt[1] - doubt[0] >= 1
 // Every live figure, for checking the picture against the data in the dev panel.
 // Who at the front is at what, and what is calling them, in words (from channellers.ts).
 const crewNow = ref("");
+// How fast the picture is being drawn and with how many pixels, in words (see watchFrameRate).
+const drawingNow = ref("");
 const liveFigures = computed(() => {
 	const c = conditions.value;
 	if (!c) return [];
@@ -127,6 +129,7 @@ const liveFigures = computed(() => {
 		["visibility", `${(c.visibility / 1000).toFixed(1)} km`],
 		["thunder", `code ${c.weatherCode} · ${c.cape.toFixed(0)} J/kg`],
 		["pressure", `${c.pressure.toFixed(0)} hPa`],
+		["twilight air", `${Math.round(twilightAir(c).density * 100)}% of standard · thins over ${(twilightAir(c).height / 1000).toFixed(1)} km · haze overhead ${twilightAir(c).overhead.toFixed(2)}${c.aerosolDepth == null ? " (assumed)" : ""}, standing ${Math.round(twilightAir(c).hazeHeight)} m deep`],
 		["air · sea", `${c.airTemperature.toFixed(1)} °C · ${c.seaTemperature.toFixed(1)} °C · ${c.humidity}%`],
 		["next 3 h", `wind ${c.windTrend >= 0 ? "+" : ""}${c.windTrend.toFixed(0)} km/h · waves ${c.waveTrend >= 0 ? "+" : ""}${c.waveTrend.toFixed(1)} m · pressure ${c.pressureTrend >= 0 ? "+" : ""}${c.pressureTrend.toFixed(1)} hPa`],
 		["picture", `sea ${Math.round(seaState(c) * 100)}% · sky ${Math.round(skyState(c) * 100)}% · storm ${Math.round(stormFury(c) * 100)}%`],
@@ -139,6 +142,7 @@ const liveFigures = computed(() => {
 		["sky", windsAloft(c).map((layer, height) => `${["sea", "750 m", "1.5 km", "3 km", "5.5 km"][height]} ${layer.speed.toFixed(0)} ${compassPoint(layer.from)}`).join(" · ")],
 		["sky cools by", lapseAloft(c).map((lapse, layer) => `${["sea to 750 m", "to 1.5 km", "to 3 km", "to 5.5 km"][layer]} ${lapse.toFixed(1)}`).join(" · ") + " °C/km (9.8 rises freely · under 0 is a lid)"],
 		["air", thermal(c) > 0.1 ? `sea warmer by ${(c.seaTemperature - c.airTemperature).toFixed(1)} °C: thermals ${Math.round(thermal(c) * 100)}%` : thermal(c) < -0.1 ? `air warmer by ${(c.airTemperature - c.seaTemperature).toFixed(1)} °C: still, layered ${Math.round(-thermal(c) * 100)}%` : "sea and air alike: neither rising nor layered"],
+		["drawing", drawingNow.value],
 		["at the front", crewNow.value.split(" | ")[0] ?? ""],
 		["calling", crewNow.value.split(" | ")[1] ?? ""],
 	];
@@ -175,8 +179,21 @@ onMounted(() => {
 	const lerp = THREE.MathUtils.lerp;
 
 	const renderer = new THREE.WebGLRenderer({ outputBufferType: THREE.HalfFloatType });
-	// Beyond 2 the extra pixels cost a great deal and show very little.
-	renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+	// Beyond 2 the extra pixels cost a great deal and show very little. And on a machine that
+	// cannot keep the picture moving smoothly at that, it is drawn with fewer (see watchFrameRate):
+	// these are the steps down, never below one pixel of the picture to one of the page.
+	const fullRatio = Math.min(window.devicePixelRatio, 2);
+	const RATIOS = [fullRatio, ...[1.5, 1.25, 1].filter((ratio) => ratio < fullRatio)];
+	// (/?ratio=2, or 1.5, 1.25, 1, holds the picture at that, for comparing them by eye.)
+	const heldRatio = Number(query.get("ratio"));
+	if (heldRatio >= 0.5 && heldRatio <= fullRatio) RATIOS.splice(0, RATIOS.length, heldRatio);
+	let ratioStep = 0;
+	const usePixelRatio = (step: number) => {
+		ratioStep = step;
+		pixelRatio.value = RATIOS[step]!;
+		renderer.setPixelRatio(RATIOS[step]!);
+	};
+	usePixelRatio(0);
 	renderer.setSize(window.innerWidth, window.innerHeight);
 	renderer.toneMapping = THREE.ACESFilmicToneMapping;
 	el.appendChild(renderer.domElement);
@@ -237,6 +254,7 @@ onMounted(() => {
 	skyUniforms.mieDirectionalG.value = 0.8;
 	skyUniforms.cloudElevation.value = 0.5;
 	const vortexUniforms = addSkyVortex(sky);
+	const twilightUniforms = addTwilightSky(sky);
 
 	// The moon's face, drawn for its phase with the lit edge to the right; the disc is then turned
 	// so that edge faces the sun. Redrawn only when the phase has moved on.
@@ -268,6 +286,7 @@ onMounted(() => {
 	const towardsSun = new THREE.Vector3();
 
 	const NIGHT_EXPOSURE = 15;
+	const TWILIGHT_GLOW = Number(query.get("glow") ?? 0.24);
 
 	// Sun intensity term of the Sky shader (sunIntensity() in Sky.js) for an elevation in degrees.
 	const skySunIntensity = (elevation: number) => {
@@ -305,6 +324,8 @@ onMounted(() => {
 	let steepness = 0.2;
 	let cameraHeight = 18;
 	let exposure = 1;
+	// How bright the twilight sky ahead is to come out on the screen (see twilight-sky.ts).
+	let twilightGlow = 0;
 	let daylight = 1;
 	// 0..1 how far the four channellers are at work: at night, in the days about the new moon.
 	let darkness = 0;
@@ -389,6 +410,12 @@ onMounted(() => {
 		towardsSun.copy(sun).applyQuaternion(moon.quaternion.clone().invert());
 		moon.rotateZ(Math.atan2(towardsSun.y, towardsSun.x));
 		moon.material.opacity = lerp(0.35, 1, night) * lerp(1, 0.15, sky);
+
+		// With the sun low, down or just down, the sky is the one worked out from the planet and
+		// its air (twilight-sky.ts); the daylight sky hands over to it between 10 and 3 degrees.
+		// It dims as the sun goes down, to nothing by the end of nautical twilight, and under cloud.
+		twilightUniforms.uTwilight.value = staged ? 0 : 1 - THREE.MathUtils.smoothstep(sunElevation, 3, 10);
+		twilightGlow = TWILIGHT_GLOW * THREE.MathUtils.smoothstep(sunElevation, -14, 2) ** 1.5 * lerp(1, 0.4, sky);
 
 		skyUniforms.turbidity.value = lerp(2, 20, sky);
 		skyUniforms.rayleigh.value = lerp(2, 0.5, sky);
@@ -530,12 +557,52 @@ onMounted(() => {
 	const flowWorld = new THREE.Vector3();
 	// Watches the frame rate and gives the fluid less work if the machine is struggling
 	// (0 full, 2 lightest), then more again once it has kept up for a while.
+	// Before that, and sooner, the whole picture is drawn with fewer pixels (RATIOS above): a
+	// picture a little softer that moves smoothly is better than a sharp one that stutters. Once
+	// the machine has kept up for a while the sharper picture is tried again; each time that fails
+	// it is left three times as long before the next try, so the picture does not keep changing.
+	// And if the fewest pixels are hardly quicker than the most were, it is not the pixels that
+	// are slow (some phones saving their battery draw only 30 frames a second whatever is asked):
+	// the sharp picture is put back and left.
 	let quality = 0;
 	let frameAverage = 1 / 60;
 	let sinceQualityChange = 0;
+	// (The first six seconds are not judged: the machine is still building the picture then.)
+	let sinceRatioChange = -3;
+	let patience = 12;
+	let justRaised = false;
+	let adapting = RATIOS.length > 1;
+	let slowAtFull = 0;
+	const changeRatio = (step: number) => {
+		usePixelRatio(step);
+		sinceRatioChange = 0;
+		// (Judged afresh: the change itself costs a slow frame or two.)
+		frameAverage = 1 / 60;
+	};
 	const watchFrameRate = (delta: number) => {
+		// (A gap of a quarter of a second is not slowness: the page was out of sight.)
+		if (delta > 0.25) return;
 		frameAverage += (Math.min(delta, 0.1) - frameAverage) * 0.05;
 		sinceQualityChange += delta;
+		sinceRatioChange += delta;
+		if (sinceRatioChange > 10) justRaised = false;
+		// (A further step down is weighed for longer than the first: just after a change, and in the
+		// page's first seconds, a machine is often slow for reasons that pass.)
+		if (adapting && sinceRatioChange >= (ratioStep > 0 ? 5 : 3)) {
+			const slow = frameAverage > 1 / 48;
+			if (slow && ratioStep < RATIOS.length - 1) {
+				if (ratioStep === 0) slowAtFull = frameAverage;
+				if (justRaised) patience = Math.min(patience * 3, 900);
+				justRaised = false;
+				changeRatio(ratioStep + 1);
+			} else if (slow && frameAverage > 0.85 * slowAtFull) {
+				adapting = false;
+				changeRatio(0);
+			} else if (frameAverage < 1 / 57 && ratioStep > 0 && sinceRatioChange > patience) {
+				justRaised = true;
+				changeRatio(ratioStep - 1);
+			}
+		}
 		if (sinceQualityChange < 3) return;
 		if (frameAverage > 1 / 42 && quality < 2) quality++;
 		else if (frameAverage < 1 / 57 && quality > 0 && sinceQualityChange > 12) quality--;
@@ -707,6 +774,10 @@ onMounted(() => {
 		// The storm darkens the day. At night it is lifted instead, or the sea would be lost in black.
 		const steadyExposure = exposure * lerp(1, lerp(2.5, 0.6, daylight), fury);
 		renderer.toneMappingExposure = steadyExposure * (1 + 5 * flash) * (1 + 4 * moment.white * moment.veil);
+		twilightUniforms.uTwilightLevel.value = twilightGlow / steadyExposure;
+		// The air it is worked out from is the air at the boat (not during the storm's story, which is staged).
+		const skyAir = twilightAir(liveOnly);
+		twilightUniforms.uTwilightAir.value.set(skyAir.density, skyAir.height, skyAir.haze, skyAir.hazeHeight);
 
 		// Fog thickens with the storm and fills the stillness. The fog colour is set before tone
 		// mapping, so it is divided by the exposure to land on the intended screen colour.
@@ -815,6 +886,7 @@ onMounted(() => {
 		if (showControls.value && Math.floor(time) !== toldAt) {
 			toldAt = Math.floor(time);
 			crewNow.value = channelling.told();
+			drawingNow.value = `${Math.round(1 / frameAverage)} frames a second · ${RATIOS[ratioStep]} pixels of the picture to one of the page (${RATIOS[0]} at most) · fluid at ${["full", "less", "least"][quality]} work`;
 		}
 		FLOW_DISTANCES.forEach((ahead, i) => {
 			channelling.flowPoint(ahead, flowWorld);
@@ -898,6 +970,8 @@ onMounted(() => {
 
 		waterUniforms.time.value += delta * lerp(0.6, 2, sea) * alive;
 		waveUniforms.waveTime.value = time;
+		workOutTrains(waveUniforms);
+		twilightUniforms.draw(renderer);
 		skyUniforms.time.value += delta * lerp(1, 4, sky) * (1 + 2 * fury);
 		renderer.render(scene, camera);
 		// Shown once it has been drawn a few times in the form it will keep.
