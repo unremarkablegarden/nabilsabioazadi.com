@@ -229,7 +229,8 @@ const elsewhere = [
 						<span class="key" aria-hidden="true">Elsewhere</span>
 						<ul aria-label="Elsewhere">
 							<li v-for="place in elsewhere" :key="place.to">
-								<a :href="place.to" rel="me" :aria-label="place.said">{{ place.label }}</a>
+								<!-- Each opens in a new tab (the owner's wish), and says so to screen readers. -->
+								<a :href="place.to" target="_blank" rel="me noopener" :aria-label="`${place.said ?? place.label} (opens in a new tab)`">{{ place.label }}</a>
 							</li>
 						</ul>
 					</li>
