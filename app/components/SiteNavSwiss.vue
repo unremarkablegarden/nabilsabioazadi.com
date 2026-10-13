@@ -183,11 +183,12 @@ const links = [
 ];
 // Where else the owner is to be found: one quiet line under the links. Cyberspace, the owner's
 // best friend's platform, is written the way it writes its own name, and said plainly for
-// screen readers. One with no address yet is left out (none has one yet: the owner is to give them).
+// screen readers. One with no address would be left out. Signal's is the owner's username link, which does not
+// show their phone number.
 const elsewhere = [
-	{ to: "", label: "Instagram" },
-	{ to: "", label: "ᑕ¥ΒЄЯรקค¢Є", said: "Cyberspace" },
-	{ to: "", label: "Signal" },
+	{ to: "https://www.instagram.com/nabilsabioazadi/", label: "Instagram" },
+	{ to: "https://cyberspace.online/nsa/blog", label: "ᑕ¥ΒЄЯรקค¢Є", said: "Cyberspace" },
+	{ to: "https://signal.me/#eu/onu_NcdRUHRNOhvTkGQD3ZaVudd1FjufCtQwGXzXi34Gx0ENPlVNcIetdJ65LvCz", label: "Signal" },
 ].filter((place) => place.to);
 </script>
 
