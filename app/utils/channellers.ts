@@ -477,6 +477,9 @@ vec3 threadPoint( float t, bool onlyPlace ) {
 	// Its three strands pass over and under each other: a plait, loosely kept.
 	float phase = q * 6.0 - channelTime * 0.4 + aThread.y * 2.0944 + who * 0.7;
 	vec2 across = vec2( sin( phase ), 0.5 * sin( 2.0 * phase ) ) * 0.42;
+	// (In a storm the three strands lie side by side, broad and parallel, and only sway: thrown
+	// wide, the plait's figures of eight lay on the sea as great loops.)
+	across = mix( across, vec2( ( aThread.y - 1.0 ) * 0.36 + 0.08 * sin( phase ), 0.0 ), channelControl );
 	// Each filament has its own place in its strand, and winds slowly round it.
 	float wind = aSeed.x * 6.28319 + q * ( 1.2 + 1.6 * aSeed.y ) - channelTime * 0.15;
 	across += aSeed.z * 0.5 * vec2( cos( wind ), sin( wind ) );
@@ -486,7 +489,9 @@ vec3 threadPoint( float t, bool onlyPlace ) {
 	float skill = channelOf( channelOwn, who ) * channelLoss;
 	float restless = channelOf( uRestless, who );
 	// (Each for themselves, the tresses are kept close: four clean lines over the sea, like strings.)
-	across += ( 1.0 - 0.6 * ( 1.0 - channelLink ) ) * aSeed.w * 0.55 * ( 0.55 + 1.1 * restless ) * ( 1.0 - 0.75 * skill ) * ( 1.0 - 0.6 * channelHold ) * ( 1.0 - 0.85 * smoothstep( 0.3, 0.8, way ) ) * vec2(
+	// (In a storm the strays are drawn in: thrown wide over the waves, they were loops and
+	// scribbles across the sea. Its breadth is in the tress, not in its strays.)
+	across += ( 1.0 - 0.6 * ( 1.0 - channelLink ) ) * aSeed.w * 0.55 * ( 0.55 + 1.1 * restless ) * ( 1.0 - 0.75 * skill ) * ( 1.0 - 0.6 * channelHold ) * ( 1.0 - 0.85 * smoothstep( 0.3, 0.8, way ) ) * ( 1.0 - 0.75 * channelControl ) * vec2(
 		drift( q * 2.3 + aSeed.x * 40.0 - channelOf( uWanderX, who ) ),
 		drift( q * 2.9 + aSeed.y * 40.0 + channelOf( uWanderY, who ) )
 	);
@@ -660,11 +665,13 @@ void main() {
 	float muted = 0.46 * channelHeal;
 	vTint = mix( vTint, vec3( dot( vTint, vec3( 0.2126, 0.7152, 0.0722 ) ) ), muted );
 	// Fainter all the way down the dive, and gone before the horizon: they must not gather
-	// into a light there.
+	// into a light there. (It fades as it draws together into one line, from some 600 m out: when
+	// it began only at a kilometre, the last kilometres of all four, drawn into one line and seen
+	// edge on, made a small bright knot just over the horizon at dawn and dusk.)
 	// (Driven hard there are more filaments alight at once, so each is drawn a little fainter,
 	// or their colours would burn out to white where they lie thickest.)
 	vAlpha = uStrength * aKind.x * ( 1.0 - 0.4 * channelSurge ) * lit * ( 0.55 + 1.1 * channelPulse( aThread.x, ahead ) ) * smoothstep( 0.0, 0.05, aT )
-		* ( 1.0 - smoothstep( 0.7, 1.0, channelWay( ahead ) ) * ( 1.0 - 0.8 * lingering ) ) / ( 1.0 + ahead / 1500.0 ) / ( 1.0 + 2.0 * lingering ) / ( 1.0 + 1.6 * soften );
+		* ( 1.0 - smoothstep( 0.5, 0.88, channelWay( ahead ) ) * ( 1.0 - 0.8 * lingering ) ) / ( 1.0 + ahead / 1500.0 ) / ( 1.0 + 2.0 * lingering ) / ( 1.0 + 1.6 * soften );
 	vEdge = aSide;
 	vSoft = max( aSoft, max( lingering, max( 0.9 * soften, 0.85 * nightReading ) ) );
 	// The strongest's own weaves show white against anything. By day they are not thinned away
@@ -700,6 +707,12 @@ void main() {
 	vAlpha *= 1.0 - channelHeal * smoothstep( 130.0, 240.0, ahead );
 	// (In a storm by day the linked flow is thrown wide over the waves; as colour it is far too much.)
 	vAlpha *= 1.0 - 0.65 * uDay * channelControl;
+	// (And at any hour, so much of it lying on itself burnt out to a white sheet over the sea, the
+	// strongest's most of all: a storm is met with strength, which is not brightness.)
+	vAlpha /= 1.0 + ( 1.5 + 2.0 * vWhite ) * channelControl;
+	// (Thrown widest far out, it was pressed into a bright band along the horizon: it thins away
+	// before that, over the nearer waves, which are the ones being worked.)
+	vAlpha *= 1.0 - channelControl * smoothstep( 0.3, 0.65, channelWay( ahead ) );
 	// (Not the veils: a broad veil of colour lies on the day sea as a stain.)
 	vAlpha *= 1.0 - 0.8 * uDay * step( 0.9, aSoft );
 }
@@ -2110,32 +2123,45 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	//   curious      how often they are among those who sound the water
 	// The strongest's attention to air, pressure, waves and the rest is 0.84: the owner had it
 	// brought down by 16%, so that not every small thing is looked into.
+	//
+	// (14 October, the owner: more maturity, more nuanced, less unruliness, after Kahlil Gibran's
+	// The Prophet, which was read for it. They are grown people at a shared work. Their reason and
+	// their passion are "the rudder and the sails" of each: so none is all sail, rash and soon
+	// spent, and none all rudder; the steadiest are not the dullest, and the quickest still keep
+	// their line (steady is never under 0.6, eager between 0.3 and 0.8, stamina at least 0.5). They
+	// work together with "spaces in your togetherness", "as the strings of a lute are alone though
+	// they quiver with the same music": none wholly joins, none holds wholly apart (sociable 0.35
+	// to 0.8). And they differ in how much they long and how fast, which is no fault: "let not him
+	// who longs much say to him who longs little, 'Wherefore are you slow and halting?'" Three were
+	// renamed for it: Gale, Spark and Drift are Sail, Lantern and Mist.)
 	const TEMPERS = [
 		{ name: "the strongest", air: 0.84, water: 0.84, eager: 1, stamina: 1, steady: 1, sociable: 0.5, curious: 1 },
-		// Dutiful and even: holds a place longest, strays least, leaves the looking to others.
-		{ name: "Keel", air: 0.5, water: 0.55, eager: 0.6, stamina: 0.95, steady: 0.9, sociable: 0.7, curious: 0.2 },
-		// All air: first forward when the wind shifts, quick in, never still for long.
-		{ name: "Kite", air: 0.95, water: 0.2, eager: 0.9, stamina: 0.45, steady: 0.3, sociable: 0.4, curious: 0.7 },
-		// All water: slow to come in, patient, goes furthest under and stays longest.
-		{ name: "Fathom", air: 0.15, water: 0.95, eager: 0.25, stamina: 0.8, steady: 0.8, sociable: 0.35, curious: 0.95 },
-		// Hot and quick: in at once, burns through a turn, restless.
-		{ name: "Ember", air: 0.6, water: 0.35, eager: 1, stamina: 0.25, steady: 0.25, sociable: 0.55, curious: 0.45 },
-		// The one who joins things: works best laid in with others, even and unhurried.
-		{ name: "Loom", air: 0.45, water: 0.5, eager: 0.55, stamina: 0.7, steady: 0.75, sociable: 1, curious: 0.5 },
-		// Quiet and attentive, to pressure most of all: slow in, often sounding.
-		{ name: "Listener", air: 0.75, water: 0.6, eager: 0.2, stamina: 0.6, steady: 0.85, sociable: 0.3, curious: 0.9 },
-		// Wind again, but rougher than Kite: eager, tiring, unruly.
-		{ name: "Gale", air: 0.9, water: 0.3, eager: 0.85, stamina: 0.3, steady: 0.15, sociable: 0.5, curious: 0.35 },
-		// Stubborn water: holds a place a long time, keeps to themself.
-		{ name: "Reef", air: 0.2, water: 0.85, eager: 0.4, stamina: 0.9, steady: 0.85, sociable: 0.15, curious: 0.55 },
-		// For still weather: the steadiest of all, forward when little is happening, alone.
-		{ name: "Glass", air: 0.3, water: 0.4, eager: 0.3, stamina: 0.65, steady: 1, sociable: 0.2, curious: 0.4 },
-		// Young: into everything, quick, erratic, soon spent.
-		{ name: "Spark", air: 0.65, water: 0.65, eager: 0.95, stamina: 0.2, steady: 0.1, sociable: 0.75, curious: 0.85 },
-		// Slow and heavy: late in, hard to move once there, drawn to the water.
-		{ name: "Ballast", air: 0.1, water: 0.75, eager: 0.1, stamina: 0.85, steady: 0.95, sociable: 0.6, curious: 0.3 },
-		// A dreamer: wanders, follows whoever is near, curious about all of it.
-		{ name: "Drift", air: 0.55, water: 0.55, eager: 0.5, stamina: 0.4, steady: 0.2, sociable: 0.9, curious: 0.8 },
+		// The rudder: holds a place longest and lies stillest; reason that serves and does not rule.
+		{ name: "Keel", air: 0.5, water: 0.55, eager: 0.55, stamina: 0.95, steady: 0.95, sociable: 0.65, curious: 0.35 },
+		// Air, and free because held: first to feel a shift in the wind, never carried off by it.
+		{ name: "Kite", air: 0.9, water: 0.35, eager: 0.75, stamina: 0.6, steady: 0.65, sociable: 0.5, curious: 0.7 },
+		// Patient water: comes in slowly, goes deepest, and does not hurry back with what it finds.
+		{ name: "Fathom", air: 0.3, water: 0.95, eager: 0.35, stamina: 0.85, steady: 0.85, sociable: 0.4, curious: 0.9 },
+		// Warmth that lasts: comes in readily, and burns low and long rather than bright and short.
+		{ name: "Ember", air: 0.6, water: 0.45, eager: 0.8, stamina: 0.55, steady: 0.65, sociable: 0.55, curious: 0.5 },
+		// Joins without binding: lays a tress in with the others and keeps a space between them.
+		{ name: "Loom", air: 0.5, water: 0.55, eager: 0.5, stamina: 0.75, steady: 0.8, sociable: 0.8, curious: 0.5 },
+		// Quiet and attentive, to pressure most of all: listens long before moving, often sounding.
+		{ name: "Listener", air: 0.75, water: 0.6, eager: 0.35, stamina: 0.7, steady: 0.9, sociable: 0.4, curious: 0.85 },
+		// Passion with a rudder: answers a strong wind fully, and lets it go when it has passed.
+		{ name: "Sail", air: 0.9, water: 0.35, eager: 0.7, stamina: 0.55, steady: 0.6, sociable: 0.5, curious: 0.45 },
+		// Constant water: holds a place a long time, keeps their own counsel without turning away.
+		{ name: "Reef", air: 0.3, water: 0.85, eager: 0.4, stamina: 0.9, steady: 0.9, sociable: 0.35, curious: 0.55 },
+		// For still weather: forward when little is happening; clear, and still.
+		{ name: "Glass", air: 0.35, water: 0.45, eager: 0.35, stamina: 0.7, steady: 0.95, sociable: 0.35, curious: 0.45 },
+		// The youngest: open to all of it, still learning to hold; carries what is given and passes
+		// it on ("empty and dark shall I raise my lantern").
+		{ name: "Lantern", air: 0.65, water: 0.65, eager: 0.7, stamina: 0.5, steady: 0.6, sociable: 0.65, curious: 0.8 },
+		// Slow and grounding: late in, unhurried once there, a weight the others steady themselves by.
+		{ name: "Ballast", air: 0.3, water: 0.75, eager: 0.3, stamina: 0.85, steady: 0.95, sociable: 0.6, curious: 0.35 },
+		// A dreamer, who wanders in thought and not in hand: goes where the others are and sees what
+		// they miss ("life, and all that lives, is conceived in the mist and not in the crystal").
+		{ name: "Mist", air: 0.55, water: 0.6, eager: 0.45, stamina: 0.6, steady: 0.65, sociable: 0.7, curious: 0.8 },
 	];
 	// One of them, more likely the more a weight favours them.
 	const pick = <T>(from: T[], weight: (one: T) => number) => {
@@ -2299,10 +2325,14 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		}
 		// (The readers at the front now do the seeking into the day sky; the scout is the night's.)
 		const seeking = 0;
-		tendScout(delta, time, probing === "air" ? 1 : Math.max(scout * (1 - gathering), seeking), aloft, slowToRise, wind.gust, thermal, probing === "air");
+		// (Not while all thirteen are in the dawn or dusk link, when there is nobody free to send it
+		// up; nor in a storm, which would tear it, and when every hand is wanted on the waves.)
+		const sparing = (1 - THREE.MathUtils.smoothstep(gathering, 0.05, 0.3)) * (1 - THREE.MathUtils.smoothstep(control, 0.05, 0.3));
+		tendScout(delta, time, (probing === "air" ? 1 : Math.max(scout * (1 - gathering), seeking)) * sparing, aloft, slowToRise, wind.gust, thermal, probing === "air");
 		const calls = { air: unusual.air, water: unusual.water, need };
 		takeTurns(delta, time, linkedAll, calls);
-		tendSoundings(delta, time, thermal, showSoundings === true, linkedAll, probing === "water", calls);
+		// (Nor does anyone sound the water in a storm: they let go, as for the dawn and dusk link.)
+		tendSoundings(delta, time, thermal, showSoundings === true, linkedAll || control > 0.05, probing === "water" && control <= 0.05, calls);
 		// Slowing the boat is not the work of the four at the front. The weaker ones do it, with deep
 		// weaves close round the boat (drawn in the water: `deepWeave` in gerstner-waves.ts). So the
 		// weaving ahead goes on as it otherwise would, with its story, however the boat is held.

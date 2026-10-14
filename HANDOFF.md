@@ -126,8 +126,8 @@ All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerst
   the owner's word): the strongest looks into it first with an investigative weave into the air
   or the water for 10 to 16 seconds, then channels with it, the others following. Only 84% of
   what is unusual counts (the owner had the strongest's attention reduced by 16%).
-- **The twelve have temperaments** (`TEMPERS`: Keel, Kite, Fathom, Ember, Loom, Listener, Gale,
-  Reef, Glass, Spark, Ballast, Drift) that drive who steps forward, how soon they come in, how
+- **The twelve have temperaments** (`TEMPERS`: Keel, Kite, Fathom, Ember, Loom, Listener, Sail,
+  Reef, Glass, Lantern, Ballast, Mist) that drive who steps forward, how soon they come in, how
   still their tress lies, and who sounds the water. The assistant invented them; the owner has
   not yet reviewed the names or numbers.
 - **Soundings**: every two or three minutes three or four of them feel the water with fine

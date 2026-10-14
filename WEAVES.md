@@ -216,10 +216,24 @@ a picture. A photograph or painting whose colour or line is right is worth more 
   goes straight to what calls them now, not to their old reading and then, a second later, to
   another. Watched in motion for a few minutes in a headless browser.
 - You cannot tell one channeller from another by their weave; only the kind of reading shows.
-- The twelve names and temperaments are the assistant's invention and unreviewed by the owner.
+- The twelve names and temperaments are the assistant's invention. On 14 October the owner asked
+  for more maturity and less unruliness, after Gibran's The Prophet: all are now grown and
+  steady at a shared work, and Gale, Spark and Drift became Sail, Lantern and Mist (see the
+  comment above `TEMPERS`). Not yet reviewed name by name.
 - The forecast changes about hourly, so within one visit only the waves under the boat and the
   gusts actually move. The moment each gust arrives is made up; its size is real.
-- Dawn, dusk and storm have not been looked at since the readings, turns and colours were added.
+- Dawn, dusk and storm, looked at and mended 14 October (`weaves-reference/2026-10-14-dusk-*.jpg`,
+  `…-storm-*.jpg`, before and after):
+  - Dawn and dusk: the far end of the one flow gathered into a small bright knot just over the
+    horizon. It now fades as it draws together into one line, from some 600 m out. Its last
+    curl still shows faintly.
+  - Storm: the linked flow was a blown-out white sheet with gold and lilac loops through it. Now
+    each filament is fainter in a storm (the strongest's most), the strays are drawn in, and the
+    three strands lie side by side and sway instead of plaiting into loops. Still wrong: where
+    the flow lies over the next big crest, seen edge on, it is pressed into one bright band.
+  - Nobody sounds the water in a storm now, and the sky-scan is not sent up in a storm nor while
+    all thirteen are in the dawn or dusk link. (As a page opens on a storm, a sky-scan begun in
+    its first second still fades out over half a minute.)
 - The healed water's fading over minutes has never been watched.
 
 ## For an AI assistant
