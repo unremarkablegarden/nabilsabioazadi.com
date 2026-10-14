@@ -67,6 +67,26 @@ const FILAMENTS = 64;
 const GOLDEN = 14;
 const SEGMENTS = 300;
 
+// The height of the sea at a place (x), and beside it (y) the height of the long swell alone,
+// without the shorter waves that ride on it: what lies on the swell is lifted slowly, and the
+// short waves pass under and over it. (Shared by the weaves that lie on the sea; each declares
+// the wave uniforms.)
+const seaPartsChunk = (trains: number) => /* glsl */ `
+vec2 seaParts( vec2 p ) {
+	float distanceToEye = length( p - cameraPosition.xz );
+	vec2 height = vec2( 0.0 );
+	for ( int i = 0; i < ${trains}; i ++ ) {
+		float steepness = waves[ i ].z * waveSteepness
+			* ( 1.0 - smoothstep( 0.5 * waveFade[ i ], waveFade[ i ], distanceToEye ) );
+		if ( steepness <= 0.0 ) continue;
+		float k = waveForm[ i ].z;
+		float h = steepness / k * sin( k * dot( waveForm[ i ].xy, p ) - waveForm[ i ].w * waveTime + waves[ i ].y );
+		height += h * vec2( 1.0, 1.0 - smoothstep( 0.08, 0.2, k ) );
+	}
+	return height;
+}
+`;
+
 const vertexShader = (trains: number) => /* glsl */ `
 attribute float aT;
 attribute float aSide;
@@ -199,21 +219,7 @@ float seaHeight( vec2 p ) {
 	return height;
 }
 
-// The same, and beside it (y) the height of the long swell alone, without the shorter waves that
-// ride on it: what lies on the swell is lifted slowly, and the short waves pass under and over it.
-vec2 seaParts( vec2 p ) {
-	float distanceToEye = length( p - cameraPosition.xz );
-	vec2 height = vec2( 0.0 );
-	for ( int i = 0; i < ${trains}; i ++ ) {
-		float steepness = waves[ i ].z * waveSteepness
-			* ( 1.0 - smoothstep( 0.5 * waveFade[ i ], waveFade[ i ], distanceToEye ) );
-		if ( steepness <= 0.0 ) continue;
-		float k = waveForm[ i ].z;
-		float h = steepness / k * sin( k * dot( waveForm[ i ].xy, p ) - waveForm[ i ].w * waveTime + waves[ i ].y );
-		height += h * vec2( 1.0, 1.0 - smoothstep( 0.08, 0.2, k ) );
-	}
-	return height;
-}
+${seaPartsChunk(trains)}
 
 // A filament is energy sent out along a line, and it behaves as energy does: the further it
 // goes the more of it is lost. It spreads, it trembles (the heat of its going shakes it, more
@@ -1066,25 +1072,31 @@ void main() {
 
 // Soundings (the owner's). Every now and then three or four of the channellers feel the water:
 // its temperature and its currents. Each sends a tress of fine filaments, plaited in three, out
-// low over the sea ahead; it slips under the surface, quests about down there, comes up again
-// and returns to the boat. None of it is drawn to a pattern, and no two do it alike:
+// low over the sea ahead, and slips under the surface to feel. None of it is drawn to a pattern,
+// and no two do it alike:
 //   each begins when they are ready, reaches as far as they can, holds as long as they need,
 //                  and lets go in their own time;
 //   together       at times their tresses are laid in one and wound round each other on the way
 //                  out, but under water they part, each to feel its own quarter;
-//   in the water   it runs shallow, just under the mean surface, so the real waves cover it and
-//                  their troughs uncover it: it ducks in and out as the sea moves. The real
-//                  current carries it, further the longer it has been under. In water warmer than
-//                  the air the plait slackens, lifts and shimmers; in colder it draws tight and
-//                  lies deeper.
-//   coming back    what was felt runs along it towards the hands, and its colour leans a little
-//                  to the water's warmth or cold.
+//   the line      one long easy curve out, to its own side and with the current: never a loop
+//                  (the owner, 14 October: out under the water and back again, the soundings
+//                  stood on the sea as hoops; they are to be "beautiful and elegant and natural").
+//   on the water   it rides the long swell, low over the short waves, which pass under it. It
+//                  does not climb and dive: seen from so low, any line that runs out and then
+//                  visibly dips draws a hoop standing on the sea.
+//   in the water   it is lost to sight as it nears the water and slips under, out where it will;
+//                  never seen going down, and never shallow enough for a trough to uncover. In
+//                  water warmer than the air the plait slackens and shimmers; in colder it draws
+//                  tight and lies lower.
+//   coming back    nothing comes back as a second strand: what was felt runs home along it as
+//                  light, towards the hands, and its colour leans a little to the water's warmth
+//                  or cold.
 // It is a light touch and is drawn as one: faint threads, nothing near the bow.
 const SOUNDERS = 4;
 const SOUNDING_FILAMENTS = 15;
 const SOUNDING_SEGMENTS = 220;
 
-const soundingVertexShader = /* glsl */ `
+const soundingVertexShader = (trains: number) => /* glsl */ `
 attribute float aT;
 attribute float aSide;
 // Which sounder (0..3), which strand of the plait (0..2), a random number, width in pixels.
@@ -1094,7 +1106,7 @@ attribute vec4 aBraid;
 attribute vec4 aKind;
 uniform float uTime;
 uniform float uStrength;
-// For each sounder: how far their tress has run round its loop, and how far the cut has followed
+// For each sounder: how far their tress has run out, and how far the cut has followed
 // once they let go (past the end when there is none).
 uniform vec4 uHead;
 uniform vec4 uTail;
@@ -1112,12 +1124,19 @@ uniform float uOwn;
 uniform float uTogether;
 uniform float uThermal;
 uniform float channelCurrent;
+// The sea, to ride on it.
+uniform vec4 waves[ ${trains} ];
+uniform vec4 waveForm[ ${trains} ];
+uniform float waveFade[ ${trains} ];
+uniform float waveSteepness;
+uniform float waveTime;
 varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
 varying float vSoft;
 varying float vWhite;
 ${ribbonShaderChunk}
+${seaPartsChunk(trains)}
 
 float drift( float x ) {
 	float i = floor( x );
@@ -1129,46 +1148,50 @@ float ofSounder( vec4 each, float who ) {
 	return who < 0.5 ? each.x : who < 1.5 ? each.y : who < 2.5 ? each.z : each.w;
 }
 
-// 0..1 how far a point along the loop is under the sea. Each goes in and comes out where it will.
+// 0..1 how far a point along the tress has gone into the sea. Each goes in where it will.
 float soundingUnder( float t, float who ) {
-	float enters = 0.25 + 0.05 * hash1( who * 3.7 + 1.0 );
-	float leaves = 0.75 - 0.06 * hash1( who * 5.3 + 2.0 );
-	return smoothstep( enters - 0.06, enters + 0.06, t ) * ( 1.0 - smoothstep( leaves - 0.06, leaves + 0.06, t ) );
+	float enters = 0.72 + 0.14 * hash1( who * 3.7 + 1.0 );
+	return smoothstep( enters - 0.16, enters + 0.12, t );
 }
 
-// The line one sounder's tress lies along, relative to the boat.
+// Where the line of one sounder's tress lies, relative to the boat (y: height above the sea's
+// mean level).
 vec3 soundingStem( float t, float who ) {
 	float under = soundingUnder( t, who );
 	float warm = max( uThermal, 0.0 );
 	float still = max( - uThermal, 0.0 );
-	// Together in the air; under water each feels its own quarter.
-	float held = uTogether * ( 1.0 - 0.7 * under );
+	// Together near the boat; further out each feels its own quarter.
+	float held = uTogether * ( 1.0 - 0.8 * smoothstep( 0.25, 0.75, t ) );
 	float own = ( who - 1.5 ) * 0.36 + 0.14 * drift( uTime * 0.04 + who * 7.1 );
 	float bearing = mix( own, 0.1 * drift( uTime * 0.03 ), held );
-	float reach = mix( ofSounder( uReach, who ), 50.0, held );
+	float reach = mix( ofSounder( uReach, who ), 50.0, uTogether * 0.6 );
 	vec2 out_ = vec2( sin( bearing ), - cos( bearing ) );
 	vec2 across = vec2( - out_.y, out_.x );
-	// Out along one side and back along the other: which side, and how wide, is each one's own.
-	float arc = sin( 3.14159 * t );
-	float aside = reach * ( 0.16 + 0.1 * hash1( who * 2.3 ) ) * sin( 6.28319 * t ) * ( hash1( who * 4.9 ) < 0.5 ? 1.0 : - 1.0 );
-	// Under water it quests about.
-	aside += under * 1.6 * drift( t * 2.5 + uTime * 0.05 + who * 13.0 );
-	vec2 level = vec2( ( who - 1.5 ) * 1.5, 0.0 ) * ( 1.0 - arc ) + out_ * reach * arc + across * aside;
-	// The current carries it, further the longer it has been under, and it is drawn back against
-	// the current as it comes home.
-	float carried = smoothstep( 0.25, 0.75, t );
-	level.x += channelCurrent * 16.0 * carried * carried * ( 1.0 - smoothstep( 0.78, 1.0, t ) );
+	// One long easy curve: out the way it is sent, and round to its own side and with the current.
+	// (Each to their own side of the boat, the left ones left: they open like a fan and no two cross.)
+	float aside = reach * ( 0.3 + 0.15 * hash1( who * 2.3 ) ) * ( who < 1.5 ? - 1.0 : 1.0 ) + channelCurrent * 16.0;
+	vec2 hands = vec2( ( who - 1.5 ) * 1.5, 0.0 );
+	vec2 bend = hands + out_ * reach * 0.55;
+	vec2 level = mix( mix( hands, bend, t ), mix( bend, hands + out_ * reach + across * aside, t ), t );
 	// Together, the tresses wind round one another.
 	float wind = t * 14.0 - uTime * 0.2 + who * 1.5708;
-	vec2 wound = vec2( cos( wind ), sin( wind ) ) * 0.55 * held * arc;
-	// Low over the sea, not arched high; and shallow under it, where the real waves cover and
-	// uncover it. Warm water lifts it; cold lets it lie deeper.
-	float air = 1.0 + 0.6 * arc + 0.5 * drift( t * 3.0 + who * 5.0 + uTime * 0.05 );
-	float depth = 0.45 + 0.5 * still - 0.25 * warm + 0.3 * drift( t * 3.0 + uTime * 0.06 + who * 3.0 );
-	vec3 p = vec3( level.x + across.x * wound.x, mix( air + wound.y, - depth, under ), level.y + across.y * wound.x );
-	// It leaves from, and returns to, hands held a little below the eye.
-	p.y = mix( cameraPosition.y - 1.2, p.y, smoothstep( 0.0, 0.16, t ) * smoothstep( 1.0, 0.84, t ) );
-	return p;
+	vec2 wound = vec2( cos( wind ), sin( wind ) ) * 0.55 * held * smoothstep( 0.0, 0.2, t );
+	level += across * wound.x;
+	// Riding the long swell, low over the short waves: clear of them near the boat, nearer them
+	// as it goes. Warm water lifts it; cold lets it lie lower.
+	vec2 sea = seaParts( vec2( cameraPosition.x, cameraPosition.z - 2.0 ) + level );
+	float clear = mix( 1.0, 0.45, smoothstep( 0.1, 0.5, t ) ) * ( 1.0 + 0.3 * warm - 0.3 * still ) + 0.25 * wound.y;
+	// And into the water, gently and out of sight (see soundingLost).
+	float y = sea.y + mix( clear, - 1.2 - 0.6 * still, under );
+	// It leaves from hands held a little below the eye.
+	y = mix( cameraPosition.y - 1.2, y, smoothstep( 0.0, 0.16, t ) );
+	return vec3( level.x, y, level.y );
+}
+
+// 0..1 how far a point is lost to sight: going into the water it fades before it gets there, so
+// that it is never seen going down.
+float soundingLost( float t, float who ) {
+	return smoothstep( 0.0, 0.3, soundingUnder( t, who ) );
 }
 
 vec3 soundingPoint( float t ) {
@@ -1217,13 +1240,15 @@ void main() {
 	vShade = uDay;
 	gl_Position = ribbonPosition( clip, clipAhead, aSide, mix( 1.0, max( 1.0, 2.5 / uPixelRatio ), uDay ) * vWide * aBraid.w * ( 1.0 + 2.5 * loose + 3.0 * soften ) );
 	// What is felt runs along it towards the hands.
-	float lit = smoothstep( - 0.25, 0.4, drift( aT * aKind.y - uTime * aKind.z + aBraid.z * 91.0 ) );
+	float lit = smoothstep( - 0.25, 0.4, drift( aT * aKind.y + uTime * aKind.z + aBraid.z * 91.0 ) );
 	// Going out it is the pale of any weave. Coming back it leans to the water's warmth or cold.
 	vec3 pale = vec3( 0.8, 0.88, 1.0 );
 	vec3 felt = uThermal > 0.0 ? mix( pale, vec3( 1.0, 0.82, 0.64 ), 0.6 * uThermal ) : mix( pale, vec3( 0.5, 0.72, 1.0 ), - 0.6 * uThermal );
 	vTint = mix( pale, felt, smoothstep( 0.3, 0.65, aT ) );
-	// Nothing near the bow: it is seen from where it nears the water.
-	float away = smoothstep( 0.05, 0.2, aT ) * smoothstep( 0.95, 0.8, aT );
+	// Nothing near the bow: it is seen from where it lies on the water, and until it goes in.
+	// (Its drop from the hands, so near the eye, was a hook at the foot of the picture.)
+	float near = 0.1 * hash1( who * 6.1 + 3.0 );
+	float away = smoothstep( 0.12 + near, 0.3 + near, aT ) * ( 1.0 - soundingLost( aT, who ) );
 	vAlpha = uStrength * aKind.x * lit * inHand * kept * away / ( 1.0 + 1.5 * loose ) / ( 1.0 + 1.6 * soften );
 	vEdge = aSide;
 	vSoft = max( loose, 0.9 * soften );
@@ -1650,6 +1675,11 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uTogether: { value: 0 },
 		uThermal: { value: 0 },
 		channelCurrent: sea.channelCurrent,
+		waves: sea.waves,
+		waveForm: sea.waveForm,
+		waveFade: sea.waveFade,
+		waveSteepness: sea.waveSteepness,
+		waveTime: sea.waveTime,
 		uPixelRatio: uniforms.uPixelRatio,
 		uResolution: uniforms.uResolution,
 	};
@@ -1657,7 +1687,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		soundingGeometry,
 		new THREE.ShaderMaterial({
 			uniforms: soundingUniforms,
-			vertexShader: soundingVertexShader,
+			vertexShader: soundingVertexShader(sea.waves.value.length),
 			fragmentShader,
 			transparent: true,
 			depthWrite: false,
@@ -1854,7 +1884,11 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		calls.water += (clamp01(0.45 * sensed.set + 0.4 * Math.abs(weather.thermal) + 0.5 * Math.abs(weather.current) + 0.25 * weather.energy) - calls.water) * taken;
 		// Where each is to be read. The wind from where it comes, if that is anywhere ahead; the
 		// water from where the swell comes; the pressure overhead.
-		const ahead = (angle: number, most: number) => (Math.abs(angle) > 1.3 ? Math.sign(angle || 1) * most : Math.max(-most, Math.min(most, angle)));
+		// (From behind, the more nearly behind the more nearly straight ahead: not to whichever side
+		// it leans, which threw a reading across from one side to the other, unasked, each time the
+		// swell or the wind passed dead astern.)
+		const ahead = (angle: number, most: number) =>
+			Math.abs(angle) > 1.3 ? (Math.sign(angle) * most * (Math.PI - Math.abs(angle))) / (Math.PI - 1.3) : Math.max(-most, Math.min(most, angle));
 		towards.wind = ahead(Math.atan2(-weather.wind.across, -weather.wind.away), 0.5);
 		towards.water = ahead(weather.swellFrom, 0.42);
 	};
@@ -1903,7 +1937,10 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	const settling: ((typeof mended)[number] | undefined)[] = [undefined, undefined, undefined, undefined];
 	const flowAt = new THREE.Vector3();
 	// (All of it unhurried, the owner's "elegant, Odyssey-like".)
+	// Whether the strongest has asked them to link, and they have not yet done so.
+	let askedToLink = false;
 	const tend = (delta: number, linkNow: boolean, weather: Weather, only?: string) => {
+		if (linkNow) askedToLink = true;
 		sense(delta, weather);
 		const { need, energy } = weather;
 		// Healing, in the sea's own time: a set of waves has passed and the water eases. (If the
@@ -1912,7 +1949,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		let wanted = linked;
 		if (!linked) {
 			sinceLink += delta;
-			if ((eased && sinceLink > 32) || sinceLink > 90 || linkNow) wanted = true;
+			if ((eased && sinceLink > 32) || sinceLink > 90 || askedToLink) wanted = true;
 		} else {
 			linkedFor += delta;
 			// Until the next set is on them.
@@ -1928,8 +1965,11 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 				seat.until = clock + 5;
 			});
 		}
-		if (wanted !== linked) {
+		// (Not until the turn they are in has run out to the far ends of their weaves: a turn taken
+		// back half-way jumped, and is not meant.)
+		if (wanted !== linked && front >= 1.6) {
 			linked = wanted;
+			askedToLink = false;
 			if (linked) {
 				linkedFor = 0;
 				sensed.peak = 0;
@@ -1945,8 +1985,16 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			} else {
 				sinceLink = 0;
 				mended.forEach((one) => (one.growing = false));
-				// Parting, each listens again.
-				seats.forEach((seat) => (seat.until = Math.min(seat.until, clock + 1 + 2 * Math.random())));
+				// Parting, each listens again: and the weave goes straight out to what calls them now,
+				// not out to what they were at before and then, a breath later, turned to another.
+				// (And they give it its time before turning again.)
+				seats.forEach((seat, who) => {
+					seat.until = Math.min(seat.until, clock + 1 + 2 * Math.random());
+					if (seat.doing === "rest" || only) return;
+					const next = hears(who);
+					if (next !== "rest" && next !== seat.doing) Object.assign(seat, { doing: next, act: ACT[next], was: ACT[next], turn: 1, bearing: towards[next] + (who - 1.5) * 0.08 });
+					seat.age = 0;
+				});
 			}
 		}
 		// (Their own time stands still while they are linked.)

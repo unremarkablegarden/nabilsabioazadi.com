@@ -57,10 +57,13 @@ vec4 ribbonPosition( vec4 clip, vec4 clipAhead, float side, float widthPx ) {
 }
 
 // 0..1 whether a point is seen against the sky and not the sea: it is, once it stands above
-// the eye's own height, which is where the horizon lies. Eased in from a little under it.
+// the eye's own height, which is where the horizon lies. Eased in gradually, from a little under
+// the horizon to some ten degrees above it. (It was all at once, at the horizon itself: and the
+// eye rides the waves, so on every weave rising from the boat the place where it turned from a
+// fine line to a broad blur slid up and down with each wave, and the weave shuddered.)
 float againstSky( vec3 p ) {
 	float rise = ( p.y - cameraPosition.y ) / max( length( p.xz - cameraPosition.xz ), 1.0 );
-	return smoothstep( - 0.012, 0.004, rise );
+	return smoothstep( - 0.03, 0.18, rise );
 }
 
 float hash1( float n ) {

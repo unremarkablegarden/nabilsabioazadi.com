@@ -130,7 +130,7 @@ the four.
 | **Water reading** | one at the front, the water-minded most | when a set of higher waves passes, the sea and air differ in warmth, or the current runs | one long open line laid with the sea, never a loop (changed 13 October: the loop staggered and squared off). Metal goes first as one hair-fine line; water is the body and sinks along its length; air is folded under each passing crest; fire lifts off the far end downwind, only over a sea warmer than the air; earth goes down soonest and deepest and leaves the water mended a little for minutes | the current bends it and sets its side; real waves fold the air under; sea against air temperature brings the fire; the sea's energy sets how deep the earth goes; it is sent towards where the swell comes from. Unverified by night and in motion: see `formPoint` in `channellers.ts` | `/?hour=16.5&show=water`, and `&pretend=seaTemperature:22,currentSpeed:4` for fire and a strong current |
 | **Healing flow** | all at the front, linked | when a set of waves has passed and the water eases, or after 90 seconds without that | one braided flow, low over the water, that sinks into the sea about 100 m out; the water there turns bluer and glows faintly for some minutes | the waves under the boat set when; how much the sea is doing sets how hard it is driven. Its colours are muted by 46% (the owner's figure, 12 October) | `/?hour=16.5&show=healing` |
 | **Sky-scanning weave** ("scout") | two to five of those not at the front, or the strongest with others | see above | see above | see above | `/?hour=23&date=2026-10-11` |
-| **Soundings** | three or four of those *not* at the front | every two or three minutes | fine plaited tresses that run shallow under the waves and come back | sea against air temperature, the current; who takes part is by temperament | `/?show=soundings` |
+| **Soundings** | three or four of those *not* at the front | every two or three minutes | fine plaited tresses, each cast out low in one long open curve to its own side, riding the long swell, fading as they slip under; a fan, never a loop (changed 14 October: they stood on the sea as hoops). What is felt runs home along them as light | sea against air temperature, the current; who takes part is by temperament | `/?show=soundings` |
 | **Dawn and dusk link** | all thirteen | sun between 9° under and 8° over the horizon | one great flow towards Hawaiʻi that climbs a little and dives into the horizon | the hour; how much the sea calls for | `/?hour=19.2` |
 | **Storm link** | the four, linked | in a storm, any hour | the flow thrown wide over the waves, entering each one | wave height, wind | `/?pretend=waveHeight:6,windSpeed:70,windGusts:95` |
 | **Deep weaves** | the weaker ones, at times the strongest | when the sea would carry the boat too fast | plaits in rings just under the surface round the boat | current and wind against the pilgrimage's pace | `/?show=masters` |
@@ -203,7 +203,18 @@ a picture. A photograph or painting whose colour or line is right is worth more 
 - The middle of a water reading is simply out of sight; it is not seen going under.
 - By night the readings are faint, and the healing flow is mostly white with little colour.
 - Under a moon the tops of stems show as small points of light.
-- Soundings stand out of the water as small hoops.
+- Fixed 14 October: soundings stood out of the water as small hoops. Now each is one open curve
+  that slips under out of sight. Before and after: `weaves-reference/2026-10-14-soundings-*.jpg`.
+- Fixed 14 October: every weave rising from the boat shuddered. Weaves are fine against the sea
+  and soft against the sky, and the change was all at once at eye level; the eye rides the waves,
+  so on each stem the place where it turned from line to blur slid up and down with every wave,
+  and the blurred part looked like oblong pieces. Now the softening comes on gradually, from just
+  under the horizon to about ten degrees above it (`againstSky` in `weave.ts`). Before and after:
+  `weaves-reference/2026-10-14-stems-*.jpg`.
+- Fixed 14 October, the turns: a reading aimed at swell or wind from dead astern no longer flips
+  from side to side; they no longer link half-way through a turn (it jumped); and parting, each
+  goes straight to what calls them now, not to their old reading and then, a second later, to
+  another. Watched in motion for a few minutes in a headless browser.
 - You cannot tell one channeller from another by their weave; only the kind of reading shows.
 - The twelve names and temperaments are the assistant's invention and unreviewed by the owner.
 - The forecast changes about hourly, so within one visit only the waves under the boat and the
