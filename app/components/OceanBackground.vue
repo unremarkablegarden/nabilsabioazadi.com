@@ -876,6 +876,8 @@ onMounted(() => {
 			showMasters: query.get("show") === "masters",
 			showSoundings: query.get("show") === "soundings",
 			showOnly: query.get("show") ?? undefined,
+			// Each channeller's own hand, from their temperament (the plan's first part): try it with ?hands.
+			hands: query.has("hands"),
 			gathering,
 			// Soft against a light sky, fine against a dark one.
 			soften: skyLight,

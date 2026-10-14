@@ -112,6 +112,14 @@ uniform vec4 uRestless;
 // the whole tress was thrown sideways at once.)
 uniform vec4 uWanderX;
 uniform vec4 uWanderY;
+// Each one's hand (see \`hands\` in update): how high they carry a reading (-1 low, for the
+// water-minded, to 1 high, for the air-minded), how open their tress lies (1 as before), how
+// loosely they hold it (0.5 as before), and how far its filaments have wound round, added up as
+// they go at each one's own pace. All as before unless ?hands is in the address.
+uniform vec4 uCarry;
+uniform vec4 uOpen;
+uniform vec4 uLoose;
+uniform vec4 uTempo;
 // 0..1 how far it is day. By day a weave is not seen as light (see the fragment shader), and
 // what they weave is akasha, air and water: for each seat, the element its occupant is weaving.
 uniform float uDay;
@@ -291,8 +299,11 @@ vec3 formPoint( float t, float act, float age ) {
 	vec2 side = vec2( - dir.y, dir.x );
 	float hands = cameraPosition.y - 1.2;
 	// Each filament's own small place in the tress.
-	float turn = aSeed.x * 6.28319 + tt * ( 4.0 + 5.0 * aSeed.y ) - channelTime * 0.15;
-	vec2 own = aSeed.z * vec2( cos( turn ), sin( turn ) );
+	float turn = aSeed.x * 6.28319 + tt * ( 4.0 + 5.0 * aSeed.y ) - 0.15 * channelOf( uTempo, who );
+	vec2 own = aSeed.z * vec2( cos( turn ), sin( turn ) ) * channelOf( uOpen, who );
+	// How high they carry it, and how loosely.
+	float carry = channelOf( uCarry, who );
+	float loose = channelOf( uLoose, who );
 	formShown = smoothstep( 0.0, 0.06, tt );
 	formTint = vec3( 1.0 );
 	formTinted = 0.0;
@@ -314,13 +325,15 @@ vec3 formPoint( float t, float act, float age ) {
 		float u = smoothstep( 0.34, 1.0, tt );
 		float sag = - uPressure;
 		float breath = sin( channelTime * 0.33 + who );
-		float top = 36.0 - 11.0 * sag + 1.5 * breath;
+		float top = ( 36.0 - 11.0 * sag + 1.5 * breath ) * ( 1.0 + 0.4 * carry );
 		// (It opens slowly once it is up, and then holds.)
 		float reach = ( 26.0 + 14.0 * abs( uPressure ) ) * ( 1.0 - exp( - age / 5.0 ) ) * ( 0.93 + 0.07 * breath );
 		vec2 bend = boat + thrown * 70.0;
 		xz = mix( mix( boat, bend, s ), mix( bend, boat + dir * 135.0, s ), s ) + side * own.x * ( 0.25 + 0.9 * s );
-		// (Faint by the boat and plain at its top: it is the top that is the reading.)
-		formShown = smoothstep( 0.04, 0.3, tt );
+		// (Plain from the hands by day: every weave begins at the boat, and faint there it seemed to
+		// rise out of the open sea. By night still faint by the boat, where a broad ribbon so near
+		// the eye was a bar of light.)
+		formShown = mix( smoothstep( 0.04, 0.3, tt ), smoothstep( 0.0, 0.06, tt ), uDay );
 		y = mix( hands, 2.4, smoothstep( 0.0, 0.22, s ) ) + ( top - 2.4 ) * pow( smoothstep( 0.1, 1.0, s ), 1.5 ) + own.y * ( 0.25 + 0.5 * s );
 		float spoke = aSeed.x * 6.28319 + 0.9 * u + channelTime * 0.03;
 		float r = reach * pow( u, 1.3 ) * ( 0.55 + 0.45 * fract( aSeed.y * 7.3 ) );
@@ -339,15 +352,15 @@ vec3 formPoint( float t, float act, float age ) {
 		float force = uWindView.z;
 		vec2 w = dot( uWindView.xy, uWindView.xy ) > 0.0001 ? normalize( vec2( uWindView.x, - uWindView.y ) ) : side;
 		vec2 crosswise = vec2( - w.y, w.x );
-		float top = 22.0 + 3.0 * sin( channelTime * 0.21 + who );
+		float top = ( 22.0 + 3.0 * sin( channelTime * 0.21 + who ) ) * ( 1.0 + 0.4 * carry );
 		vec2 bend = boat + thrown * 54.0;
 		xz = mix( mix( boat, bend, s ), mix( bend, boat + dir * 105.0, s ), s ) + w * 12.0 * force * s * s + side * own.x * ( 0.25 + 0.9 * s );
-		formShown = smoothstep( 0.04, 0.26, tt );
+		formShown = mix( smoothstep( 0.04, 0.26, tt ), smoothstep( 0.0, 0.06, tt ), uDay );
 		y = mix( hands, 2.0, smoothstep( 0.0, 0.22, s ) ) + ( top - 2.0 ) * pow( smoothstep( 0.1, 1.0, s ), 1.5 ) + own.y * ( 0.25 + 0.5 * s );
 		float gust = 1.0 + 0.8 * channelWind.y * sin( channelTime * 0.7 + who );
 		float longness = ( 28.0 + 115.0 * force ) * ( 0.85 + 0.15 * gust );
 		float flap = u * 8.0 - uFlap + aSeed.x * 2.2 + who;
-		float sway = ( 0.4 + 4.0 * u ) * ( 0.35 + 0.9 * force ) * gust;
+		float sway = ( 0.4 + 4.0 * u ) * ( 0.35 + 0.9 * force ) * gust * ( 0.6 + 0.8 * loose );
 		xz += w * longness * u + crosswise * ( sin( flap ) * sway + own.x * u * longness * 0.1 );
 		// (With no wind to carry it, it hangs.)
 		y += cos( flap * 0.8 ) * sway * 0.6 + own.y * u * longness * 0.06 - ( 1.0 - force ) * u * u * 16.0;
@@ -377,7 +390,7 @@ vec3 formPoint( float t, float act, float age ) {
 		xz += side * own.x * open;
 		vec2 sea = seaParts( xz );
 		// Clear of the short waves, which pass under it.
-		float clear = 0.4 + 0.25 * channelSea.y;
+		float clear = ( 0.4 + 0.25 * channelSea.y ) * ( 1.0 + 0.3 * carry );
 		y = clear * ( earth ? 0.4 : air ? 1.5 : 1.0 ) + own.y * open * 0.5;
 		// Air: folded under each crest that passes.
 		float crest = smoothstep( 0.2, 0.7, ( sea.x - sea.y ) / max( 0.25 * channelSea.y, 0.1 ) );
@@ -473,7 +486,9 @@ vec3 threadPoint( float t, bool onlyPlace ) {
 	// (In a storm the linked flow is thrown wide over the waves ahead.)
 	float width = ( 0.1 + 0.04 * along ) * ( 1.0 + 1.8 * channelHold ) * ( 1.0 + 1.4 * channelControl ) * ( 0.75 + 0.7 * channelSea.x ) * ( 1.0 + 0.4 * channelSurge ) * smoothstep( - 4.0, 8.0, ahead ) * breath * ( 0.55 + 0.7 * channelStrength( who ) ) * ( 1.0 - smoothstep( 0.6, 0.97, way ) )
 		// (Each for themselves by day, a tress lies open and loose on the sea, not drawn tight.)
-		* ( 1.0 + 0.5 * ( 1.0 - channelLink ) );
+		* ( 1.0 + 0.5 * ( 1.0 - channelLink ) )
+		// (Each as open or as close as they hold it: see uOpen.)
+		* mix( channelOf( uOpen, who ), 1.0, channelLink );
 	// Its three strands pass over and under each other: a plait, loosely kept.
 	float phase = q * 6.0 - channelTime * 0.4 + aThread.y * 2.0944 + who * 0.7;
 	vec2 across = vec2( sin( phase ), 0.5 * sin( 2.0 * phase ) ) * 0.42;
@@ -1196,8 +1211,9 @@ vec3 soundingStem( float t, float who ) {
 	float clear = mix( 1.0, 0.45, smoothstep( 0.1, 0.5, t ) ) * ( 1.0 + 0.3 * warm - 0.3 * still ) + 0.25 * wound.y;
 	// And into the water, gently and out of sight (see soundingLost).
 	float y = sea.y + mix( clear, - 1.2 - 0.6 * still, under );
-	// It leaves from hands held a little below the eye.
-	y = mix( cameraPosition.y - 1.2, y, smoothstep( 0.0, 0.16, t ) );
+	// It leaves from hands held a little below the eye, and comes down to the water slowly and
+	// in one easy curve: brought down quickly, so near the eye, it drew a hook.
+	y = mix( cameraPosition.y - 1.2, y, smoothstep( 0.0, 0.4, t ) );
 	return vec3( level.x, y, level.y );
 }
 
@@ -1258,10 +1274,8 @@ void main() {
 	vec3 pale = vec3( 0.8, 0.88, 1.0 );
 	vec3 felt = uThermal > 0.0 ? mix( pale, vec3( 1.0, 0.82, 0.64 ), 0.6 * uThermal ) : mix( pale, vec3( 0.5, 0.72, 1.0 ), - 0.6 * uThermal );
 	vTint = mix( pale, felt, smoothstep( 0.3, 0.65, aT ) );
-	// Nothing near the bow: it is seen from where it lies on the water, and until it goes in.
-	// (Its drop from the hands, so near the eye, was a hook at the foot of the picture.)
-	float near = 0.1 * hash1( who * 6.1 + 3.0 );
-	float away = smoothstep( 0.12 + near, 0.3 + near, aT ) * ( 1.0 - soundingLost( aT, who ) );
+	// Seen from the hands, as every weave begins at the boat, until it goes in.
+	float away = smoothstep( 0.0, 0.06, aT ) * ( 1.0 - soundingLost( aT, who ) );
 	vAlpha = uStrength * aKind.x * lit * inHand * kept * away / ( 1.0 + 1.5 * loose ) / ( 1.0 + 1.6 * soften );
 	vEdge = aSide;
 	vSoft = max( loose, 0.9 * soften );
@@ -1297,6 +1311,8 @@ export interface ChannellerState {
 	showMasters?: boolean;
 	// The same for the soundings.
 	showSoundings?: boolean;
+	// Each channeller's own hand, from their temperament (?hands in the address): see \`hand\`.
+	hands?: boolean;
 	// And for one kind of reading (?show=pressure, wind or water), or the healing (?show=healing):
 	// all four at the front do that, and nothing else.
 	showOnly?: string;
@@ -1421,6 +1437,10 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uRestless: { value: new THREE.Vector4() },
 		uWanderX: { value: new THREE.Vector4() },
 		uWanderY: { value: new THREE.Vector4() },
+		uCarry: { value: new THREE.Vector4() },
+		uOpen: { value: new THREE.Vector4(1, 1, 1, 1) },
+		uLoose: { value: new THREE.Vector4(0.5, 0.5, 0.5, 0.5) },
+		uTempo: { value: new THREE.Vector4() },
 		uTints: { value: TINTS },
 		uElements: { value: ELEMENTS },
 		uBaseTone: { value: BASE },
@@ -1940,6 +1960,17 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	// or all of them between their readings and the healing flow.
 	// (The owner found 6.5 seconds erratic, not intentional: a turn is a slow, meant thing.)
 	const TURNS_IN = 12;
+	// Each one's hand (the owner, 14 October: "a recognisable hand for each channeller"; the
+	// first part of the plan to make the weaving more human). Who is in the seat shows in how the
+	// weave is worked, not only in when:
+	//   pace     how briskly they cast out, turn and let go: the eager briskly, the patient
+	//            laying it out slowly (a turn takes 10 to 14 seconds; never hurried)
+	//   carry    how high they hold a reading: the air-minded higher, the water-minded lower
+	//   open     how open their tress lies: the sociable more open, the reserved close
+	//   loose    how loosely they hold it: the less steady let it flap and stray more
+	// Eased over a few seconds when another takes the seat. All as before without ?hands.
+	let handsOn = false;
+	const hand = [0, 1, 2, 3].map(() => ({ pace: 1, carry: 0, open: 1, loose: 0.5, set: false }));
 	let toReading = false;
 	let front = 1.6;
 	// Water they have healed stays altered for minutes (the owner's): up to four places.
@@ -2069,7 +2100,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 				settling[who] = undefined;
 			}
 			seat.age += delta;
-			seat.turn = Math.min(1, seat.turn + delta / TURNS_IN);
+			// (At each one's own pace, which moves a turn's 12 seconds no further than 10 to 14.)
+			seat.turn = Math.min(1, seat.turn + (delta * (1 + 0.6 * (hand[who]!.pace - 1))) / TURNS_IN);
 			want[who] = linked ? !sitsOut.includes(who) : seat.doing !== "rest";
 			// (Eased: a weave let go keeps its way while it fades, and bends only slowly to the next.)
 			into[who] = into[who]! + (INTO[seat.doing] - into[who]!) * Math.min(1, delta / 2.5);
@@ -2312,7 +2344,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		return target.set(camera.position.x + side, 1.3 + rise, camera.position.z - ahead);
 	};
 
-	const update = ({ time, delta, energy, waveHeight, need, hold: slowing, current, control, scout, showMasters, showSoundings, showOnly, gathering, soften, tending, day, pressure, wind, heave, swellFrom, white, unusual, below, aloft, slowToRise, thermal, strength, gain }: ChannellerState) => {
+	const update = ({ time, delta, energy, waveHeight, need, hold: slowing, current, control, scout, showMasters, showSoundings, showOnly, hands, gathering, soften, tending, day, pressure, wind, heave, swellFrom, white, unusual, below, aloft, slowToRise, thermal, strength, gain }: ChannellerState) => {
 		// (`byDay` is from when this was only done by day. It is now every hour but dawn and dusk.)
 		const byDay = tending > 0.5 && control <= 0.05;
 		// (As it comes in, `strength` is how far it is one of the nights without a moon.)
@@ -2408,7 +2440,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 				linger[who] = 0;
 			}
 			if (weaving[who]) {
-				head[who] = Math.min(ALL, head[who]! + delta / RUNS_OUT_IN);
+				head[who] = Math.min(ALL, head[who]! + (delta * hand[who]!.pace) / RUNS_OUT_IN);
 				// A new weave that reaches the one cut loose before it takes it up again.
 				if (tail[who]! < NONE && head[who]! >= tail[who]! - 0.06) {
 					tail[who] = NONE;
@@ -2416,7 +2448,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 				}
 			}
 			if (tail[who]! < NONE) {
-				if (tail[who]! < LINGERS_FROM) tail[who] = tail[who]! + delta * CUT_TRAVELS * (0.6 + 1.2 * energy) * (1 + 1.6 * reading);
+				if (tail[who]! < LINGERS_FROM) tail[who] = tail[who]! + delta * hand[who]!.pace * CUT_TRAVELS * (0.6 + 1.2 * energy) * (1 + 1.6 * reading);
 				else {
 					tail[who] = tail[who]! + delta * 0.008;
 					linger[who] = linger[who]! + delta / LINGERS_FOR;
@@ -2511,6 +2543,23 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			uniforms.uWanderY.value.setComponent(seat, uniforms.uWanderY.value.getComponent(seat) + delta * (0.11 + 0.16 * restless));
 		}
 		restlessSet = true;
+		handsOn = hands === true;
+		hand.forEach((one, seat) => {
+			const temper = TEMPERS[memberAt(seat)]!;
+			const want = handsOn
+				? { pace: 0.8 + 0.45 * temper.eager, carry: temper.air - temper.water, open: 0.65 + 0.8 * temper.sociable, loose: 1 - temper.steady }
+				: { pace: 1, carry: 0, open: 1, loose: 0.5 };
+			const ease = one.set ? Math.min(1, delta / 3) : 1;
+			one.pace += (want.pace - one.pace) * ease;
+			one.carry += (want.carry - one.carry) * ease;
+			one.open += (want.open - one.open) * ease;
+			one.loose += (want.loose - one.loose) * ease;
+			one.set = true;
+			uniforms.uCarry.value.setComponent(seat, one.carry);
+			uniforms.uOpen.value.setComponent(seat, one.open);
+			uniforms.uLoose.value.setComponent(seat, one.loose);
+			uniforms.uTempo.value.setComponent(seat, uniforms.uTempo.value.getComponent(seat) + delta * one.pace);
+		});
 		uniforms.uWhite.value = white;
 		uniforms.uGain.value = gain;
 		uniforms.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(uniforms.uPixelRatio.value);

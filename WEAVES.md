@@ -139,6 +139,21 @@ the four.
 loudly the wind, the pressure and the water are each calling. Leave `controls` out of the
 address to see the picture without the panel.
 
+## Each one's hand (begun 14 October, at `?hands`)
+
+The first part of the plan to make the weaving more human: who is in a seat shows in how the
+weave is worked, from their temperament (`TEMPERS`). Add `hands` to any address to see it, for
+example `/?hour=18&show=wind&hands`; without it everything is as before.
+
+| | From | What it does |
+|---|---|---|
+| Pace | eager | how briskly they cast out, turn and let go; a turn takes 10 to 14 seconds |
+| Carry | air against water | the air-minded hold a reading up to 40% higher, the water-minded lower |
+| Open | sociable | how open their tress lies, from close to half as wide again |
+| Loose | steady | how much the wind reading's filaments flap |
+
+Mostly seen in motion; in a still picture only the heights and the openness differ, and modestly.
+
 ## The rules now in force for every weave
 
 Each of these came from the owner, in these words or close to them.
