@@ -50,6 +50,8 @@ const pickColour = () => {
 };
 // Set by the navigation's pause button (WCAG 2.2.2): while true nothing is redrawn.
 const motionPaused = useState("motion-paused", () => false);
+// The navigation's drawer; while it is open the view holds still.
+const menuOpen = useState("menu-open", () => false);
 // The navigation can show the place, time and conditions itself, in which case the caption here is left out.
 const readout = useState<{ place?: string; time: string; waves?: string; wind?: string }>("scene-readout", () => ({ time: "" }));
 const captionInNavigation = useState("caption-in-navigation", () => false);
@@ -214,10 +216,25 @@ onMounted(() => {
 	const SCREEN_LAYER = 1;
 	camera.layers.enable(SCREEN_LAYER);
 
-	// Pointer position in -1..1 on both axes; the camera eases towards it each frame.
+	// Pointer position in -1..1 on both axes.
 	const pointer = new THREE.Vector2();
+	// Where the view is aimed, in the same terms; the camera eases towards it each frame. It is
+	// the pointer, less the reaching for things (the owner, October: going to the menu turned the
+	// view far to the left and high up, which could disorientate). The view follows the pointer
+	// as it wanders, not as it is carried quickly across the screen to something, and it holds
+	// while the pointer is on the navigation or anything else to be pressed, and while the menu is
+	// open. When the pointer settles again the view goes on to where it now is.
+	const aim = new THREE.Vector2();
+	const lastPointer = new THREE.Vector2();
+	// How fast the pointer has lately been moving, in screen half-widths a second.
+	let pointerSpeed = 0;
+	// Above about this speed the pointer is reaching for something rather than looking about.
+	// (/?reach=1.5, or another speed, tries it by feel.)
+	const REACH = Number(query.get("reach")) > 0 ? Number(query.get("reach")) : 1.5;
+	let onControl = false;
 	const onPointerMove = (event: PointerEvent) => {
 		pointer.set((event.clientX / window.innerWidth) * 2 - 1, (event.clientY / window.innerHeight) * 2 - 1);
+		onControl = event.target instanceof Element && !!event.target.closest("header.site, a, button, input, select, textarea, label, summary, [role='button']");
 	};
 	window.addEventListener("pointermove", onPointerMove);
 	// How far the view turns with the pointer (the owner's, October: "viewing higher than we do
@@ -767,8 +784,19 @@ onMounted(() => {
 			camera.position.y += (cameraHeight + swell + heave - camera.position.y) * follow(0.05);
 		}
 		camera.rotation.z = sway * (0.06 * Math.sin(time * 0.33) + 0.025 * Math.sin(time * 0.83 + 0.7));
-		camera.rotation.y += (-lookAcross(pointer.x) - camera.rotation.y) * 0.03;
-		camera.rotation.x += (-lookUp(pointer.y) + pitch - camera.rotation.x) * 0.03;
+		// The speed rises at once with a quick movement and falls away slowly, so the slowing down
+		// at the end of a reach still counts as reaching.
+		if (delta > 0) {
+			const speedNow = pointer.distanceTo(lastPointer) / delta;
+			pointerSpeed += (speedNow - pointerSpeed) * Math.min(1, delta / (speedNow > pointerSpeed ? 0.05 : 0.4));
+		}
+		lastPointer.copy(pointer);
+		if (!onControl && !menuOpen.value) {
+			const wandering = 1 / (1 + (pointerSpeed / REACH) ** 4);
+			aim.lerp(pointer, follow((1 - Math.exp(-delta / 0.08)) * wandering));
+		}
+		camera.rotation.y += (-lookAcross(aim.x) - camera.rotation.y) * 0.03;
+		camera.rotation.x += (-lookUp(aim.y) + pitch - camera.rotation.x) * 0.03;
 
 		const flash = alive > 0.5 ? lightning(time, sky, fury, liveOnly ? thunderAmount(liveOnly) : 1) : 0;
 		// The storm darkens the day. At night it is lifted instead, or the sea would be lost in black.
