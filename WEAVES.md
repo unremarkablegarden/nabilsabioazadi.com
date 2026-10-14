@@ -127,7 +127,7 @@ the four.
 |---|---|---|---|---|---|
 | **Pressure reading** | one at the front, the air-minded most | when the barometer is moving, or nobody has looked for some minutes | a stem up into the air that opens level at its top and holds, like a held breath | `pressureTrend`: steady, a flat disc; falling, lower, drooping rim, greyer; rising, higher, lifted rim, golden | `/?hour=16.5&show=pressure&pretend=pressureTrend:-0.9` |
 | **Wind reading** | one at the front, the air-minded most | when the wind is strong, gusty, or a gust comes | a stem up at a slant whose filaments stream off downwind | wind speed, direction, gust factor: long and flat in a fresh wind, short and drooping in a light air; it is sent towards where the wind comes from | `/?hour=16.5&show=wind&pretend=windSpeed:30,windGusts:42` |
-| **Water reading** | one at the front, the water-minded most | when a set of higher waves passes, the sea and air differ in warmth, or the current runs | out low on one side, under the surface, back on the other, loosened | waves under the boat; sea against air temperature gives its returning colour (rose-gold warmer, violet colder, aquamarine alike); the current carries it; it is sent towards where the swell comes from | `/?hour=16.5&show=water&pretend=seaTemperature:22` |
+| **Water reading** | one at the front, the water-minded most | when a set of higher waves passes, the sea and air differ in warmth, or the current runs | one long open line laid with the sea, never a loop (changed 13 October: the loop staggered and squared off). Metal goes first as one hair-fine line; water is the body and sinks along its length; air is folded under each passing crest; fire lifts off the far end downwind, only over a sea warmer than the air; earth goes down soonest and deepest and leaves the water mended a little for minutes | the current bends it and sets its side; real waves fold the air under; sea against air temperature brings the fire; the sea's energy sets how deep the earth goes; it is sent towards where the swell comes from. Unverified by night and in motion: see `formPoint` in `channellers.ts` | `/?hour=16.5&show=water`, and `&pretend=seaTemperature:22,currentSpeed:4` for fire and a strong current |
 | **Healing flow** | all at the front, linked | when a set of waves has passed and the water eases, or after 90 seconds without that | one braided flow, low over the water, that sinks into the sea about 100 m out; the water there turns bluer and glows faintly for some minutes | the waves under the boat set when; how much the sea is doing sets how hard it is driven. Its colours are muted by 46% (the owner's figure, 12 October) | `/?hour=16.5&show=healing` |
 | **Sky-scanning weave** ("scout") | two to five of those not at the front, or the strongest with others | see above | see above | see above | `/?hour=23&date=2026-10-11` |
 | **Soundings** | three or four of those *not* at the front | every two or three minutes | fine plaited tresses that run shallow under the waves and come back | sea against air temperature, the current; who takes part is by temperament | `/?show=soundings` |
@@ -192,7 +192,14 @@ a picture. A photograph or painting whose colour or line is right is worth more 
 
 ## Known to be wrong
 
-- All sky forms are soft and blurred, so the wind reading's torn ends cannot be seen.
+- All sky forms are soft and blurred by day, but for the wind reading's streaming ends, which
+  are kept as threads (14 October: blurred, they turned "into oblong pieces rather than
+  filaments"). Its stem is still soft.
+- Fixed 14 October: the wind reading's flapping ran wild, faster and back and forth, the longer
+  the page was open. Watched for four minutes since; not yet for half an hour.
+- Fixed 14 October: when one channeller took another's seat, the whole tress snapped sideways
+  for an instant. Now the newcomer's restlessness comes on over a few seconds. Not yet watched
+  at the moment of a change of seat.
 - The middle of a water reading is simply out of sight; it is not seen going under.
 - By night the readings are faint, and the healing flow is mostly white with little colour.
 - Under a moon the tops of stems show as small points of light.

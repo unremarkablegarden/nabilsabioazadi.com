@@ -87,6 +87,11 @@ uniform float uSoften;
 // For each seat, 0..1 how restless its occupant is (their temperament): a restless one's
 // filaments stray further and wander quicker; a steady one's lie close and still.
 uniform vec4 uRestless;
+// How far each seat's filaments have wandered, along and across, added up as they go: a restless
+// one's the faster. (Not the time multiplied by how restless: then when another took the seat
+// the whole tress was thrown sideways at once.)
+uniform vec4 uWanderX;
+uniform vec4 uWanderY;
 // 0..1 how far it is day. By day a weave is not seen as light (see the fragment shader), and
 // what they weave is akasha, air and water: for each seat, the element its occupant is weaving.
 uniform float uDay;
@@ -111,6 +116,10 @@ uniform float uToReading;
 uniform float uFront;
 uniform float uPressure;
 uniform vec3 uWindView;
+// How far the wind reading's filaments have flapped, added up as it goes: the harder the wind the
+// faster. (Not the time multiplied by the wind's force: then every change in the force, every
+// gust, threw the flapping forward or back by as much more as the page had been open longer.)
+uniform float uFlap;
 uniform float uWarm;
 uniform vec3 uTints[ 3 ];
 uniform vec3 uElements[ 6 ];
@@ -146,6 +155,16 @@ float formWeight;
 float formPush;
 // 0..1 how far a turn is under way at all (0 before and after it).
 float formGoing;
+// 0..1 how far the reading keeps its filaments hair-fine by night, and is not drawn broad and
+// soft: a tress laid close on the sea, not one spread over the dark of the sky.
+float formFine;
+// 0..1 how far it keeps its filaments as threads against a day sky, not softened to a blur there:
+// the wind reading's streaming ends (the owner, 14 October: blurred, they turned "into oblong
+// pieces rather than filaments").
+float formSharp;
+// 0..1 how far what it has taken its colour from is its own element (see the water reading),
+// which by day must show in the sheath beside the thread too.
+float formDye;
 
 // A turn begins at the hands and runs out along the weave: what is near the boat is in the new
 // place first, and the far end follows. 0..1 how far a point has turned, for a turn that has
@@ -176,6 +195,22 @@ float seaHeight( vec2 p ) {
 		if ( steepness <= 0.0 ) continue;
 		float k = waveForm[ i ].z;
 		height += steepness / k * sin( k * dot( waveForm[ i ].xy, p ) - waveForm[ i ].w * waveTime + waves[ i ].y );
+	}
+	return height;
+}
+
+// The same, and beside it (y) the height of the long swell alone, without the shorter waves that
+// ride on it: what lies on the swell is lifted slowly, and the short waves pass under and over it.
+vec2 seaParts( vec2 p ) {
+	float distanceToEye = length( p - cameraPosition.xz );
+	vec2 height = vec2( 0.0 );
+	for ( int i = 0; i < ${trains}; i ++ ) {
+		float steepness = waves[ i ].z * waveSteepness
+			* ( 1.0 - smoothstep( 0.5 * waveFade[ i ], waveFade[ i ], distanceToEye ) );
+		if ( steepness <= 0.0 ) continue;
+		float k = waveForm[ i ].z;
+		float h = steepness / k * sin( k * dot( waveForm[ i ].xy, p ) - waveForm[ i ].w * waveTime + waves[ i ].y );
+		height += h * vec2( 1.0, 1.0 - smoothstep( 0.08, 0.2, k ) );
 	}
 	return height;
 }
@@ -223,10 +258,23 @@ float aheadAt( float t ) {
 //              is really blowing, flapping, spreading and torn off at their own lengths. In a
 //              light air they hang and droop; in a gale they lie out long and flat and flap fast;
 //              in gusts the tearing comes and goes.
-//   water      Out low on one side, under the surface, and back on the other. It goes in a close
-//              tress and comes back changed: loosened, and in the colour of what it found. Sea
-//              warmer than the air, rose-gold; colder, a violet ice; alike, aquamarine. The
-//              current carries the far end of it.
+//   water      One long open line laid with the sea, never a loop across it (the owner, 13 October:
+//              the loop staggered and "sometimes bends into rectangles"; seen from so low, a loop
+//              lying flat on the sea is a level bar with two upright sides). Each element in it
+//              has the one thing to do that it has in an ocean:
+//                metal   goes first and alone: one hair-fine line, cast like a lead line, that
+//                        finds the current and lies along it in one curve. The rest follow it.
+//                water   the body of the tress, close and low, sinking little by little along
+//                        its length, each filament in its own place.
+//                air     breath taken down: where a real crest passes over the weave a few
+//                        filaments are folded under it. A flat sea takes none.
+//                fire    warmth moved, never flame: over a sea warmer than the air it lifts
+//                        slowly off the far end and thins away downwind. Over a colder sea it
+//                        is not there.
+//                earth   the heaviest and slowest: lowest, soonest under and deepest, the more
+//                        the sea is doing. It is what stays (see the mended water in tend).
+//              Nothing comes back as a second strand: what is learnt runs home as light along
+//              the same line. It rides the long swell only; the short waves pass under it.
 vec3 formPoint( float t, float act, float age ) {
 	float who = aThread.x;
 	// (A reading is a near thing: the visible part of the thread is laid along the whole of it.)
@@ -242,6 +290,9 @@ vec3 formPoint( float t, float act, float age ) {
 	formShown = smoothstep( 0.0, 0.06, tt );
 	formTint = vec3( 1.0 );
 	formTinted = 0.0;
+	formFine = 0.0;
+	formDye = 0.0;
+	formSharp = 0.0;
 	vec2 xz;
 	float y;
 	// How a weave leaves the boat (the owner: "too angular... in how they heave in the early step
@@ -289,7 +340,7 @@ vec3 formPoint( float t, float act, float age ) {
 		y = mix( hands, 2.0, smoothstep( 0.0, 0.22, s ) ) + ( top - 2.0 ) * pow( smoothstep( 0.1, 1.0, s ), 1.5 ) + own.y * ( 0.25 + 0.5 * s );
 		float gust = 1.0 + 0.8 * channelWind.y * sin( channelTime * 0.7 + who );
 		float longness = ( 28.0 + 115.0 * force ) * ( 0.85 + 0.15 * gust );
-		float flap = u * 8.0 - channelTime * ( 1.0 + 4.5 * force ) + aSeed.x * 2.2 + who;
+		float flap = u * 8.0 - uFlap + aSeed.x * 2.2 + who;
 		float sway = ( 0.4 + 4.0 * u ) * ( 0.35 + 0.9 * force ) * gust;
 		xz += w * longness * u + crosswise * ( sin( flap ) * sway + own.x * u * longness * 0.1 );
 		// (With no wind to carry it, it hangs.)
@@ -298,18 +349,65 @@ vec3 formPoint( float t, float act, float age ) {
 		formShown *= 1.0 - smoothstep( torn - 0.22, torn, u );
 		formShown *= 1.0 - 0.8 * exp( - pow( ( tt - 0.42 ) / 0.07, 2.0 ) );
 		y = max( y, 0.6 );
+		formSharp = smoothstep( 0.3, 0.5, tt );
 	} else {
-		float sgn = mod( who, 2.0 ) < 0.5 ? 1.0 : - 1.0;
-		float back = smoothstep( 0.45, 0.62, tt );
-		xz = boat + dir * 70.0 * sin( 3.14159 * tt ) + side * ( 18.0 * sin( 6.28319 * tt ) * sgn + channelCurrent * 14.0 * sin( 3.14159 * tt ) );
-		float loosened = 0.3 + 1.3 * back;
-		xz += side * own.x * loosened;
-		float under = smoothstep( 0.24, 0.34, tt ) * ( 1.0 - smoothstep( 0.66, 0.76, tt ) );
-		y = seaHeight( xz ) + mix( 0.7 + own.y * loosened * 0.6 + 0.25 * sin( tt * 18.0 - channelTime * ( 1.0 - 0.6 * back ) ), - 0.9 - 0.5 * aSeed.z, under );
-		y = mix( hands, y, smoothstep( 0.0, 0.12, tt ) * smoothstep( 1.0, 0.88, tt ) );
-		formShown *= smoothstep( 1.0, 0.94, tt );
-		formTint = mix( vec3( 0.45, 1.0, 0.84 ), uWarm > 0.0 ? vec3( 1.0, 0.7, 0.55 ) : vec3( 0.66, 0.6, 1.0 ), smoothstep( 0.1, 0.7, abs( uWarm ) ) );
-		formTinted = 0.85 * back;
+		// (Each to their own side of the boat, so that no two lines cross.)
+		float sgn = who < 1.5 ? - 1.0 : 1.0;
+		// Which element this filament is. (A veil or a halo is of the water, the body of it.)
+		float lot = fract( aSeed.y * 57.3 );
+		bool fine = aSoft < 0.5;
+		bool metal = fine && aSeed.y < 0.05;
+		bool air = fine && ! metal && lot > 0.5 && lot <= 0.68;
+		bool fire = fine && ! metal && lot > 0.68 && lot <= 0.82;
+		bool earth = fine && ! metal && lot > 0.82;
+		// The line: out the way it is sent, and round in one curve to the side the current runs
+		// (with no current to speak of, to its own side), further the harder it runs.
+		float carry = abs( channelCurrent );
+		float aside = mix( sgn * 38.0, sign( channelCurrent ) * ( 44.0 + 50.0 * carry ), smoothstep( 0.03, 0.2, carry ) );
+		vec2 bend = boat + dir * 50.0 + side * aside * 0.2;
+		xz = mix( mix( boat, bend, tt ), mix( bend, boat + dir * 80.0 + side * aside * 1.2, tt ), tt );
+		// (The tress opens a little as it goes. The metal is the line itself.)
+		float open = ( 0.3 + 1.0 * tt ) * ( metal ? 0.12 : 1.0 );
+		xz += side * own.x * open;
+		vec2 sea = seaParts( xz );
+		// Clear of the short waves, which pass under it.
+		float clear = 0.4 + 0.25 * channelSea.y;
+		y = clear * ( earth ? 0.4 : air ? 1.5 : 1.0 ) + own.y * open * 0.5;
+		// Air: folded under each crest that passes.
+		float crest = smoothstep( 0.2, 0.7, ( sea.x - sea.y ) / max( 0.25 * channelSea.y, 0.1 ) );
+		if ( air ) y = mix( y, sea.x - sea.y - 0.5, crest * smoothstep( 0.15, 0.35, tt ) );
+		// Sinking, little by little, each in its own place: earth soonest and deepest.
+		float from = earth ? 0.22 + 0.2 * fract( aSeed.x * 7.3 ) : 0.45 + 0.35 * fract( aSeed.x * 7.3 );
+		float sunk = metal || fire ? 0.0 : smoothstep( from, from + 0.35, tt );
+		y = mix( y, - ( earth ? 1.5 + 3.0 * channelSea.x : 1.0 ) - aSeed.z, sunk );
+		// (Lost to sight as it goes under, not seen going down: seen from so low, a line that
+		// runs out and then visibly dips draws a small hoop standing on the sea.)
+		formShown *= 1.0 - smoothstep( 0.0, 0.3, sunk );
+		// Fire: the sea's warmth, lifted off the far end and carried away downwind.
+		if ( fire ) {
+			float warm = max( uWarm, 0.0 );
+			float u = smoothstep( 0.5, 1.0, tt );
+			vec2 w = dot( uWindView.xy, uWindView.xy ) > 0.0001 ? normalize( vec2( uWindView.x, - uWindView.y ) ) : side;
+			y += warm * 16.0 * u * u;
+			xz += w * ( 8.0 + 30.0 * uWindView.z ) * u * u + side * own.x * 4.0 * u;
+			formShown *= smoothstep( 0.0, 0.12, warm ) * ( 1.0 - smoothstep( 0.45, 0.95, u ) );
+		}
+		y += sea.y;
+		y = mix( hands, y, smoothstep( 0.0, 0.12, tt ) );
+		// Metal first: the others follow its line out a few seconds after, and on a quiet sea
+		// there is less of them. (Not next to nothing, as was tried: by night that left no weave.)
+		if ( ! metal ) {
+			float follows = ( age - 3.0 ) / 7.0;
+			formShown *= ( 1.0 - smoothstep( follows - 0.2, follows, tt ) ) * mix( 0.6, 1.0, smoothstep( 0.05, 0.3, channelSea.x ) );
+		}
+		// What is learnt runs home along it as light.
+		formShown *= mix( 1.0, 0.5 + 1.1 * pow( 0.5 + 0.5 * sin( tt * 7.0 + channelTime * 0.9 + who ), 6.0 ), metal ? 1.0 : 0.3 );
+		formShown *= smoothstep( 1.0, 0.9, tt );
+		formTint = metal ? vec3( 0.78, 0.84, 0.92 ) : air ? vec3( 0.66, 0.6, 1.0 ) : fire ? vec3( 1.0, 0.68, 0.5 ) : earth ? vec3( 0.62, 0.74, 0.4 )
+			: mix( vec3( 0.45, 1.0, 0.84 ), vec3( 0.6, 0.72, 1.0 ), smoothstep( 0.1, 0.7, - uWarm ) );
+		formTinted = 0.85 * smoothstep( 0.08, 0.3, tt );
+		formFine = metal ? 0.85 : 0.1;
+		formDye = 1.0;
 	}
 	return vec3( xz.x, y, xz.y );
 }
@@ -324,12 +422,18 @@ vec3 readingPoint( float t ) {
 	float shownNow = formShown;
 	vec3 tintNow = formTint;
 	float tintedNow = formTinted;
+	float fineNow = formFine;
+	float dyeNow = formDye;
+	float sharpNow = formSharp;
 	vec3 was = formPoint( t, channelOf( uWas, who ), 60.0 );
 	float tt = clamp( t / 0.7, 0.0, 1.0 );
 	float gone = turned( tt, turn * 1.6 );
 	formShown = mix( formShown, shownNow, gone );
 	formTint = mix( formTint, tintNow, gone );
 	formTinted = mix( formTinted, tintedNow, gone );
+	formFine = mix( formFine, fineNow, gone );
+	formDye = mix( formDye, dyeNow, gone );
+	formSharp = mix( formSharp, sharpNow, gone );
 	formPush = max( formPush, pushed( tt, turn * 1.6 ) );
 	formGoing = max( formGoing, sin( 3.14159 * turn ) );
 	// The turn itself is a curve (the owner's): a point does not go straight from its old place to
@@ -377,8 +481,8 @@ vec3 threadPoint( float t, bool onlyPlace ) {
 	float restless = channelOf( uRestless, who );
 	// (Each for themselves, the tresses are kept close: four clean lines over the sea, like strings.)
 	across += ( 1.0 - 0.6 * ( 1.0 - channelLink ) ) * aSeed.w * 0.55 * ( 0.55 + 1.1 * restless ) * ( 1.0 - 0.75 * skill ) * ( 1.0 - 0.6 * channelHold ) * ( 1.0 - 0.85 * smoothstep( 0.3, 0.8, way ) ) * vec2(
-		drift( q * 2.3 + aSeed.x * 40.0 - channelTime * ( 0.14 + 0.2 * restless ) ),
-		drift( q * 2.9 + aSeed.y * 40.0 + channelTime * ( 0.11 + 0.16 * restless ) )
+		drift( q * 2.3 + aSeed.x * 40.0 - channelOf( uWanderX, who ) ),
+		drift( q * 2.9 + aSeed.y * 40.0 + channelOf( uWanderY, who ) )
 	);
 	// What is spent shows as a loosening, finer than the wandering, and more with distance; where
 	// the tress has gathered itself it stops and the strays are drawn in.
@@ -415,6 +519,9 @@ vec3 threadPoint( float t, bool onlyPlace ) {
 	float height = mix( cameraPosition.y - 1.2, seaUnder + low, smoothstep( - 2.0, 14.0, ahead ) );
 	formShown = 1.0;
 	formTinted = 0.0;
+	formFine = 0.0;
+	formDye = 0.0;
+	formSharp = 0.0;
 	vec3 flowing = vec3( p.x, height, p.y );
 	formPush = pushed( tt, uFront );
 	formGoing = sin( 3.14159 * clamp( uFront / 1.6, 0.0, 1.0 ) );
@@ -456,9 +563,11 @@ void main() {
 	float shown = max( formShown, 0.6 * push );
 	vec3 found = formTint;
 	float finding = formTinted * atReading;
+	float fine = formFine * atReading;
+	float dyed = formDye * finding;
 	vec4 clip = viewProjection * vec4( here, 1.0 );
 	// (Soft only where it is seen against the sky; against the sea it keeps its fine, sharp line.)
-	float soften = uSoften * againstSky( here );
+	float soften = uSoften * againstSky( here ) * ( 1.0 - formSharp * atReading );
 	// They work with the waves: each crest that passes under the flow lifts its light, each trough dims it.
 	// (Far more so in a storm, when the waves are what they are working on.)
 	float withWaves = 1.0 + ( 0.7 + 0.3 * channelControl ) * clamp( seaUnder / max( 0.25 * channelSea.y, 0.1 ), - 1.0, 1.0 );
@@ -473,7 +582,7 @@ void main() {
 	// (A reading by night is drawn broad and soft, as it is against the day sky: hair-fine lines
 	// spread over so much dark could not be seen at all.)
 	// (Not by the boat, where a broad ribbon so close to the eye is a bar of light.)
-	float nightReading = atReading * ( 1.0 - uDay ) * ( 1.0 - aSoft ) * smoothstep( 0.1, 0.45, aT / 0.7 );
+	float nightReading = atReading * ( 1.0 - uDay ) * ( 1.0 - aSoft ) * smoothstep( 0.1, 0.45, aT / 0.7 ) * ( 1.0 - fine );
 	gl_Position = ribbonPosition( clip, clipAhead, aSide, body * vWide * aThread.w * ( 1.0 + 4.0 * lingering + 3.0 * soften * ( 1.0 - aSoft ) + 3.5 * nightReading ) );
 
 	float ahead = max( aheadAt( aT ), 0.0 );
@@ -557,6 +666,8 @@ void main() {
 	vWhite = aThread.x > ${STRONGEST - 0.5} && aThread.x < ${STRONGEST + 0.5} ? 1.0 : 0.0;
 	vSheath = mix( element == 4 ? uSheath[ 1 ] : element == 1 ? uSheath[ 0 ] : uSheath[ 2 ], uSheath[ 3 ], vWhite );
 	vSheath = mix( vSheath, vec3( dot( vSheath, vec3( 0.2126, 0.7152, 0.0722 ) ) ), muted );
+	// (Each element of a water reading has its own colour beside it by day, deeper than its light.)
+	vSheath = mix( vSheath, found * found * 0.75, dyed * ( 1.0 - vWhite ) );
 	vAlpha *= mix( 1.0, 1.0 + 0.7 * soften, vWhite * ( 1.0 - aSoft ) );
 	// By day the others' weaves are colour, not light, and colour needs more of itself to be seen.
 	vAlpha *= mix( 1.0, ${DAY_BODY}, uDay * ( 1.0 - vWhite ) );
@@ -1266,9 +1377,12 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uFront: { value: 1.6 },
 		uPressure: { value: 0 },
 		uWindView: { value: new THREE.Vector3() },
+		uFlap: { value: 0 },
 		uWarm: { value: 0 },
 		uGain: { value: 1 },
 		uRestless: { value: new THREE.Vector4() },
+		uWanderX: { value: new THREE.Vector4() },
+		uWanderY: { value: new THREE.Vector4() },
 		uTints: { value: TINTS },
 		uElements: { value: ELEMENTS },
 		uBaseTone: { value: BASE },
@@ -1706,6 +1820,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	// tells a set of higher waves from the lull after it; and the wind against its own late average.
 	const sensed = { level: 0, short: -1, long: 0, set: 0, peak: 0, windMean: -1, gust: 0 };
 	let sinceStart = 0;
+	// (Whether each seat's restlessness has been set yet: at first it is simply its occupant's.)
+	let restlessSet = false;
 	interface Weather {
 		heave: number;
 		energy: number;
@@ -1780,7 +1896,11 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	let toReading = false;
 	let front = 1.6;
 	// Water they have healed stays altered for minutes (the owner's): up to four places.
-	const mended = [0, 1, 2, 3].map(() => ({ x: 0, z: 0, reach: 0, left: 0, growing: false }));
+	// (`most` and `widest`: how far it is mended and how far it spreads while it is being worked.
+	// The healing flow mends wholly and widely; the earth of one water reading, a little.)
+	const mended = [0, 1, 2, 3].map(() => ({ x: 0, z: 0, reach: 0, left: 0, growing: false, most: 1, widest: 70 }));
+	// Where each seat's water reading has laid its earth, while it does.
+	const settling: ((typeof mended)[number] | undefined)[] = [undefined, undefined, undefined, undefined];
 	const flowAt = new THREE.Vector3();
 	// (All of it unhurried, the owner's "elegant, Odyssey-like".)
 	const tend = (delta: number, linkNow: boolean, weather: Weather, only?: string) => {
@@ -1821,7 +1941,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 				// whichever of the four has faded most.
 				const place = mended.reduce((least, one) => (one.left < least.left ? one : least));
 				flowPoint(115, flowAt);
-				Object.assign(place, { x: flowAt.x, z: flowAt.z, reach: 12, left: Math.max(place.left * 0.3, 0.02), growing: true });
+				Object.assign(place, { x: flowAt.x, z: flowAt.z, reach: 12, left: Math.max(place.left * 0.3, 0.02), growing: true, most: 1, widest: 70 });
 			} else {
 				sinceLink = 0;
 				mended.forEach((one) => (one.growing = false));
@@ -1869,6 +1989,24 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 				// (Where it is sent follows the wind and the swell as they come round, slowly.)
 				seat.bearing += (towards[seat.doing] + (who - 1.5) * 0.08 - seat.bearing) * Math.min(1, delta / 16);
 			}
+			// Earth is what stays (the owner's water reading, 13 October): where the earth of a water
+			// reading has gone down, the water mends a little, the more the more the sea is doing,
+			// and stays so for minutes after the weave is let go. (The place is the far part of the
+			// reading's line: see the water form in the shader.)
+			if (!linked && seat.doing === "water" && seat.turn >= 1 && seat.age > 9) {
+				if (!settling[who]) {
+					const place = mended.reduce((least, one) => (one.left < least.left ? one : least));
+					const carry = Math.abs(weather.current);
+					const aside = THREE.MathUtils.lerp((who < 1.5 ? -1 : 1) * 38, Math.sign(weather.current) * (44 + 50 * carry), THREE.MathUtils.smoothstep(carry, 0.03, 0.2));
+					const [sin, cos] = [Math.sin(seat.bearing), Math.cos(seat.bearing)];
+					Object.assign(place, { x: camera.position.x + (who - 1.5) * 1.5 + sin * 68 + cos * aside * 0.7, z: camera.position.z - cos * 68 + sin * aside * 0.7, reach: 8, left: Math.max(place.left * 0.3, 0.02), most: 0.2 + 0.4 * clamp01(energy * 1.5), widest: 26 });
+					settling[who] = place;
+				}
+				settling[who]!.growing = true;
+			} else if (settling[who]) {
+				settling[who]!.growing = false;
+				settling[who] = undefined;
+			}
 			seat.age += delta;
 			seat.turn = Math.min(1, seat.turn + delta / TURNS_IN);
 			want[who] = linked ? !sitsOut.includes(who) : seat.doing !== "rest";
@@ -1885,10 +2023,10 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	// (Whether or not they are tending just now: what is mended fades in its own time, over minutes.)
 	const tendMended = (delta: number, current: number) => {
 		mended.forEach((one, i) => {
-			if (one.growing) one.left += (1 - one.left) * Math.min(1, delta / 4);
+			if (one.growing) one.left += (one.most - one.left) * Math.min(1, delta / 4);
 			else one.left *= Math.exp(-delta / 100);
 			// It spreads in the water as it fades, and the current takes it.
-			one.reach = Math.min(70, one.reach + delta * (one.growing ? 3 : 0.18));
+			one.reach = Math.min(one.growing ? Math.max(one.widest, one.reach) : 70, one.reach + delta * (one.growing ? 3 : 0.18));
 			one.x += current * delta * 0.25;
 			sea.healed.value[i]!.set(one.x, one.z, one.reach, one.left);
 		});
@@ -2259,6 +2397,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		});
 		uniforms.uPressure.value += (pressure - uniforms.uPressure.value) * Math.min(1, delta / 4);
 		uniforms.uWindView.value.set(wind.across, wind.away, wind.force);
+		uniforms.uFlap.value += delta * (1 + 4.5 * wind.force);
 		uniforms.uWarm.value += (thermal - uniforms.uWarm.value) * Math.min(1, delta / 4);
 		for (let seat = 0; seat < CHANNELLERS; seat++) {
 			// What each is reading: the air (pressure, wind) or the water.
@@ -2285,7 +2424,15 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		// low an exposure that their light all but vanished.)
 		if (byDay) uniforms.uStrength.value *= (1 + 1.6 * (1 - day) * (1 - 0.6 * link)) * (1 + 1.2 * moonless * (1 - day));
 		uniforms.uSoften.value = soften;
-		for (let seat = 0; seat < CHANNELLERS; seat++) uniforms.uRestless.value.setComponent(seat, 1 - TEMPERS[memberAt(seat)]!.steady);
+		for (let seat = 0; seat < CHANNELLERS; seat++) {
+			// (When another takes the seat their restlessness comes on over a few seconds, not at once.)
+			const was = uniforms.uRestless.value.getComponent(seat);
+			const restless = restlessSet ? was + (1 - TEMPERS[memberAt(seat)]!.steady - was) * Math.min(1, delta / 3) : 1 - TEMPERS[memberAt(seat)]!.steady;
+			uniforms.uRestless.value.setComponent(seat, restless);
+			uniforms.uWanderX.value.setComponent(seat, uniforms.uWanderX.value.getComponent(seat) + delta * (0.14 + 0.2 * restless));
+			uniforms.uWanderY.value.setComponent(seat, uniforms.uWanderY.value.getComponent(seat) + delta * (0.11 + 0.16 * restless));
+		}
+		restlessSet = true;
 		uniforms.uWhite.value = white;
 		uniforms.uGain.value = gain;
 		uniforms.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(uniforms.uPixelRatio.value);
