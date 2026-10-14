@@ -42,6 +42,7 @@
 // device for less motion), controls are at least 44px tall with a white focus ring, the form is labelled
 // and speaks its status, there is a skip link, the ocean can be paused, and the slab folds away.
 
+const route = useRoute();
 // Shared with OceanBackground, which stops drawing while this is true.
 const paused = useState("motion-paused", () => false);
 // Filled in by OceanBackground. This slab shows it, so the floating caption is turned off.
@@ -57,7 +58,56 @@ const open = useState("menu-open", () => false);
 // page (About, Contact) keeps out of sight for as long: the owner must never see one appear
 // suddenly while the drawer is still moving. Set at once, before anything is drawn again.
 const moving = useState("menu-moving", () => false);
-watch(open, () => (moving.value = true), { flush: "sync" });
+// How the drawer hands over to a page that is a panel in the same place (About, Contact), and back.
+// Shut and then open again, as it was, read as the menu jumping shut and coming back (the owner,
+// 14 October 2026). ?through= tries the ways; the choice is kept as the visitor moves about the site:
+//   become    the drawer does not go: its words sink, its ground swells to the page's own shape
+//             and colour, and the page's words surface on it. Menu on that page does the same
+//             backwards (the owner's choice, 14 October, and the default)
+//   wave      the page comes in from the left over the drawer, as the next wave over the last
+//   dissolve  nothing travels: the drawer melts away and the page is there beneath it
+//   tide      as it was: the drawer goes out, then the page comes
+const THROUGH = ["become", "wave", "dissolve", "tide"];
+const through = useState("menu-through", () => "become");
+// What is happening now, for the drawer's transition and for the page: "into-about", "from-contact",
+// "wave", "dissolve", or "" for the tide. Shared, as the page arrives in step with it.
+const becoming = useState("menu-becoming", () => "");
+// Which page is a panel this drawer can become: only each one's chosen look has a shape to match.
+const panelAt = () => {
+	const path = route.path.replace(/\/$/, "");
+	if (path === "/about" && [undefined, "panel"].includes(route.query.about as string)) return "about";
+	if (path === "/contact" && [undefined, "letter"].includes(route.query.contact as string)) return "contact";
+	return path === "/about" || path === "/contact" ? "panel" : "";
+};
+// The swelling is drawn for a wide screen. On a narrow one, and for anyone who asks for less
+// motion, the drawer melts instead.
+const roomToBecome = () => window.matchMedia("(min-width: 721px) and (prefers-reduced-motion: no-preference)").matches;
+const handover = (leaving: boolean) => {
+	const panel = panelAt();
+	if (!panel || through.value === "tide") return "";
+	if (through.value === "become") {
+		if (panel !== "panel" && shape.value === "moon" && roomToBecome()) return `${leaving ? "into" : "from"}-${panel}`;
+		return leaving ? "dissolve" : "";
+	}
+	// The wave and the melting are for the way into a page; the way back is the tide.
+	return leaving ? through.value : "";
+};
+// Set by a panel page's Close (About), which goes back to the menu: the drawer opens over the page
+// and the address then goes home under it, the drawer staying open.
+const backToMenu = useState("menu-back", () => false);
+// Set at once, before anything is drawn again. Following a link decides the way out itself (below).
+let leavingBy: string | undefined;
+watch(
+	open,
+	(now) => {
+		moving.value = true;
+		becoming.value = now ? handover(false) : (leavingBy ?? "");
+		leavingBy = undefined;
+	},
+	{ flush: "sync" },
+);
+const transitionName = computed(() => (/^(into|from)-/.test(becoming.value) ? "become" : becoming.value || "tide"));
+const becomes = computed(() => becoming.value.replace(/^(into|from)-/, ""));
 const settled = () => (moving.value = false);
 // The cut of the drawer's outer edge. ?shape= tries the others:
 //   moon      part of a great disc, its edge the lit limb of a moon (the first, and the default)
@@ -111,6 +161,13 @@ const NAME = [
 // The swell, as points down the drawer's right edge.
 const wave = `polygon(0 0, ${Array.from({ length: 41 }, (_, i) => `${(89 + 10 * Math.sin((i / 40) * Math.PI * 2.6 + 0.6)).toFixed(1)}% ${(i * 2.5).toFixed(1)}%`).join(", ")}, 0 100%)`;
 const menuButton = ref<HTMLButtonElement>();
+watch(
+	() => route.query.through as string,
+	(asked) => {
+		if (THROUGH.includes(asked)) through.value = asked;
+	},
+	{ immediate: true },
+);
 onMounted(() => {
 	if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) paused.value = true;
 	if (route.query.name) open.value = true;
@@ -143,8 +200,15 @@ const toNewsletter = async () => {
 	document.getElementById("news-email")?.focus();
 };
 // Following a link shuts the drawer, so the page it leads to is not hidden behind it.
-const route = useRoute();
-watch(() => route.path, () => (open.value = false));
+watch(
+	() => route.path,
+	() => {
+		if (backToMenu.value) return void (backToMenu.value = false);
+		if (!open.value) return;
+		leavingBy = handover(true);
+		open.value = false;
+	},
+);
 
 // The newsletter form signs the address up on Kit and says, in words, how that went.
 const email = ref("");
@@ -178,7 +242,7 @@ const join = async () => {
 const links = [
 	{ to: "/about", label: "About" },
 	// The studio has a site of its own.
-	{ to: "https://www.tiraho.com.au", label: "Tîr Aho Studio" },
+	{ to: "https://www.tiraho.com.au", label: "Tîr Aho Studio", newTab: true },
 	{ to: "/contact", label: "Contact" },
 ];
 // Where else the owner is to be found: one quiet line under the links. Cyberspace, the owner's
@@ -203,8 +267,8 @@ const elsewhere = [
 				</button>
 
 				<!-- The drawer comes straight after its button, so the keyboard goes from one into the other. -->
-				<Transition name="tide" @after-enter="settled" @after-leave="settled" @enter-cancelled="settled" @leave-cancelled="settled">
-				<div v-show="open" id="menu" class="slab" :data-shape="shape" :data-menu="menu" :data-name="name" :style="shape === 'wave' ? { clipPath: wave } : undefined">
+				<Transition :name="transitionName" @after-enter="settled" @after-leave="settled" @enter-cancelled="settled" @leave-cancelled="settled">
+				<div v-show="open" id="menu" class="slab" :data-shape="shape" :data-menu="menu" :data-name="name" :data-becoming="becomes || undefined" :style="shape === 'wave' ? { clipPath: wave } : undefined">
 					<!-- Decoration only: a faint figure behind the text. ?figure= tries the others (see MenuFigure). -->
 					<MenuFigure class="trine" :kind="figure" :ring="menu !== 'field'" />
 					<div class="body">
@@ -220,7 +284,8 @@ const elsewhere = [
 			<nav aria-label="Main">
 				<ol>
 					<li v-for="(link, i) in links" :key="link.to">
-						<NuxtLink :to="link.to" class="row" :aria-label="link.label">
+						<!-- The studio's site opens in a new tab (the owner's wish), and says so to screen readers. -->
+						<NuxtLink :to="link.to" class="row" :target="link.newTab ? '_blank' : undefined" :aria-label="link.newTab ? `${link.label} (opens in a new tab)` : link.label">
 							<span class="key" aria-hidden="true">0{{ i + 1 }}</span>
 							<span class="title" aria-hidden="true">{{ link.label }}</span>
 						</NuxtLink>
@@ -509,7 +574,11 @@ const elsewhere = [
 	/* The slab is part of a great disc: its outer edge is a true arc of a circle, the lit limb of
 	   a moon, bowing out to the slab's full width at mid-height and falling well back at head and foot. */
 	--radius: 74vh;
-	clip-path: circle(var(--radius) at calc(100% - var(--radius)) 50%);
+	/* (Measured from the drawer's own width, 33rem, not from 100%: in Become the drawer is made
+	   wider while it changes, and its edge must not leap out with it.) */
+	clip-path: circle(var(--radius) at calc(33rem - var(--radius)) 50%);
+	/* Nothing to see; it is there for Become to fade the letter's paper in over. */
+	box-shadow: inset 0 0 0 100vmax rgb(244 241 232 / 0);
 }
 /* The drawer comes in as a tide does: from the left, quick at first and spending itself as it
    arrives, its moon-edge leading; its words surface a little after the water has. It goes out
@@ -537,10 +606,14 @@ const elsewhere = [
 	transform: translateX(-2rem);
 }
 .tide-enter-from .body,
-.tide-enter-from .trine,
-.tide-leave-to .body,
-.tide-leave-to .trine {
+.tide-leave-to .body {
 	opacity: 0;
+}
+/* (Firmly: each way of setting the chart gives it an opacity of its own, which would otherwise
+   keep it showing until the drawer had gone, and then it vanished all at once.) */
+.tide-enter-from .trine,
+.tide-leave-to .trine {
+	opacity: 0 !important;
 }
 /* For anyone who has asked for less motion nothing travels: it fades, briefly. */
 @media (prefers-reduced-motion: reduce) {
@@ -557,6 +630,89 @@ const elsewhere = [
 	.tide-enter-from .body {
 		transform: none !important;
 	}
+}
+/* Become (?through=become): the drawer turns into the page it leads to, and back. Its words
+   sink first; then its ground swells, slowly and evenly, to the page's own shape: for About the
+   wider moon of that panel, for Contact the letter's straight edge and paper. The page's words
+   surface once it is there. While it changes the drawer is made as wide as the page, with the
+   room on the right widened to match, so its words do not move. */
+.slab.become-enter-active,
+.slab.become-leave-active {
+	width: 46rem;
+	padding-right: 22.5rem;
+	clip-path: circle(74vh at calc(33rem - 74vh) 50%);
+	box-shadow: inset 0 0 0 100vmax rgb(244 241 232 / 0);
+	transition: clip-path 0.8s cubic-bezier(0.65, 0, 0.35, 1), box-shadow 0.7s ease-in-out;
+}
+.slab.become-leave-active {
+	transition-delay: 0.15s;
+}
+.slab.become-enter-from[data-becoming="about"],
+.slab.become-leave-to[data-becoming="about"] {
+	clip-path: circle(80vh at calc(46rem - 80vh) 50%);
+}
+/* The letter's edge is straight: a circle so large that its edge cannot be told from a line. The
+   paper's off-white is laid over the drawer's blue as a shadow cast inward, which can fade. It
+   comes late and quickly, once the edge is nearly straight: a slow fade from the blue to the
+   paper passed through a muddy grey. */
+.slab.become-leave-active[data-becoming="contact"] {
+	transition: clip-path 0.8s cubic-bezier(0.65, 0, 0.35, 1) 0.15s, box-shadow 0.35s ease-in 0.55s;
+}
+.slab.become-enter-active[data-becoming="contact"] {
+	transition: clip-path 0.8s cubic-bezier(0.65, 0, 0.35, 1), box-shadow 0.35s ease-out;
+}
+.slab.become-enter-from[data-becoming="contact"],
+.slab.become-leave-to[data-becoming="contact"] {
+	clip-path: circle(10000vh at calc(44rem - 10000vh) 50%);
+	box-shadow: inset 0 0 0 100vmax #f4f1e8;
+}
+.become-leave-active .body,
+.become-leave-active .trine {
+	transition: opacity 0.3s ease-in;
+}
+.become-enter-active .body,
+.become-enter-active .trine {
+	transition: opacity 0.5s ease-out 0.45s;
+}
+.become-enter-from .body,
+.become-leave-to .body {
+	opacity: 0;
+}
+.become-enter-from .trine,
+.become-leave-to .trine {
+	opacity: 0 !important;
+}
+/* Wave (?through=wave): the drawer stays where it is, its words sinking, while the page comes in
+   over it from the left (the page lifts itself above the drawer for this); then it is gone from beneath. */
+.wave-leave-active {
+	transition: opacity 0.01s linear 1.1s;
+}
+.wave-leave-active .body,
+.wave-leave-active .trine {
+	transition: opacity 0.5s ease-in;
+}
+.wave-leave-to,
+.wave-leave-to .body {
+	opacity: 0;
+}
+.wave-leave-to .trine {
+	opacity: 0 !important;
+}
+/* Dissolve (?through=dissolve): nothing travels. The words sink, and the drawer melts away to
+   show the page already there beneath it. */
+.dissolve-leave-active {
+	transition: opacity 0.9s ease-in-out 0.25s;
+}
+.dissolve-leave-active .body,
+.dissolve-leave-active .trine {
+	transition: opacity 0.45s ease-in;
+}
+.dissolve-leave-to,
+.dissolve-leave-to .body {
+	opacity: 0;
+}
+.dissolve-leave-to .trine {
+	opacity: 0 !important;
 }
 /* Ways for the sky chart and the words to share the drawer (?menu=). */
 /* Field: the stars alone, larger than the drawer and bled off its edges, fixed while the words scroll. */

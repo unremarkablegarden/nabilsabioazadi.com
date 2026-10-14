@@ -155,6 +155,7 @@ All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerst
 | `/?ratio=2`, `1.5`, `1.25`, `1` | holds the picture at that many pixels to one of the page (it otherwise drops them itself when a machine cannot keep up; the row "drawing" in `/?controls` says how fast it is going and at what) |
 | `/?light=0..1` | the "light is loss" dial (default 0.5; the owner has not chosen a value) |
 | `/?look=september` | September's look |
+| `/?through=become`, `wave`, `dissolve`, `tide` | how the menu hands over to About or Contact (14 October; the owner: the menu "jumps shut and then re-opens"). `become` (the owner's choice, 14 October, then made a little faster; the Close of About and of Contact now goes back to the menu the same way; Tîr Aho Studio opens in a new tab): the drawer turns into the page; `wave`: the page comes in over it from the left; `dissolve`: the drawer melts away; `tide`: as it was. Kept while moving about the site |
 
 ## Unfinished, in the order the owner last cared about
 

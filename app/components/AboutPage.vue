@@ -15,9 +15,30 @@ const menuOpen = useState("menu-open", () => false);
 const menuMoving = useState("menu-moving", () => false);
 // And once the menu's Close has put it away, for the moment it lingers before it is gone.
 const putAway = useState("panel-put-away", () => false);
+// How the menu's drawer is handing over to this page (see "through" in SiteNavSwiss). Coming in
+// over the drawer, or found beneath it as it melts, the page is there at once, not waiting for
+// the drawer to be gone.
+const becoming = useState("menu-becoming", () => "");
+const aside = computed(() => menuOpen.value || putAway.value || (menuMoving.value && !["wave", "dissolve"].includes(becoming.value)));
 // Tells the menu that this page is a panel over the picture, so that its Close leads back to
 // the main screen (see SiteNavSwiss).
 const pageIsPanel = useState("page-is-panel", () => false);
+// Close goes back to the menu (the owner, 14 October), not to the bare picture: the panel turns
+// back into the drawer, and once the drawer is at rest the address goes home beneath it. The
+// keyboard goes to the menu's own button. (Without JavaScript it is a plain link home.)
+const backToMenu = useState("menu-back", () => false);
+const closeToMenu = () => {
+	menuOpen.value = true;
+	(document.querySelector("button[aria-controls=menu]") as HTMLElement | null)?.focus();
+	const stop = watch(menuMoving, (moving) => {
+		if (moving) return;
+		stop();
+		// Shut again before it came to rest: nothing more to do.
+		if (!menuOpen.value) return;
+		backToMenu.value = true;
+		navigateTo("/");
+	});
+};
 pageIsPanel.value = true;
 onBeforeUnmount(() => (pageIsPanel.value = false));
 onUnmounted(() => (putAway.value = false));
@@ -47,7 +68,7 @@ const links: { label: string; href: string; title?: boolean; after?: string }[] 
 </script>
 
 <template>
-	<main id="main" tabindex="-1" class="about" :class="{ aside: menuOpen || menuMoving || putAway }" :data-layout="layout">
+	<main id="main" tabindex="-1" class="about" :class="{ aside, arriving: becoming.startsWith('into-'), [becoming]: ['wave', 'dissolve'].includes(becoming) }" :data-layout="layout">
 		<!-- The panel's coloured shape, apart from its contents so that the picture can sit across its edge. -->
 		<div class="back" aria-hidden="true">
 			<MenuFigure v-if="sky === 'behind' || sky === 'seal'" class="trine" :class="{ seal: sky === 'seal' }" kind="sky" />
@@ -58,7 +79,7 @@ const links: { label: string; href: string; title?: boolean; after?: string }[] 
 				<span>Human time {{ readout.time }}</span>
 			</p>
 			<!-- The way back to the main screen, at the head of the page. -->
-			<p class="leave"><NuxtLink to="/">Close</NuxtLink></p>
+			<p class="leave"><a href="/" @click.prevent="closeToMenu">Close</a></p>
 			<header class="row">
 				<p class="key">About</p>
 				<div>
@@ -145,6 +166,45 @@ const links: { label: string; href: string; title?: boolean; after?: string }[] 
 	.about,
 	.about.aside {
 		transition-duration: 0.2s;
+	}
+}
+/* The drawer has become this page's ground, so the ground is shown at once, and only what is on
+   it surfaces. */
+.about.arriving {
+	transition: none;
+}
+.about.arriving:not(.aside) .ground,
+.about.arriving:not(.aside) .disc {
+	animation: surface 0.6s ease-out both;
+}
+/* Coming in over the drawer, from the left, as the menu's drawer itself comes: quick at first and
+   spending itself as it arrives. It is lifted over the drawer while it does. */
+.about.wave .back,
+.about.wave .ground,
+.about.wave .picture.disc {
+	z-index: 21;
+	animation: tide-in 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.about.wave .ground {
+	animation: tide-in 1.1s cubic-bezier(0.16, 1, 0.3, 1) both, surface 0.8s ease-out 0.35s both;
+}
+@keyframes surface {
+	from {
+		opacity: 0;
+	}
+}
+@keyframes tide-in {
+	from {
+		transform: translateX(calc(-1 * var(--wide, 46rem) - 8rem));
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.about.arriving:not(.aside) .ground,
+	.about.arriving:not(.aside) .disc,
+	.about.wave .back,
+	.about.wave .ground,
+	.about.wave .picture.disc {
+		animation: surface 0.2s linear both;
 	}
 }
 

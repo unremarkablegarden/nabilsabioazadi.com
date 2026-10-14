@@ -98,7 +98,6 @@ const live = computed(() => (followLive.value ? conditions.value : undefined));
 // The server fetches the conditions too and sends the page out with them already in it, so the
 // first sea a visitor sees is the real one. (Where there is no server the page asks for itself.)
 const { data: served } = useFetch<SeaConditions>("/api/conditions", { key: "sea-conditions-served" });
-if (served.value && !conditions.value) conditions.value = served.value;
 const seaAmount = computed(() => (live.value ? seaState(live.value) : weather.value));
 const skyAmount = computed(() => (live.value ? skyState(live.value) : weather.value));
 const wavesLabel = computed(
@@ -156,6 +155,10 @@ watchEffect(() => {
 });
 
 onMounted(() => {
+	// Taken up here and no sooner. The server's answer reaches it only after it has drawn the menu,
+	// so its menu has no Waves or Wind rows; taken up any earlier in the browser, the browser's
+	// menu had them, and Vue complained on every load that the two did not match.
+	if (served.value && !conditions.value) conditions.value = served.value;
 	const query = new URLSearchParams(window.location.search);
 	showControls.value = query.has("controls");
 	showColours.value = query.has("colours");

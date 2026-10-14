@@ -21,7 +21,28 @@ const menuOpen = useState("menu-open", () => false);
 const menuMoving = useState("menu-moving", () => false);
 // And once the menu's Close has put it away, for the moment it lingers before it is gone.
 const putAway = useState("panel-put-away", () => false);
+// How the menu's drawer is handing over to this page (see "through" in SiteNavSwiss). Coming in
+// over the drawer, or found beneath it as it melts, the page is there at once, not waiting for
+// the drawer to be gone.
+const becoming = useState("menu-becoming", () => "");
+const aside = computed(() => menuOpen.value || putAway.value || (menuMoving.value && !["wave", "dissolve"].includes(becoming.value)));
 const pageIsPanel = useState("page-is-panel", () => false);
+// Close goes back to the menu, as on the About page (the owner, 14 October): the letter turns back
+// into the drawer, and once the drawer is at rest the address goes home beneath it. The keyboard
+// goes to the menu's own button. (Without JavaScript it is a plain link home.)
+const backToMenu = useState("menu-back", () => false);
+const closeToMenu = () => {
+	menuOpen.value = true;
+	(document.querySelector("button[aria-controls=menu]") as HTMLElement | null)?.focus();
+	const stop = watch(menuMoving, (moving) => {
+		if (moving) return;
+		stop();
+		// Shut again before it came to rest: nothing more to do.
+		if (!menuOpen.value) return;
+		backToMenu.value = true;
+		navigateTo("/");
+	});
+};
 pageIsPanel.value = true;
 onBeforeUnmount(() => (pageIsPanel.value = false));
 onUnmounted(() => (putAway.value = false));
@@ -51,10 +72,10 @@ const send = () => {
 </script>
 
 <template>
-	<main id="main" tabindex="-1" class="contact" :class="{ aside: menuOpen || menuMoving || putAway }" :data-layout="layout">
+	<main id="main" tabindex="-1" class="contact" :class="{ aside, arriving: becoming.startsWith('into-'), [becoming]: ['wave', 'dissolve'].includes(becoming) }" :data-layout="layout">
 		<div class="back" aria-hidden="true" />
 		<div class="ground">
-			<p class="leave" :lang="layout === 'letter' ? words.lang : undefined"><NuxtLink to="/">{{ layout === "letter" ? words.close : "Close" }}</NuxtLink></p>
+			<p class="leave" :lang="layout === 'letter' ? words.lang : undefined"><a href="/" @click.prevent="closeToMenu">{{ layout === "letter" ? words.close : "Close" }}</a></p>
 			<p v-if="layout === 'signal'" class="heading key">
 				<span>{{ readout.place }}</span>
 				<span>Human time {{ readout.time }}</span>
@@ -151,6 +172,41 @@ const send = () => {
 	.contact,
 	.contact.aside {
 		transition-duration: 0.2s;
+	}
+}
+/* The drawer has become this page's ground, so the ground is shown at once, and only what is on
+   it surfaces. */
+.contact.arriving {
+	transition: none;
+}
+.contact.arriving:not(.aside) .ground {
+	animation: surface 0.6s ease-out both;
+}
+/* Coming in over the drawer, from the left, as the menu's drawer itself comes: quick at first and
+   spending itself as it arrives. It is lifted over the drawer while it does. */
+.contact.wave .back,
+.contact.wave .ground {
+	z-index: 21;
+	animation: tide-in 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.contact.wave .ground {
+	animation: tide-in 1.1s cubic-bezier(0.16, 1, 0.3, 1) both, surface 0.8s ease-out 0.35s both;
+}
+@keyframes surface {
+	from {
+		opacity: 0;
+	}
+}
+@keyframes tide-in {
+	from {
+		transform: translateX(calc(-1 * var(--wide, 46rem) - 8rem));
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.contact.arriving:not(.aside) .ground,
+	.contact.wave .back,
+	.contact.wave .ground {
+		animation: surface 0.2s linear both;
 	}
 }
 .back,
