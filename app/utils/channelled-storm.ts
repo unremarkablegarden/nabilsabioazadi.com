@@ -38,6 +38,13 @@ export const CHANNELLED_STORM: Partial<SeaConditions> = {
 // What the menu says while it lasts (the owner's words).
 export const CHANNELLED_WORDS = "Channelled, honouring spirits met across Te Moana-nui-a-Kiwa";
 
+// Whether the twelve stay Aes Sedai (Siuan's, Leane's and Moiraine's four each, with the storm's
+// graded colours) when no storm is on: "weavers": "aes-sedai" in storm.json (the owner, 16
+// October: "release the storm but keep these weavers").
+export function aesSedaiKept() {
+	return (stormSwitch as { weavers?: string }).weavers === "aes-sedai";
+}
+
 // Whether the storm is on at this moment, by storm.json.
 export function channelledStormOn(now: Date) {
 	const { from, until } = stormSwitch as { from: string | null; until: string | null };

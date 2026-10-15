@@ -500,7 +500,9 @@ onMounted(() => {
 	channelled.value = Object.keys(pretend).length > 0;
 	// Its colours, unless the address gives colours of its own.
 	const coloursGiven = COLOUR_NAMES.some((name) => query.has(name));
-	if (stormOn && !coloursGiven) Object.assign(colours, GRADED_COLOURS);
+	// The Aes Sedai may stay on after the storm is released (aesSedaiKept).
+	const weaversStay = aesSedaiKept();
+	if ((stormOn || weaversStay) && !coloursGiven) Object.assign(colours, GRADED_COLOURS);
 	// The last measured figures, to go back to when a storm ends.
 	let measured = conditions.value;
 	// The conditions come from the site's own server, which keeps one fresh copy for everyone;
@@ -764,7 +766,7 @@ onMounted(() => {
 	const channellers = createChannellers(scene, camera, waveUniforms);
 	applyColours = channellers.setColours;
 	channellers.setColours(colours);
-	channellers.setChannelledStorm(stormOn);
+	channellers.setChannelledStorm(stormOn || weaversStay);
 	// A storm begins or ends while the page is open: the sea and sky move over to the new figures
 	// over a few seconds as they always do, and the crew and colours change over gradually.
 	const followSwitch = () => {
@@ -772,10 +774,10 @@ onMounted(() => {
 		stormOn = stormNow();
 		pretend = pretendNow();
 		channelled.value = Object.keys(pretend).length > 0;
-		channellers.setChannelledStorm(stormOn);
+		channellers.setChannelledStorm(stormOn || weaversStay);
 		stormSince = -1;
 		if (!coloursGiven) {
-			Object.assign(colours, stormOn ? GRADED_COLOURS : ELEMENT_COLOURS);
+			Object.assign(colours, stormOn || weaversStay ? GRADED_COLOURS : ELEMENT_COLOURS);
 			channellers.setColours(colours, true);
 		}
 		if (measured) conditions.value = { ...measured, ...pretend };
