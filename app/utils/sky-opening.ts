@@ -41,6 +41,8 @@ uniform float uBreath;
 uniform float uHeight;
 uniform float uSpread;
 uniform float uFar;
+// The wind's way on the water and its strength (1 at 60 m/s): the column leans with it.
+uniform vec2 uLean;
 uniform float uDay;
 uniform vec3 uSheath[ 4 ];
 varying vec3 vTint;
@@ -50,6 +52,36 @@ varying float vWhite;
 ${ribbonShaderChunk}
 
 const float PI2 = 6.28318;
+
+// The column is not a figure but a vortex in moving air, so nothing about it is regular (the
+// owner: "still so mathematical or geometrically perfect"). Its axis leans downwind with the
+// real wind, more the higher it goes, and wanders slowly; its waist swells and narrows, the
+// bulges travelling up it like breath; the threads are gathered into a few loose ropes that wind
+// about one another, with gaps between; some strands stray out and flutter; and each goes over
+// into the arms at its own height, so its top is ragged, not a rim.
+vec3 columnAxis( float u ) {
+	vec3 lean = vec3( uLean.x, 0.0, uLean.y ) * 110.0 * pow( u, 1.5 );
+	vec3 wander = vec3( sin( u * 2.1 + uTime * 0.031 + 1.0 ), 0.0, sin( u * 1.7 - uTime * 0.027 + 4.0 ) ) * 24.0 * u;
+	return lean + wander;
+}
+vec3 columnPoint( float u, float phase, float breath, vec3 foot ) {
+	float seed = aThread.w;
+	// Five ropes, each its own width and its own rate of winding.
+	float rope = floor( fract( seed * 7.77 ) * 5.0 );
+	float ropeAngle = rope * 1.25664 + ( fract( seed * 31.3 ) - 0.5 ) * 0.5;
+	float ropeWidth = 0.7 + 0.6 * fract( rope * 0.618 + 0.3 );
+	float turns = 1.9 + 0.12 * rope;
+	float waist = 1.0 + 0.28 * sin( u * 6.3 - uTime * 0.35 ) + 0.15 * sin( u * 11.0 + uTime * 0.21 + 2.0 );
+	float r = mix( 9.0, 58.0, pow( u, 1.5 ) ) * breath * ropeWidth * waist;
+	// Strays, loose of the rest and fluttering.
+	r += step( 0.86, fract( seed * 4.3 ) ) * u * u * 34.0 * ( 0.6 + 0.4 * sin( uTime * 0.6 + seed * 20.0 ) );
+	float a = phase - aThread.x * 6.28318 + ropeAngle + turns * 6.28318 * u;
+	// Not round: a little flattened, and the flattening turns as it rises.
+	float squash = 0.2 * sin( u * 3.0 + uTime * 0.05 );
+	vec2 round_ = vec2( cos( a ) * ( 1.0 + squash ), sin( a ) * ( 1.0 - squash ) ) * r;
+	float height = uHeight * ( 0.86 + 0.22 * fract( seed * 2.13 ) );
+	return foot + columnAxis( u ) + vec3( round_.x, mix( 7.0, height, u * u * ( 3.0 - 2.0 * u ) ), round_.y );
+}
 
 // A point on the thread at t (0 at its far end for one gathering, at the hands for one lifting).
 vec3 threadPoint( float t ) {
@@ -88,18 +120,19 @@ vec3 threadPoint( float t ) {
 		vec3 round_ = vec3( cos( phase ), 0.0, sin( phase ) ) * 10.0 * smoothstep( 0.3, 1.0, u );
 		return low + round_;
 	}
-	if ( t < 0.78 ) {
-		float u = ( t - 0.18 ) / 0.6;
-		float r = mix( 10.0, 60.0, pow( u, 1.6 ) ) * breath;
-		float a = phase + turns * PI2 * u;
-		return foot + vec3( cos( a ) * r, mix( 7.0, uHeight, u * u * ( 3.0 - 2.0 * u ) ), sin( a ) * r );
-	}
+	if ( t < 0.78 ) return columnPoint( ( t - 0.18 ) / 0.6, phase, breath, foot );
+	// The arms: from where this thread left the column, on round and out, rising and falling
+	// as they go and carried a little downwind; each to its own reach.
 	float u = ( t - 0.78 ) / 0.22;
-	float a = phase + turns * PI2 + u * 2.2;
-	float r = mix( 60.0, uSpread, u ) * breath;
-	return foot + vec3( cos( a ) * r, uHeight + 18.0 * u * ( 1.0 - u ) - 30.0 * u * u, sin( a ) * r );
+	vec3 top = columnPoint( 1.0, phase, breath, foot );
+	vec3 centre = foot + columnAxis( 1.0 );
+	vec2 out_ = top.xz - centre.xz;
+	float a = atan( out_.y, out_.x ) + u * 2.2;
+	float r = mix( length( out_ ), uSpread * ( 0.65 + 0.5 * fract( seed * 5.1 ) ), u ) * breath;
+	vec3 p = centre + vec3( cos( a ) * r, 0.0, sin( a ) * r ) + vec3( uLean.x, 0.0, uLean.y ) * 160.0 * u;
+	p.y = top.y + 26.0 * sin( u * 5.0 + a * 2.0 + uTime * 0.2 ) * u - 40.0 * u * u;
+	return p;
 }
-
 void main() {
 	float t = aT;
 	vec3 here = threadPoint( t );
@@ -121,12 +154,14 @@ void main() {
 	shown *= mix( 1.0 - smoothstep( 0.2, 0.6, uLift ), 1.0, lifting );
 	// Fainter the higher and further it goes: nothing bright left hanging in the sky.
 	float high = lifting * smoothstep( 0.3, 1.0, t );
+	// The arms are not rings: they break into wisps, with gaps that drift.
+	float wisps = mix( 1.0, smoothstep( 0.25, 0.65, 0.5 + 0.5 * sin( t * 23.0 + seed * 50.0 + uTime * 0.1 ) ), lifting * smoothstep( 0.76, 0.84, t ) );
 	// Light travels along each: inward on the in-breath, upward on the out-breath; in longer,
 	// slower swells the higher it is, so the arms are not broken into beads.
 	float pulse = 0.6 + 0.4 * sin( t * mix( 38.0, 9.0, high ) - uTime * ( 1.6 + 0.6 * seed ) * ( lifting > 0.5 ? 1.0 : - 1.0 ) + seed * 40.0 );
 	// (Faint, each one: a hundred and twenty of them lie on one another in the column, and
 	// strength is not brightness.)
-	vAlpha = shown * pulse * ( 0.16 - 0.11 * high ) * smoothstep( 0.0, 0.03, t ) * ( lifting > 0.5 ? 1.0 : 0.8 );
+	vAlpha = shown * wisps * pulse * ( 0.16 - 0.11 * high ) * smoothstep( 0.0, 0.03, t ) * ( lifting > 0.5 ? 1.0 : 0.8 );
 	// Colour: mostly air, for this is the air's work, some water from the gathering, the
 	// strongest's white.
 	vWhite = step( 0.94, fract( seed * 7.31 ) );
@@ -175,6 +210,8 @@ export interface SkyOpeningFrame {
 	gain: number;
 	// The elements' colours: air, water, akasha, the strongest's.
 	sheath: THREE.Color[];
+	// The wind, in m/s, the way it blows.
+	wind: THREE.Vector3;
 }
 
 // Where it is in its breaths, from the seconds since a channelled storm began. It comes round
@@ -236,6 +273,7 @@ export function createSkyOpening(scene: THREE.Scene, layer: number) {
 		uHeight: { value: SKY_OPENING.height },
 		uSpread: { value: SKY_OPENING.spread },
 		uFar: { value: SKY_OPENING.ahead },
+		uLean: { value: new THREE.Vector2() },
 		uDay: { value: 0 },
 		uGain: { value: 1 },
 		uSheath: { value: [new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color()] },
@@ -267,6 +305,8 @@ export function createSkyOpening(scene: THREE.Scene, layer: number) {
 		// A slow breath, about eight seconds in and out, as it is held.
 		uniforms.uBreath.value = Math.sin((frame.time * Math.PI * 2) / 8);
 		uniforms.uDay.value = frame.day;
+		uniforms.uLean.value.set(frame.wind.x, frame.wind.z).multiplyScalar(1 / 60);
+		if (uniforms.uLean.value.length() > 1) uniforms.uLean.value.normalize();
 		uniforms.uGain.value = frame.gain;
 		frame.sheath.forEach((colour, i) => uniforms.uSheath.value[i]!.copy(colour));
 		uniforms.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(pixelRatio.value);

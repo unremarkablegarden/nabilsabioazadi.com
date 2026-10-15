@@ -144,7 +144,7 @@ All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerst
 | Address | Shows |
 |---|---|
 | `/?storm` | a channelled storm, for this visit only: past hurricane force, the twelve as versions of Siuan, Leane and Moiraine, the weaves' colours graded, and the menu row "Weather · Channelled, honouring spirits met across Te Moana-nui-a-Kiwa". `/?storm=off` shows the site without it while one is on for everyone |
-| `/?storm&show=sky` | in a channelled storm, the channellers opening the sky at once (`sky-opening.ts`): the in-breath that draws threads in off the sea, the spiral column rising some 600 m ahead, the arms opening at the cloud base and the rain parting round the boat (`rain.ts`, now real 3D drops); otherwise it comes round every 160 seconds in a channelled storm |
+| `/?storm&show=sky` | in a channelled storm, the channellers opening the sky at once; otherwise it comes round every 160 seconds in a channelled storm. Every way of opening it plays together as one piece (`sky-all.ts`, the owner's choice): the rain gathered into shoals, hanging and going back up as mist, the in-breath off the sea, the silk column (`sky-opening.ts`, leaning, roped, never a cone) rising some 600 m ahead and opening into arms at the cloud base, a kelp forest of threads at the horizon, the strongest's silk ribbon, the curtain of rain lifted, a ring of calm rolling out, and lanterns. Rain is real 3D drops (`rain.ts`). `&sky=column` shows the column alone |
 | `/?controls` | every live figure, including rows "unusual", "strongest", "storm" |
 | `/?hour=19.2`, `/?hour=22`, `/?hour=13` | dusk, night, midday at the boat |
 | `/?date=2027-03-01` | another day of the voyage |

@@ -30,6 +30,21 @@ uniform vec3 uBox;
 uniform vec3 uCentre;
 uniform vec3 uWind;
 uniform float uTime;
+// How far the wind has carried the rain so far (wrapped to the box) and how far it has fallen,
+// both added up frame by frame, so that a change in the wind or the fall never makes it jump;
+// and how fast each is going just now (1 is ordinary).
+uniform vec3 uDrift;
+// The same, not wrapped: for the sheets, which travel with it.
+uniform vec3 uCarried;
+uniform float uFall;
+uniform vec2 uSpeed;
+// Channelled (sky-opening.ts, ?sky=all): how far the drops hang in the air glimmering, how far
+// they have gone back up as mist, how far they are gathered into shoals like starlings, and how
+// high the bottom edge of the rain has been lifted off the sea.
+uniform float uHang;
+uniform float uRise;
+uniform float uMurmur;
+uniform float uCurtain;
 uniform float uRain;
 uniform float uExposure;
 uniform float uFocus;
@@ -83,15 +98,22 @@ vec3 canopied( vec3 p ) {
 
 void main() {
 	// Bigger drops fall faster (about 6 to 9 m/s) and the wind carries them all at its own speed.
-	vec3 velocity = uWind + vec3( 0.0, - ( 6.0 + 3.0 * aSeed.w ), 0.0 );
-	// (A little flutter: the air they fall through is not smooth.)
-	velocity.xz += length( uWind.xz ) * 0.12 * vec2( sin( uTime * 3.1 + aSeed.x * 40.0 ), cos( uTime * 2.7 + aSeed.y * 40.0 ) );
+	vec3 fall = vec3( 0.0, - ( 6.0 + 3.0 * aSeed.w ), 0.0 );
+	vec3 velocity = uWind * uSpeed.x + fall * uSpeed.y;
 	vec3 corner = uCentre - 0.5 * uBox;
-	vec3 at = corner + mod( aSeed.xyz * uBox + velocity * uTime - corner, uBox );
+	vec3 at = corner + mod( aSeed.xyz * uBox + uDrift + fall * uFall - corner, uBox );
+	// (A little flutter: the air they fall through is not smooth.)
+	at.xz += length( uWind.xz ) * 0.004 * vec2( sin( uTime * 3.1 + aSeed.x * 40.0 ), cos( uTime * 2.7 + aSeed.y * 40.0 ) );
+	// Gathered into shoals: carried round in great slow swirls, and only those in the shoals seen.
+	vec3 swirlAt = at * 0.012 + vec3( uTime * 0.05, 0.0, - uTime * 0.04 );
+	at += uMurmur * 30.0 * vec3( sin( swirlAt.y * 3.0 + swirlAt.z * 2.0 ), 0.4 * sin( swirlAt.x * 2.5 + uTime * 0.2 ), cos( swirlAt.x * 3.0 - swirlAt.y * 2.0 ) );
 
 	// Sheets of heavier rain, carried along with the wind; at less rain, fewer drops.
-	float sheet = noise( at * 0.035 - uWind * uTime * 0.035 + vec3( 0.0, uTime * 0.05, 0.0 ) );
+	float sheet = noise( at * 0.035 - uCarried * 0.035 + vec3( 0.0, uTime * 0.05, 0.0 ) );
 	float shown = step( fract( aSeed.w * 7.13 + aSeed.x * 3.7 ), uRain * ( 0.35 + 1.1 * sheet ) );
+	shown *= mix( 1.0, smoothstep( 0.5, 0.62, noise( at * 0.02 + vec3( uTime * 0.12, uTime * 0.03, 0.0 ) ) ) * 1.6, uMurmur );
+	// The curtain lifted: nothing below its bottom edge.
+	shown *= smoothstep( uCurtain - 6.0, uCurtain + 6.0, at.y );
 
 	// The streak: where the drop is, and where it was a moment ago, both bent by the shelter.
 	vec3 head = at;
@@ -121,7 +143,7 @@ void main() {
 	// are out of focus and blurred broad and faint.
 	float distance = max( headClip.w, 0.5 );
 	float blur = uFocus / distance;
-	float width = 0.9 + 3.0 * blur;
+	float width = ( 0.9 + 3.0 * blur ) * ( 1.0 + 2.5 * uRise );
 	vec2 a = headClip.xy / max( headClip.w, 1e-3 );
 	vec2 b = tailClip.xy / max( tailClip.w, 1e-3 );
 	vec2 along = ( a - b ) * uResolution;
@@ -129,7 +151,10 @@ void main() {
 	clip.xy += side * aCorner.y * width / uResolution * clip.w;
 	gl_Position = clip;
 	// Fainter for being blurred, and lost in the rain with distance.
-	vAlpha = shown * ( 0.35 / ( 1.0 + 3.0 * blur ) ) * exp( - distance / uFar ) * ( beading > 0.0 ? 0.5 : 1.0 );
+	// Hanging, each drop glimmers a little, as a drop held in the light does; gone back up, it is
+	// mist: broad, faint.
+	float glimmer = 1.0 + uHang * 0.9 * sin( uTime * 2.3 + aSeed.z * 60.0 );
+	vAlpha = shown * glimmer * ( 1.0 - 0.75 * uRise ) * ( 0.35 / ( 1.0 + 3.0 * blur ) ) * exp( - distance / uFar ) * ( beading > 0.0 ? 0.5 : 1.0 );
 	// Behind the camera: nothing.
 	vAlpha *= step( 1.2, headClip.w ) * step( 1.2, tailClip.w );
 	vEdge = aCorner.y;
@@ -174,6 +199,14 @@ function rainVolume(count: number, box: THREE.Vector3, ahead: number, far: numbe
 		uResolution: { value: new THREE.Vector2(1, 1) },
 		uShelter: { value: new THREE.Vector4(0, 0, 0, 0) },
 		uHold: { value: 0 },
+		uDrift: { value: new THREE.Vector3() },
+		uCarried: { value: new THREE.Vector3() },
+		uFall: { value: 0 },
+		uSpeed: { value: new THREE.Vector2(1, 1) },
+		uHang: { value: 0 },
+		uRise: { value: 0 },
+		uMurmur: { value: 0 },
+		uCurtain: { value: -1000 },
 		uCanopy: { value: new THREE.Vector4(0, 0, 0, 0) },
 		uFar: { value: far },
 		uColour: { value: new THREE.Color() },
@@ -209,6 +242,12 @@ export interface RainFrame {
 	// The opened sky: where its column stands on the sea (x, z), the radius of the dry circle,
 	// and the height of its arms.
 	canopy: THREE.Vector4;
+	// Channelled (?sky=all): 0..1 how far the rain hangs, how far it has gone back up, how far it is
+	// gathered into shoals, and the height in metres of its lifted bottom edge (-1000: on the sea).
+	hang: number;
+	rise: number;
+	murmur: number;
+	curtain: number;
 }
 
 export function createRain(scene: THREE.Scene, camera: THREE.PerspectiveCamera, layer: number) {
@@ -222,6 +261,8 @@ export function createRain(scene: THREE.Scene, camera: THREE.PerspectiveCamera, 
 	// The shelter is held, not fixed: it trails the boat's heave and roll a moment behind.
 	const held = new THREE.Vector3();
 	let started = false;
+	const drift = new THREE.Vector3();
+	let fallen = 0;
 
 	const update = (frame: RainFrame) => {
 		const visible = frame.rain > 0.001;
@@ -234,6 +275,11 @@ export function createRain(scene: THREE.Scene, camera: THREE.PerspectiveCamera, 
 		}
 		held.lerp(frame.shelter, Math.min(1, frame.delta * 2.5));
 		const wind = frame.wind.clone().multiplyScalar(1 + 0.35 * frame.gust);
+		// Hanging, they all but stop; going back up, they rise slowly and the wind barely moves them.
+		const along = THREE.MathUtils.lerp(THREE.MathUtils.lerp(1, 0.04, frame.hang), 0.12, frame.rise);
+		const down = THREE.MathUtils.lerp(THREE.MathUtils.lerp(1, 0.03, frame.hang), -0.35, frame.rise);
+		drift.addScaledVector(wind, along * frame.delta);
+		fallen += down * frame.delta;
 		for (const volume of volumes) {
 			volume.mesh.visible = visible;
 			if (!visible) continue;
@@ -241,6 +287,15 @@ export function createRain(scene: THREE.Scene, camera: THREE.PerspectiveCamera, 
 			u.uCentre.value.copy(camera.position).addScaledVector(forward, volume.ahead);
 			u.uCentre.value.y = camera.position.y + 2;
 			u.uWind.value.copy(wind);
+			const box = u.uBox.value;
+			u.uDrift.value.set(drift.x % box.x, drift.y % box.y, drift.z % box.z);
+			u.uCarried.value.copy(drift);
+			u.uFall.value = fallen;
+			u.uSpeed.value.set(along, down);
+			u.uHang.value = frame.hang;
+			u.uRise.value = frame.rise;
+			u.uMurmur.value = frame.murmur;
+			u.uCurtain.value = frame.curtain;
 			u.uTime.value = frame.time;
 			u.uRain.value = frame.rain;
 			u.uResolution.value.set(window.innerWidth, window.innerHeight);

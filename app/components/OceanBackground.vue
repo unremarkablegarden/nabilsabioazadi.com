@@ -554,6 +554,10 @@ onMounted(() => {
 	const skyCanopy = new THREE.Vector4();
 	const skySheath = [new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color()];
 	const NO_SKY = { gather: 0, lift: 0, open: 0, release: 0, canopy: 0 };
+	// Every way of opening the sky at once, as one piece (sky-all.ts; the owner's choice, 15
+	// October). ?sky=column shows the column alone, as it first was.
+	const allAtOnce = query.get("sky") !== "column";
+	const skyAll = createSkyAll(scene, SCREEN_LAYER);
 	// When the storm began, in the picture's seconds (-1: at the next frame).
 	let stormSince = 0;
 	// The shelter one channeller holds against the rain (see rain.ts): the one beside the viewer
@@ -788,7 +792,9 @@ onMounted(() => {
 		const delta = timer.getDelta();
 		watchFrameRate(delta);
 		if (stormSince < 0) stormSince = time;
-		const opening = stormOn && !calmMotion ? skyOpeningAt(time - stormSince + (query.get("show") === "sky" ? 33 : 0)) : NO_SKY;
+		const skySeconds = time - stormSince + (query.get("show") === "sky" ? 33 : 0);
+		const together = stormOn && !calmMotion && allAtOnce ? skyAllAt(skySeconds) : undefined;
+		const opening = together ?? (stormOn && !calmMotion ? skyOpeningAt(skySeconds) : NO_SKY);
 		// The figures the picture is drawn from move towards the latest real ones, or towards the
 		// usual sea while there are none yet. (At once for a single still frame.)
 		drawnFrom = towardsConditions(drawnFrom, conditions.value ?? drawnFrom, motionPaused.value ? 1 : 1 - Math.exp(-delta / 1.5));
@@ -1054,11 +1060,14 @@ onMounted(() => {
 		skyFoot.set(camera.position.x + skyAhead.x * SKY_OPENING.ahead, 0, camera.position.z + skyAhead.y * SKY_OPENING.ahead);
 		// (The dry circle is the reach of its arms: the edge of the rain sweeps out over the boat and away.)
 		skyCanopy.set(skyFoot.x, skyFoot.z, 0.9 * SKY_OPENING.spread * opening.canopy, SKY_OPENING.height);
+		// All at once, the parting is the ring of calm rolling out from the boat itself.
+		if (together) skyCanopy.set(camera.position.x, camera.position.z, 1300 * together.ring, 260);
 		skySheath.forEach((colour, i) => colour.set(colours[COLOUR_NAMES[i]!]));
-		skyOpening.update({ time, boat: camera.position, ahead: skyAhead, gather: opening.gather, lift: opening.lift, open: opening.open, release: opening.release, day: daylight, gain: 1.5 / steadyExposure, sheath: skySheath });
+		skyOpening.update({ time, boat: camera.position, ahead: skyAhead, gather: opening.gather, lift: opening.lift, open: opening.open, release: opening.release, day: daylight, gain: 1.5 / steadyExposure, sheath: skySheath, wind: rainWind });
 		shelterAt.set(-0.75, -0.3, -2.5).applyEuler(camera.rotation).add(camera.position);
 		rainLight.copy(rainNight).lerp(rainDay, daylight).multiplyScalar(1 / steadyExposure);
-		rainfall.update({ time, delta, rain, wind: rainWind, gust: gustNowRain, light: rainLight, flash, shelter: shelterAt, shelterRadius: 0.9, hold: shelterHold, canopy: skyCanopy });
+		rainfall.update({ time, delta, rain, wind: rainWind, gust: gustNowRain, light: rainLight, flash, shelter: shelterAt, shelterRadius: 0.9, hold: shelterHold, canopy: skyCanopy, hang: together?.hang ?? 0, rise: together?.rise ?? 0, murmur: together?.murmur ?? 0, curtain: together && together.curtain > 0 ? -10 + 320 * together.curtain : -1000 });
+		skyAll.update({ time, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, sheath: skySheath, at: together ?? skyAllAt(0) });
 		const strike = bolts.update(time, 4 / steadyExposure, air.vapour, stormFog);
 		if (strike > 0) {
 			for (let i = 0; i < BOLT_POINTS; i++) {
@@ -1121,6 +1130,7 @@ onMounted(() => {
 		clearTimeout(revealAnyway);
 		rainfall.dispose();
 		skyOpening.dispose();
+		skyAll.dispose();
 		stopWatching();
 		fluid.dispose();
 		renderer.setAnimationLoop(null);
