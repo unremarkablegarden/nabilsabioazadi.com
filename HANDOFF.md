@@ -144,6 +144,7 @@ All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerst
 | Address | Shows |
 |---|---|
 | `/?storm` | a channelled storm, for this visit only: past hurricane force, the twelve as versions of Siuan, Leane and Moiraine, the weaves' colours graded, and the menu row "Weather · Channelled, honouring spirits met across Te Moana-nui-a-Kiwa". `/?storm=off` shows the site without it while one is on for everyone |
+| `/?storm&show=sky` | in a channelled storm, the channellers opening the sky at once (`sky-opening.ts`): the in-breath that draws threads in off the sea, the spiral column rising some 600 m ahead, the arms opening at the cloud base and the rain parting round the boat (`rain.ts`, now real 3D drops); otherwise it comes round every 160 seconds in a channelled storm |
 | `/?controls` | every live figure, including rows "unusual", "strongest", "storm" |
 | `/?hour=19.2`, `/?hour=22`, `/?hour=13` | dusk, night, midday at the boat |
 | `/?date=2027-03-01` | another day of the voyage |

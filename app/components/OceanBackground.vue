@@ -6,7 +6,6 @@ import { Sky } from "three/addons/objects/Sky.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 
 const container = ref<HTMLDivElement>();
-const overlayCanvas = ref<HTMLCanvasElement>();
 const veil = ref<HTMLDivElement>();
 // Seconds into the story (see storm-cycle.ts). The dev slider moves it.
 const cycle = ref(0);
@@ -546,7 +545,26 @@ onMounted(() => {
 	};
 	const revealAnyway = setTimeout(reveal, 1500);
 
-	const overlay = createStormOverlay(overlayCanvas.value!);
+	const rainfall = createRain(scene, camera, SCREEN_LAYER);
+	// Opening the sky (sky-opening.ts): in a channelled storm, every 160 seconds, the channellers
+	// lift a weave to the cloud base and part the rain round the boat. ?show=sky begins with it.
+	const skyOpening = createSkyOpening(scene, SCREEN_LAYER);
+	const skyAhead = new THREE.Vector2(0, -1);
+	const skyFoot = new THREE.Vector3();
+	const skyCanopy = new THREE.Vector4();
+	const skySheath = [new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color()];
+	const NO_SKY = { gather: 0, lift: 0, open: 0, release: 0, canopy: 0 };
+	// When the storm began, in the picture's seconds (-1: at the next frame).
+	let stormSince = 0;
+	// The shelter one channeller holds against the rain (see rain.ts): the one beside the viewer
+	// on the left, about 2.5 m in front of their eyes, a little below the viewer's own. Taken up
+	// only in a channelled storm, once the rain is heavy, and let go when it eases.
+	let shelterHold = 0;
+	const shelterAt = new THREE.Vector3();
+	const rainLight = new THREE.Color();
+	const rainWind = new THREE.Vector3();
+	const rainNight = new THREE.Color(0.2, 0.22, 0.26);
+	const rainDay = new THREE.Color(0.9, 0.93, 0.96);
 	const fluid = createFluid(renderer, scene, SCREEN_LAYER);
 	const bolts = createLightning(scene);
 	const fogTint = new THREE.Color();
@@ -720,6 +738,7 @@ onMounted(() => {
 		pretend = pretendNow();
 		channelled.value = Object.keys(pretend).length > 0;
 		channellers.setChannelledStorm(stormOn);
+		stormSince = -1;
 		if (!coloursGiven) {
 			Object.assign(colours, stormOn ? GRADED_COLOURS : ELEMENT_COLOURS);
 			channellers.setColours(colours, true);
@@ -768,6 +787,8 @@ onMounted(() => {
 		const time = timer.getElapsed();
 		const delta = timer.getDelta();
 		watchFrameRate(delta);
+		if (stormSince < 0) stormSince = time;
+		const opening = stormOn && !calmMotion ? skyOpeningAt(time - stormSince + (query.get("show") === "sky" ? 33 : 0)) : NO_SKY;
 		// The figures the picture is drawn from move towards the latest real ones, or towards the
 		// usual sea while there are none yet. (At once for a single still frame.)
 		drawnFrom = towardsConditions(drawnFrom, conditions.value ?? drawnFrom, motionPaused.value ? 1 : 1 - Math.exp(-delta / 1.5));
@@ -870,7 +891,8 @@ onMounted(() => {
 		// mapping, so it is divided by the exposure to land on the intended screen colour.
 		// And it is there whenever the air at the islands is thick, storm or no storm.
 		const liveMist = liveOnly ? mistAmount(liveOnly) : 0;
-		const stormFog = showFog.value ? 0.8 * Math.max(THREE.MathUtils.smoothstep(fury, 0.2, 1) * air.fogginess, liveMist) : 0;
+		// (Under the opened sky the air clears, as the rain is held off it.)
+		const stormFog = showFog.value ? 0.8 * Math.max(THREE.MathUtils.smoothstep(fury, 0.2, 1) * air.fogginess, liveMist) * (1 - 0.6 * opening.canopy) : 0;
 		const fogAmount = Math.max(stormFog, moment.stillness);
 		mist.lerpColors(nightMist, dayFog, daylight);
 		fog.density = 0.0025 * fogAmount;
@@ -1020,10 +1042,23 @@ onMounted(() => {
 		horizonScreen.y = horizonAhead.y;
 		document.documentElement.style.setProperty("--horizon", `${(horizonAhead.y * 100).toFixed(2)}vh`);
 		document.documentElement.style.setProperty("--roll", `${camera.rotation.z.toFixed(4)}rad`);
-		// The rain is driven by the real wind: how much of it blows across the view, and how hard (150 km/h is full).
-		const gale = liveOnly ? Math.min(1, liveOnly.windSpeed / 150) : fury;
-		const across = liveOnly ? Math.sin(THREE.MathUtils.degToRad(liveOnly.windDirection + 180 - PLACE.bearing)) : 0.5 * crosswind;
-		overlay.draw(delta, rain, flash, camera.rotation.z, across * alive, gale * alive, bond, knotScreen);
+		// The rain is driven by the real wind, at its own speed and the way it blows.
+		if (liveOnly) {
+			const blowsTowards = THREE.MathUtils.degToRad(liveOnly.windDirection + 180 - PLACE.bearing);
+			rainWind.set(Math.sin(blowsTowards), 0, -Math.cos(blowsTowards)).multiplyScalar((liveOnly.windSpeed / 3.6) * alive);
+		} else rainWind.set(crosswind * 20 * fury, 0, 0);
+		const gustFactor = liveOnly ? THREE.MathUtils.clamp(liveOnly.windGusts / Math.max(liveOnly.windSpeed, 1) - 1, 0, 1) : 0.3;
+		const gustNowRain = gustFactor * (0.5 + 0.5 * Math.sin(time * 0.9) * Math.sin(time * 0.37 + 1.1));
+		// (Not needed once the sky is open over them.)
+		shelterHold += ((stormOn && rain > 0.3 && opening.canopy < 0.5 ? 1 : 0) - shelterHold) * Math.min(1, delta / 4);
+		skyFoot.set(camera.position.x + skyAhead.x * SKY_OPENING.ahead, 0, camera.position.z + skyAhead.y * SKY_OPENING.ahead);
+		// (The dry circle is the reach of its arms: the edge of the rain sweeps out over the boat and away.)
+		skyCanopy.set(skyFoot.x, skyFoot.z, 0.9 * SKY_OPENING.spread * opening.canopy, SKY_OPENING.height);
+		skySheath.forEach((colour, i) => colour.set(colours[COLOUR_NAMES[i]!]));
+		skyOpening.update({ time, boat: camera.position, ahead: skyAhead, gather: opening.gather, lift: opening.lift, open: opening.open, release: opening.release, day: daylight, gain: 1.5 / steadyExposure, sheath: skySheath });
+		shelterAt.set(-0.75, -0.3, -2.5).applyEuler(camera.rotation).add(camera.position);
+		rainLight.copy(rainNight).lerp(rainDay, daylight).multiplyScalar(1 / steadyExposure);
+		rainfall.update({ time, delta, rain, wind: rainWind, gust: gustNowRain, light: rainLight, flash, shelter: shelterAt, shelterRadius: 0.9, hold: shelterHold, canopy: skyCanopy });
 		const strike = bolts.update(time, 4 / steadyExposure, air.vapour, stormFog);
 		if (strike > 0) {
 			for (let i = 0; i < BOLT_POINTS; i++) {
@@ -1074,7 +1109,6 @@ onMounted(() => {
 		camera.aspect = window.innerWidth / window.innerHeight;
 		camera.updateProjectionMatrix();
 		renderer.setSize(window.innerWidth, window.innerHeight);
-		overlay.resize();
 	};
 	window.addEventListener("resize", onResize);
 
@@ -1085,6 +1119,8 @@ onMounted(() => {
 		clearInterval(conditionsInterval);
 		clearInterval(stormInterval);
 		clearTimeout(revealAnyway);
+		rainfall.dispose();
+		skyOpening.dispose();
 		stopWatching();
 		fluid.dispose();
 		renderer.setAnimationLoop(null);
@@ -1099,7 +1135,6 @@ onBeforeUnmount(() => dispose?.());
 <template>
 	<div ref="container" class="fixed inset-0 -z-10" aria-hidden="true">
 		<div ref="veil" class="pointer-events-none absolute inset-0 z-10 opacity-0" />
-		<canvas ref="overlayCanvas" class="pointer-events-none absolute inset-0 z-20 h-full w-full" />
 	</div>
 	<!-- Client only: the server's clock and time zone differ from the visitor's. -->
 	<ClientOnly>
