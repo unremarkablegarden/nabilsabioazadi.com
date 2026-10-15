@@ -628,10 +628,10 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 			// right, each of the four her own way off from the others, near and far (not in a row).
 			const third = THIRDS[i]!;
 			const a = [-0.5, 0.02, 0.5][third]! + (MEMBERS[i]! - 1.5) * 0.11 + 0.08 * Math.sin(i * 2.3) + 0.04 * Math.sin(frame.time * 0.01 + i);
-			const d = 230 + 950 * ((i * 0.618 + 0.3) % 1) ** 1.3;
+			const d = 180 + 750 * ((i * 0.618 + 0.3) % 1) ** 1.3;
 			const x = frame.boat.x + (frame.ahead.x * Math.cos(a) - frame.ahead.y * Math.sin(a)) * d;
 			const z = frame.boat.z + (frame.ahead.y * Math.cos(a) + frame.ahead.x * Math.sin(a)) * d;
-			const reach = (70 + 1100 * along * (0.8 + 0.4 * ((i * 0.37) % 1))) * (1 + 0.15 * shared_.uSigh.value[i]!);
+			const reach = (150 + 1100 * along * (0.8 + 0.4 * ((i * 0.37) % 1))) * (1 + 0.15 * shared_.uSigh.value[i]!);
 			const strength = Math.min(1, 0.45 + 0.55 * smoothstep(p, 0, 0.3)) * (0.7 + 0.3 * heat[i]!) * fade;
 			shared_.uPress.value[i]!.set(x, z, reach, 0);
 			frame.pressed[i]!.set(x, z, reach, strength);

@@ -605,6 +605,11 @@ const fragmentNormal = /* glsl */ `
 		float meets = exp( - pow( ( body_ - 0.5 ) / 0.05, 2.0 ) ) * hereabouts;
 		noise.xy += meets * 0.7 * vec2( sin( place.x * 0.9 + waveTime * 1.3 ), cos( place.y * 0.8 - waveTime * 1.1 ) );
 	}
+	// Where the twelve have pressed the swell out of the sea (the great calming) it is glass: its
+	// small roughness is gone too, so it mirrors the sky clean, and reads at once against the storm.
+	float pressRim, pressCore;
+	float pressCalm = pressedCalm( place, pressRim, pressCore );
+	rippled *= mix( 0.04, 1.0, pressCalm );
 	vec3 surfaceNormal = normalize( noise.xzy * vec3( rippled, 1.0, rippled ) );
 	surfaceNormal = normalize( vec3(
 		surfaceNormal.x / surfaceNormal.y + vWaveNormal.x / vWaveNormal.y,
@@ -633,6 +638,10 @@ const fragmentFoam = /* glsl */ `
 	outgoingLight = mix( outgoingLight, outgoingLight * vec3( 0.8, 1.2, 1.0 ) + vec3( 0.04, 0.2, 0.14 ) * length( waterColor ) * sunColor.g, fresh * 0.7 * ( 1.0 - reflectance ) );
 	// Where the two waters meet, a broken line of foam.
 	foamMask = max( foamMask, meeting * 0.75 * smoothstep( 0.3, 0.7, 0.5 + 0.5 * noise.x + 0.2 * sin( worldPosition.z * 0.3 ) ) );
+
+	// Within a pressed calm no foam at all; at its edge the storm's waves break white and die.
+	foamMask *= pressCalm;
+	foamMask = max( foamMask, pressRim * smoothstep( 0.2, 0.6, 0.5 + 0.5 * noise.x + 0.3 * sin( worldPosition.x * 0.07 + worldPosition.z * 0.05 + waveTime * 0.6 ) ) );
 
 	outgoingLight = mix( outgoingLight, foamColor, foamMask );
 	// The channellers' braids light the sea they run over. Each is a line of light a little above
@@ -681,9 +690,7 @@ const fragmentFoam = /* glsl */ `
 	outgoingLight += vec3( 0.03, 0.2, 0.75 ) * channelBalmGlow * mended * ( 1.0 - reflectance );
 	// Pressed calm, the cold water drawn up from below shows: darker, clearer, a little greener;
 	// and where each braid goes down into the sea its light is seen going down into the water.
-	float pressRim, pressCore;
-	float pressCalm = pressedCalm( worldPosition.xz, pressRim, pressCore );
-	outgoingLight *= mix( vec3( 1.0 ), vec3( 0.78, 0.95, 1.0 ), ( 1.0 - pressCalm ) * 0.6 );
+	outgoingLight *= mix( vec3( 1.0 ), vec3( 0.78, 0.95, 1.0 ), ( 1.0 - pressCalm ) * 0.6 * ( 1.0 - reflectance ) );
 	outgoingLight += vec3( 0.55, 0.7, 0.8 ) * pressGlow * pressCore * ( 1.0 - reflectance );
 
 	// Slowing the boat is the work of the weaker channellers (the owner's). They do not weave out
