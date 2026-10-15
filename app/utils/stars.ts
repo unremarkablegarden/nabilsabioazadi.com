@@ -10,6 +10,7 @@
 // and ESA/Gaia/DPAC), laid out by right ascension and declination like the catalogue.
 // The planets are worked out (planetPositions). Shooting stars are not drawn.
 import * as THREE from "three";
+import { skyHoleChunk } from "./sky-breath";
 import { pixelRatio } from "./weave";
 
 const RAD = Math.PI / 180;
@@ -42,6 +43,9 @@ attribute float aLight;
 uniform float uPixelRatio;
 uniform float uGain;
 uniform float uShown;
+// Through the hole the channellers open in the cloud (sky-breath.ts), as much as a clear sky shows.
+uniform float uThroughHole;
+${skyHoleChunk}
 // The magnitude of the faintest star that can be made out against the sky as it is now.
 uniform float uFaintest;
 varying vec3 vColour;
@@ -58,7 +62,8 @@ void main() {
 	// the sky darkens. It is not there at a stroke: it comes up over the next magnitude and a half.
 	float magnitude = - 1.0857 * log( max( aLight, 1e-9 ) );
 	float seen = smoothstep( - 0.5, 1.0, uFaintest - magnitude );
-	vColour = aColour * uGain * uShown * seen * pow( aLight, 0.45 ) * step( 0.0, position.y );
+	float shown = max( uShown, uThroughHole * skyHole( normalize( position ), 0.7 ) );
+	vColour = aColour * uGain * shown * seen * pow( aLight, 0.45 ) * step( 0.0, position.y );
 }
 `;
 
@@ -148,6 +153,8 @@ export interface StarState {
 	glow: number;
 	// Multiplies the light so it holds its brightness at any exposure.
 	gain: number;
+	// 0..1 how much of the stars' light gets through the hole opened in the cloud.
+	throughHole?: number;
 }
 
 // `place` is where on Earth the boat is and the compass bearing its view faces (scene -z); it
@@ -157,11 +164,15 @@ export function createStars(
 	camera: THREE.Camera,
 	place: { latitude: number; longitude: number; bearing: number },
 	wanderers: (date: Date) => Wanderer[],
+	// The hole opened in the cloud (sky-breath.ts), shared with the sky.
+	hole: THREE.IUniform<THREE.Vector3> = { value: new THREE.Vector3() },
 ) {
 	const uniforms = {
 		uPixelRatio: pixelRatio,
 		uGain: { value: 1 },
 		uShown: { value: 0 },
+		uThroughHole: { value: 0 },
+		uSkyHole: hole,
 		uFaintest: { value: Number.NaN },
 	};
 	const material = new THREE.ShaderMaterial({
@@ -292,11 +303,11 @@ export function createStars(
 		colours.needsUpdate = true;
 	};
 
-	const update = ({ date, shown, faintest, glow: glowShown, gain }: StarState) => {
+	const update = ({ date, shown, faintest, glow: glowShown, gain, throughHole = 0 }: StarState) => {
 		// (The clock moves the sun once a minute, so the figure is eased, or the stars would come up in steps.)
 		uniforms.uFaintest.value = Number.isNaN(uniforms.uFaintest.value) ? faintest : uniforms.uFaintest.value + (faintest - uniforms.uFaintest.value) * 0.03;
 		// Nothing in the sky is brighter than magnitude -5.
-		const out = shown > 0.001 && uniforms.uFaintest.value > -5;
+		const out = (shown > 0.001 || (throughHole > 0.001 && hole.value.z > 0)) && uniforms.uFaintest.value > -5;
 		if (points) points.visible = out;
 		glow.visible = glowShown > 0.001 && !!glowUniforms.uMap.value;
 		if (!out && !glow.visible) return;
@@ -310,6 +321,7 @@ export function createStars(
 		points?.position.copy(camera.position);
 		glow.matrix.setPosition(camera.position);
 		uniforms.uShown.value = shown;
+		uniforms.uThroughHole.value = throughHole;
 		uniforms.uGain.value = gain;
 		glowUniforms.uGain.value = 0.35 * glowShown * gain;
 	};

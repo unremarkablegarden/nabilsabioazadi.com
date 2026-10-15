@@ -181,6 +181,71 @@ All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerst
 
 10. **Speed** (13 October; the README's entry "Keeping the picture moving smoothly" has what was done and what is left). Measured only on the owner's M1 laptop, in a headless browser at 2560 by 1326: never on a phone, nor on a slow machine. The owner has not yet said whether the softer picture a slow machine now gets (down to 1 pixel to 1) is acceptable, or whether sharpness should be held and smoothness given up; `/?ratio=` shows each.
 
+## Handover: the storm thread of 15 October (read this first in the next thread)
+
+**For a new version of the storm, read `STORM.md` first**: the idea in the owner's words, what was
+built and why, what they reacted to, ideas not yet built, technical lessons, and the way back.
+
+One long working session on 15 October built a storm the owner can call up at will, and a way
+for the channellers to open the sky in it. All of it is pushed and live. Marked in git:
+`before-storms` (`0cbc93a`, the site as the thread began) and `storms-2026-10-15` (`e5266ce`, the
+site as it ended). The thread's seven commits run from `56331a6` to `e5266ce`.
+
+**What is live now**
+- **The channelled storm is ON for every visitor until 9 pm, 16 October 2026, Aotearoa time**
+  (`storm.json`, `"until": "2026-10-16T21:00:00+13:00"`); it ends by itself then. While on: winds
+  of 220 km/h gusting 300, an 18 m sea, thunder, pressure 915 hPa falling (`CHANNELLED_STORM` in
+  `app/utils/channelled-storm.ts`); the twelve are versions of Siuan, Leane and Moiraine
+  (`AES_SEDAI` in `channellers.ts`); the weaves' colours graded (`GRADED_COLOURS`, `uGraded`); and
+  the menu row "Weather · Channelled, honouring spirits met across Te Moana-nui-a-Kiwa".
+- **Past hurricane force** (`beyondHurricane` in `manawatawhi.ts`): giant swells under the
+  measured sea, the deck rolling harder, lightning up to about one a second.
+- **Lightning** (`lightning.ts`, always on, owner's choice): bolts from the cloud base, tortuous
+  and branched, near and far, most flashes inside the cloud, a glow in the cloud base and a
+  point of light where a bolt meets the sea; no steam plume.
+- **Smoke** (`fluid.ts`, always on): follows the real wind, mixed away fast in a gale; the gases'
+  glow beside each bolt turned almost off.
+- **Rain is real 3D drops** (`rain.ts`, always on, replacing the flat rain, kept in
+  `.trash/storm-overlay.flat-rain.ts`): three layers following the boat, driven by the real wind,
+  in sheets; the channeller beside the viewer on the left holds a weave of Air before their eyes
+  that bends the rain round it.
+- **Opening the sky**, every 160 s in a channelled storm, all ways at once (`sky-all.ts`, owner's
+  choice): the rain in shoals like starlings, hanging and rising back as mist; the in-breath off
+  the sea; the silk column some 600 m ahead (`sky-opening.ts`), leaning with the wind, in loose
+  ropes, painted in brush strokes over a soft wash, its arms spreading like smoke; a kelp forest
+  of threads at the horizon; the strongest's silk ribbon; the rain's curtain lifted; a ring of
+  calm; lanterns. Qi gong's "two hands hold up the sky" and silk-reeling are its model.
+
+**Addresses**: `/?storm` (the storm for one visit), `/?storm=off` (without it), `/?show=sky` (the
+sky opening at once), `&sky=column` (the column alone), `&controls` (figures and who is at front).
+
+**Seeing it** (for an assistant): the app's browser pane is often hidden, and a hidden page stops
+drawing. Use `scripts/shoot.mjs` (headless Brave), e.g.
+`~/.local/node/bin/node scripts/shoot.mjs "http://localhost:3000/?hour=22&show=sky" /tmp/x 20 50`.
+
+**Not right yet / the owner's last words on it**: they adore it, and asked for the shape in the
+sky to be "more abstract and less geometric" and the column "more painterly", both done once. Not
+yet done: the bright pool where the threads meet the column's foot; the arms still faintly beaded
+by night; nothing watched in motion, only stills; never seen on a phone; the cost of the 3D rain
+and the sky on a slow machine unmeasured; the shelter in front of the channeller never clearly
+photographed; the story's rain swirl round the knot went with the flat rain.
+
+**How the owner worked in this thread**: gives direction by feeling and pictures ("more poetic",
+"innovate again", "what do YOU think"), wants options with a recommendation, then often "all of
+them"; says "commit and push" for each push; British spelling; the strongest is "they".
+
+**The way back**
+1. *End the storm now, keep the work*: set `storm.json` to `{ "from": null, "until": null }`,
+   then commit and push. Everyone then sees the pilgrims, the original colours and the measured
+   weather; the 3D rain, lightning and smoke changes stay (they are not part of the switch).
+2. *Return the live site to exactly how it was before this thread* (tested: the result is
+   identical to `before-storms`). Nothing is deleted; the storm stays in history at
+   `storms-2026-10-15` and can be brought back with `git revert` of this revert.
+   ```bash
+   git revert --no-commit before-storms..storms-2026-10-15 && git -c user.name="Nabil Sabio Azadi" -c user.email="nsa@nabilsabioazadi.com" commit -m "Back to the site as it was before the storms of 15 October" && git branch -f main october && git push origin october main
+   ```
+   (If later commits touch the same files, revert those first or resolve the conflicts.)
+
 ## A channelled storm, for everyone (15 October)
 
 The owner can call one up at will. It is set in `storm.json` at the root of the site: `"until"`

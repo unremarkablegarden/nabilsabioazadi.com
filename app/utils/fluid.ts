@@ -318,6 +318,10 @@ uniform sampler2D uDye;
 uniform vec3 uFogColour;
 uniform vec3 uAirColour;
 uniform float uGain;
+// The hole opened in the cloud (sky-breath.ts), on the screen: its middle and reach across and up
+// (0..1 from the bottom left), and 0..1 how far the fog is thinned under it.
+uniform vec4 uHole;
+uniform float uHoleOpen;
 varying vec2 vUv;
 // Faint, and true to the gases: nitrogen dioxide is brown, and the cold glow of the sheath is blue-violet.
 // Very faint: the heated thread and its gases are all but invisible once the channel has gone dark.
@@ -327,6 +331,7 @@ const vec3 hydroxylColour = vec3( 0.55, 0.62, 1.0 );
 void main() {
 	vec4 dye = texture2D( uDye, vUv );
 	float fog = min( 0.85, 1.0 - exp( - dye.r * 1.3 ) );
+	fog *= 1.0 - 0.8 * uHoleOpen * ( 1.0 - smoothstep( 0.5, 1.4, length( ( vUv - uHole.xy ) / max( uHole.zw, vec2( 1e-3 ) ) ) ) );
 	vec3 light = uFogColour * fog + uAirColour * dye.g * 0.35;
 	light += vec3( 1.0, 0.96, 0.9 ) * dye.b * 0.04 + nitricColour * max( dye.a, 0.0 ) * 0.04 + hydroxylColour * max( - dye.a, 0.0 ) * 0.05;
 	gl_FragColor = vec4( light * uGain, fog );
@@ -365,6 +370,9 @@ export interface FluidFrame {
 	// Colour of the fog as it should appear on screen, and the factor that undoes the exposure.
 	fogColour: THREE.Color;
 	gain: number;
+	// The hole opened in the cloud (sky-breath.ts): its middle and reach on the screen, 0..1 from
+	// the top left, and 0..1 how far it is open.
+	hole?: { x: number; y: number; across: number; up: number; open: number };
 }
 
 export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, displayLayer: number) {
@@ -443,6 +451,8 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 				uFogColour: { value: new THREE.Color() },
 				uAirColour: { value: new THREE.Color(0xdcebff) },
 				uGain: { value: 1 },
+				uHole: { value: new THREE.Vector4() },
+				uHoleOpen: { value: 0 },
 			},
 			transparent: true,
 			premultipliedAlpha: true,
@@ -540,6 +550,9 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 		uniforms.uDye!.value = dye.read.texture;
 		uniforms.uFogColour!.value.copy(frame.fogColour);
 		uniforms.uGain!.value = frame.gain;
+		const hole = frame.hole;
+		uniforms.uHoleOpen!.value = hole?.open ?? 0;
+		if (hole) uniforms.uHole!.value.set(hole.x, 1 - hole.y, hole.across, hole.up);
 	};
 
 	const dispose = () => {

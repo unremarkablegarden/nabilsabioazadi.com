@@ -45,6 +45,11 @@ uniform float uHang;
 uniform float uRise;
 uniform float uMurmur;
 uniform float uCurtain;
+// Opened by breath alone (sky-breath.ts, ?sky=breath): 0..1 how far the in-breath has drawn the rain
+// in towards the boat, and how far out from it the rain has begun to go back up, in metres (-1: not).
+uniform vec3 uBoat;
+uniform float uBreath;
+uniform float uFront;
 uniform float uRain;
 uniform float uExposure;
 uniform float uFocus;
@@ -112,12 +117,32 @@ void main() {
 	float sheet = noise( at * 0.035 - uCarried * 0.035 + vec3( 0.0, uTime * 0.05, 0.0 ) );
 	float shown = step( fract( aSeed.w * 7.13 + aSeed.x * 3.7 ), uRain * ( 0.35 + 1.1 * sheet ) );
 	shown *= mix( 1.0, smoothstep( 0.5, 0.62, noise( at * 0.02 + vec3( uTime * 0.12, uTime * 0.03, 0.0 ) ) ) * 1.6, uMurmur );
+	// The in-breath: drawn in a little towards the boat, as breath draws the air.
+	vec2 fromBoat = at.xz - uBoat.xz;
+	float out_ = length( fromBoat );
+	vec2 outward = fromBoat / max( out_, 1e-3 );
+	at.xz -= uBreath * outward * min( out_ * 0.2, 5.0 );
+	// The out-breath: once the wave spreading from the boat has passed a drop, it goes back up,
+	// slowly and then faster, as warm air does, out a little and turning a little about the boat,
+	// broadening into mist and gone some tens of metres up. (The wave spreads at 14 m/s.)
+	float since = uFront > 0.0 ? max( 0.0, uFront - out_ ) / 14.0 : 0.0;
+	float risen = 1.2 * since + 0.09 * since * since;
+	if ( risen > 0.0 ) {
+		float turn = 0.004 * risen * ( 1.0 + aSeed.y );
+		fromBoat = mat2( cos( turn ), sin( turn ), - sin( turn ), cos( turn ) ) * ( at.xz - uBoat.xz );
+		at.xz = uBoat.xz + fromBoat + outward * risen * 0.3;
+		at.y += risen;
+	}
+	float mist = smoothstep( 0.0, 14.0, risen );
+	shown *= 1.0 - smoothstep( 18.0, 55.0, risen );
 	// The curtain lifted: nothing below its bottom edge.
 	shown *= smoothstep( uCurtain - 6.0, uCurtain + 6.0, at.y );
 
 	// The streak: where the drop is, and where it was a moment ago, both bent by the shelter.
 	vec3 head = at;
 	vec3 tail = at - velocity * uExposure;
+	// (Going up, it is seen as a soft upward smudge.)
+	if ( risen > 0.0 ) tail = mix( tail, at - vec3( 0.0, 0.4 + 0.15 * risen, 0.0 ), smoothstep( 0.0, 2.0, risen ) );
 	float hold = uHold * ( 1.0 - 0.35 * step( 0.82, fract( aSeed.z * 13.1 + floor( uTime * 0.7 ) * 0.37 ) ) );
 	vec3 d = head - uShelter.xyz;
 	float struck = uHold > 0.0 ? 1.0 - smoothstep( 0.0, uShelter.w * hold, length( d ) ) : 0.0;
@@ -143,7 +168,7 @@ void main() {
 	// are out of focus and blurred broad and faint.
 	float distance = max( headClip.w, 0.5 );
 	float blur = uFocus / distance;
-	float width = ( 0.9 + 3.0 * blur ) * ( 1.0 + 2.5 * uRise );
+	float width = ( 0.9 + 3.0 * blur ) * ( 1.0 + 2.5 * uRise + 1.2 * mist );
 	vec2 a = headClip.xy / max( headClip.w, 1e-3 );
 	vec2 b = tailClip.xy / max( tailClip.w, 1e-3 );
 	vec2 along = ( a - b ) * uResolution;
@@ -154,7 +179,7 @@ void main() {
 	// Hanging, each drop glimmers a little, as a drop held in the light does; gone back up, it is
 	// mist: broad, faint.
 	float glimmer = 1.0 + uHang * 0.9 * sin( uTime * 2.3 + aSeed.z * 60.0 );
-	vAlpha = shown * glimmer * ( 1.0 - 0.75 * uRise ) * ( 0.35 / ( 1.0 + 3.0 * blur ) ) * exp( - distance / uFar ) * ( beading > 0.0 ? 0.5 : 1.0 );
+	vAlpha = shown * glimmer * ( 1.0 - 0.75 * max( uRise, mist ) ) * ( 0.35 / ( 1.0 + 3.0 * blur ) ) * exp( - distance / uFar ) * ( beading > 0.0 ? 0.5 : 1.0 );
 	// Behind the camera: nothing.
 	vAlpha *= step( 1.2, headClip.w ) * step( 1.2, tailClip.w );
 	vEdge = aCorner.y;
@@ -207,6 +232,9 @@ function rainVolume(count: number, box: THREE.Vector3, ahead: number, far: numbe
 		uRise: { value: 0 },
 		uMurmur: { value: 0 },
 		uCurtain: { value: -1000 },
+		uBoat: { value: new THREE.Vector3() },
+		uBreath: { value: 0 },
+		uFront: { value: -1 },
 		uCanopy: { value: new THREE.Vector4(0, 0, 0, 0) },
 		uFar: { value: far },
 		uColour: { value: new THREE.Color() },
@@ -248,6 +276,10 @@ export interface RainFrame {
 	rise: number;
 	murmur: number;
 	curtain: number;
+	// Opened by breath alone (?sky=breath): 0..1 the in-breath, and how far out the rain has begun
+	// to go back up, in metres (-1: not).
+	breath: number;
+	front: number;
 }
 
 export function createRain(scene: THREE.Scene, camera: THREE.PerspectiveCamera, layer: number) {
@@ -296,6 +328,9 @@ export function createRain(scene: THREE.Scene, camera: THREE.PerspectiveCamera, 
 			u.uRise.value = frame.rise;
 			u.uMurmur.value = frame.murmur;
 			u.uCurtain.value = frame.curtain;
+			u.uBoat.value.copy(camera.position);
+			u.uBreath.value = frame.breath;
+			u.uFront.value = frame.front;
 			u.uTime.value = frame.time;
 			u.uRain.value = frame.rain;
 			u.uResolution.value.set(window.innerWidth, window.innerHeight);

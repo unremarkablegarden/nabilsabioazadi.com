@@ -207,7 +207,7 @@ export function whitecaps(windSpeed: number) {
 
 // Giant swells raised at the height of the storm. Same layout as WAVES, but the wavelength is fixed
 // and the steepness comes from the surge uniform. Few and regular, so the camera can ride them.
-const GIANT_WAVES = [
+export const GIANT_WAVES = [
 	[-8, 0.0, 0.4, 420],
 	[14, 2.1, 0.33, 310],
 	[-22, 4.4, 0.27, 230],

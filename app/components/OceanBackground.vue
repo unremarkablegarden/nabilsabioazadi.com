@@ -556,8 +556,23 @@ onMounted(() => {
 	const NO_SKY = { gather: 0, lift: 0, open: 0, release: 0, canopy: 0 };
 	// Every way of opening the sky at once, as one piece (sky-all.ts; the owner's choice, 15
 	// October). ?sky=column shows the column alone, as it first was.
-	const allAtOnce = query.get("sky") !== "column";
+	// ?sky=breath: the next version, the sky opened by breath alone, nothing drawn in it (sky-breath.ts).
+	const byBreath = query.get("sky") === "breath";
+	// ?sky=sacred: the channellers overcommand the weather, hold the sea up round them and weave
+	// all six elements together (sacred.ts). It begins at once, storm or no storm.
+	const bySacred = query.get("sky") === "sacred";
+	const allAtOnce = query.get("sky") !== "column" && !byBreath && !bySacred;
 	const skyAll = createSkyAll(scene, SCREEN_LAYER);
+	const skyBreath = createSkyBreath(scene, sky, SCREEN_LAYER);
+	const sacred = createSacred(scene, SCREEN_LAYER);
+	// The great calming (channelled-storm.ts, embroidery.ts): set in storm.json; ?calm=0.4 shows it
+	// that far through.
+	const embroidery = createEmbroidery(scene, SCREEN_LAYER, GIANT_WAVES);
+	const calmAsked = query.get("calm") !== null && Number.isFinite(Number(query.get("calm"))) ? Number(query.get("calm")) : undefined;
+	const embroideryTints = [new THREE.Color(), new THREE.Color(), new THREE.Color()];
+	const holeSeen = { x: 0.5, y: 0.2, across: 0.2, up: 0.2, open: 0 };
+	const holeEdge = { x: 0, y: 0 };
+	const holeDirection = new THREE.Vector3();
 	// When the storm began, in the picture's seconds (-1: at the next frame).
 	let stormSince = 0;
 	// The shelter one channeller holds against the rain (see rain.ts): the one beside the viewer
@@ -749,7 +764,7 @@ onMounted(() => {
 		}
 		if (measured) conditions.value = { ...measured, ...pretend };
 	}, 30_000);
-	const stars = createStars(scene, camera, PLACE, planetPositions);
+	const stars = createStars(scene, camera, PLACE, planetPositions, skyBreath.hole);
 	waveUniforms.weaveCentre.value.set(knotPosition.x, knotPosition.z);
 	const projected = new THREE.Vector3();
 	const knotScreen = { x: 0.5, y: 0.25 };
@@ -793,12 +808,23 @@ onMounted(() => {
 		watchFrameRate(delta);
 		if (stormSince < 0) stormSince = time;
 		const skySeconds = time - stormSince + (query.get("show") === "sky" ? 33 : 0);
-		const together = stormOn && !calmMotion && allAtOnce ? skyAllAt(skySeconds) : undefined;
-		const opening = together ?? (stormOn && !calmMotion ? skyOpeningAt(skySeconds) : NO_SKY);
+		const calming = stormOn && !calmMotion ? calmingNow(new Date(), calmAsked) : undefined;
+		// (While the twelve are linked, and resting after, the sky is not opened.)
+		const together = stormOn && !calmMotion && allAtOnce && !calming ? skyAllAt(skySeconds) : undefined;
+		const breathing = stormOn && !calmMotion && byBreath ? skyBreathAt(skySeconds) : undefined;
+		const holding = !calmMotion && bySacred ? sacredAt(skySeconds, drawnFrom) : undefined;
+		const opening = together ?? (breathing ? { ...NO_SKY, canopy: breathing.canopy } : holding ? { ...NO_SKY, canopy: holding.command } : stormOn && !calmMotion && !calming ? skyOpeningAt(skySeconds) : NO_SKY);
 		// The figures the picture is drawn from move towards the latest real ones, or towards the
 		// usual sea while there are none yet. (At once for a single still frame.)
 		drawnFrom = towardsConditions(drawnFrom, conditions.value ?? drawnFrom, motionPaused.value ? 1 : 1 - Math.exp(-delta / 1.5));
-		const drawn = followLive.value ? drawnFrom : undefined;
+		// Once the channellers have overcommanded it (sacred.ts), the weather is theirs.
+		const drawn = !followLive.value
+			? undefined
+			: holding && holding.command > 0
+				? towardsConditions(drawnFrom, { ...drawnFrom, ...STILLED }, holding.command)
+				: calming
+					? { ...drawnFrom, ...calmedConditions(drawnFrom, calming.progress) }
+					: drawnFrom;
 		const air = ambientAir(drawn);
 		// By hand, the story stands still and its white-out and stillness are left out.
 		let moment: StormMoment;
@@ -926,7 +952,7 @@ onMounted(() => {
 			spread: fury + 2 * moment.white * moment.veil,
 			gain: 0.5 / steadyExposure,
 		});
-		stars.update({ date: shownMoment, shown: starsOut * (1 - fogAmount) * alive, faintest: faintestStar, glow: milkyWayOut * (1 - fogAmount) * alive, gain: 2.2 / steadyExposure });
+		stars.update({ date: shownMoment, shown: starsOut * (1 - fogAmount) * alive, faintest: faintestStar, glow: milkyWayOut * (1 - fogAmount) * alive, gain: 2.2 / steadyExposure, throughHole: breathing ? alive : 0 });
 		// In the dark the four channellers weave along the water, and their braids light it.
 		waveUniforms.channelWind.value.set(crosswind, gustiness);
 		// By the dial and the story there is no forecast to read, so the need goes with the weather set.
@@ -995,7 +1021,8 @@ onMounted(() => {
 			slowToRise: liveOnly ? slowToRise(liveOnly) : ORDINARY_SKY,
 			thermal: liveOnly ? thermal(liveOnly) : 0,
 			current: liveOnly ? Math.sin(THREE.MathUtils.degToRad(liveOnly.currentDirection - PLACE.bearing)) * Math.min(1, liveOnly.currentSpeed / 3) : 0,
-			strength: Math.max(darkness, controlLevel, gathering) * alive,
+			// (All twelve are in the calming while it lasts, and rest for hours after it.)
+			strength: Math.max(darkness, controlLevel, gathering) * alive * (1 - (holding?.quiet ?? 0)) * (calming ? THREE.MathUtils.smoothstep(calming.after, 2, 10) : 1),
 			// More light by day, when it has a bright sea to show against.
 			// (And more under a moon, whose light on the sea would otherwise drown it.)
 			gain: (0.3 + 0.6 * daylight + 0.6 * nightfall * (1 - darkness)) / steadyExposure,
@@ -1062,11 +1089,50 @@ onMounted(() => {
 		skyCanopy.set(skyFoot.x, skyFoot.z, 0.9 * SKY_OPENING.spread * opening.canopy, SKY_OPENING.height);
 		// All at once, the parting is the ring of calm rolling out from the boat itself.
 		if (together) skyCanopy.set(camera.position.x, camera.position.z, 1300 * together.ring, 260);
+		// By breath alone nothing is held over the boat: the rain itself goes.
+		if (breathing) skyCanopy.setZ(0);
 		skySheath.forEach((colour, i) => colour.set(colours[COLOUR_NAMES[i]!]));
 		skyOpening.update({ time, boat: camera.position, ahead: skyAhead, gather: opening.gather, lift: opening.lift, open: opening.open, release: opening.release, day: daylight, gain: 1.5 / steadyExposure, sheath: skySheath, wind: rainWind });
 		shelterAt.set(-0.75, -0.3, -2.5).applyEuler(camera.rotation).add(camera.position);
 		rainLight.copy(rainNight).lerp(rainDay, daylight).multiplyScalar(1 / steadyExposure);
-		rainfall.update({ time, delta, rain, wind: rainWind, gust: gustNowRain, light: rainLight, flash, shelter: shelterAt, shelterRadius: 0.9, hold: shelterHold, canopy: skyCanopy, hang: together?.hang ?? 0, rise: together?.rise ?? 0, murmur: together?.murmur ?? 0, curtain: together && together.curtain > 0 ? -10 + 320 * together.curtain : -1000 });
+		rainfall.update({ time, delta, rain, wind: rainWind, gust: gustNowRain, light: rainLight, flash, shelter: shelterAt, shelterRadius: 0.9, hold: shelterHold, canopy: skyCanopy, hang: together?.hang ?? breathing?.hang ?? 0, rise: together?.rise ?? 0, murmur: together?.murmur ?? 0, curtain: together && together.curtain > 0 ? -10 + 320 * together.curtain : (breathing?.curtain ?? -1000), breath: breathing?.breath ?? 0, front: breathing?.front ?? holding?.rainFront ?? -1 });
+		skyBreath.update(breathing && { boat: camera.position, ahead: skyAhead, day: daylight, gain: 1.5 / steadyExposure, at: breathing });
+		// Where the hole is seen, for the fog to thin under it: its middle, and how far its edge
+		// reaches across and up the screen.
+		holeSeen.open = breathing ? Math.min(1, breathing.hole) : 0;
+		if (holeSeen.open > 0) {
+			const reach = skyBreath.reach();
+			const [hx, hz] = [skyAhead.x * HOLE_AHEAD, skyAhead.y * HOLE_AHEAD];
+			const seenAt = (dx: number, dz: number, target: { x: number; y: number }) => {
+				holeDirection.set(hx + dx, 1, hz + dz).normalize().multiplyScalar(5000).add(camera.position);
+				toScreen(holeDirection.x, holeDirection.y, holeDirection.z, target);
+			};
+			seenAt(0, 0, holeSeen);
+			seenAt(reach / 0.75, 0, holeEdge);
+			holeSeen.across = Math.max(0.02, Math.abs(holeEdge.x - holeSeen.x));
+			seenAt(0, reach, holeEdge);
+			holeSeen.up = Math.max(0.02, Math.abs(holeEdge.y - holeSeen.y));
+		}
+		sacred.update(holding && { time, delta, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, at: holding });
+		embroideryTints[0]!.copy(skySheath[1]!);
+		embroideryTints[1]!.copy(skySheath[0]!);
+		embroideryTints[2]!.copy(skySheath[2]!);
+		embroidery.update(
+			calming && {
+				time,
+				boat: camera.position,
+				ahead: skyAhead,
+				wind: rainWind,
+				trains: waveUniforms.waves.value,
+				steepness: waveUniforms.waveSteepness.value,
+				surge: waveUniforms.surge.value,
+				progress: calming.progress,
+				after: calming.after,
+				day: daylight,
+				gain: 1.5 / steadyExposure,
+				tints: embroideryTints,
+			},
+		);
 		skyAll.update({ time, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, sheath: skySheath, at: together ?? skyAllAt(0) });
 		const strike = bolts.update(time, 4 / steadyExposure, air.vapour, stormFog);
 		if (strike > 0) {
@@ -1102,6 +1168,7 @@ onMounted(() => {
 			pointer: pointerScreen,
 			fogColour: fogTint,
 			gain: 1 / steadyExposure,
+			hole: holeSeen,
 		});
 
 		waterUniforms.time.value += delta * lerp(0.6, 2, sea) * alive;
@@ -1131,6 +1198,9 @@ onMounted(() => {
 		rainfall.dispose();
 		skyOpening.dispose();
 		skyAll.dispose();
+		skyBreath.dispose();
+		sacred.dispose();
+		embroidery.dispose();
 		stopWatching();
 		fluid.dispose();
 		renderer.setAnimationLoop(null);
