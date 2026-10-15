@@ -11,7 +11,9 @@
 //                  down to the water at intervals by short stitches, as a laid thread is caught
 //                  down to the cloth. The nearest are laid first and fastest.
 // The link: from each of the twelve a tress runs out to one knot ahead of the boat, where all
-// twelve meet and are one, and out of it to the three needles at work: the edge of the sea work,
+// twelve meet and are one, and out of it each to her own place in the work, as a great rope of
+// many filaments (the owner: "this is how you render the strongest channellers working with
+// this weather?" when it was three thin threads; barely coloured is not barely there): the edge of the sea work,
 // the end of the thread Leane's four are laying, the edge of the sky work. When it is done the
 // tresses are let go and the embroidery stays, fading slowly, while they rest.
 //
@@ -39,13 +41,15 @@ const SKY_ROWS = 40;
 const SKY_SLOTS = 70;
 const LAID = 36;
 const TIES = 24;
-const FIBRES = 22;
+const FIBRES = 64;
 const CLOTH = 420;
 const TRAINS = 32;
 // The twelve's places at the rail (the strongest's, 2, is left out: they trust them), and whose
 // third each is (0 Siuan's, 1 Leane's, 2 Moiraine's), in the order of AES_SEDAI in channellers.ts.
 const SLOTS = [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const THIRDS = [0, 1, 0, 1, 2, 2, 1, 0, 2, 1, 0, 2];
+// Which of her third's four each is.
+const MEMBERS = THIRDS.map((third, i) => THIRDS.slice(0, i).filter((other) => other === third).length);
 
 const vertex = /* glsl */ `
 attribute float aT;
@@ -128,17 +132,20 @@ vec3 laidPoint( float i, float s ) {
 }
 float laidSoFar() { return uLaid * ${LAID}.0; }
 
-vec3 needle( float third ) {
+// Where each of the twelve is working: each third's four spread along their edge of the work.
+vec3 needle( float third, float member ) {
+	float spread = ( member - 1.5 ) * 0.32;
 	if ( third < 0.5 ) {
-		float a = 0.6 * sin( uTime * 0.004 + 1.0 );
+		float a = 0.6 * sin( uTime * 0.004 + 1.0 ) * 0.5 + spread;
 		vec3 p = uBoat + bearing( a ) * seaFront( a );
 		return vec3( p.x, seaAt( p.xz ) + 2.0, p.z );
 	}
 	if ( third < 1.5 ) {
+		// Each lays her own thread, the four nearest the newest.
 		float n = min( laidSoFar(), ${LAID}.0 - 0.001 );
-		return laidPoint( floor( n ), fract( n ) );
+		return laidPoint( max( floor( n ) - member, 0.0 ), member < 0.5 ? fract( n ) : 0.5 + 0.4 * sin( uTime * 0.01 + member ) );
 	}
-	float a = 0.6 * sin( uTime * 0.003 + 2.0 );
+	float a = 0.6 * sin( uTime * 0.003 + 2.0 ) * 0.5 + spread;
 	vec3 p = uBoat + bearing( a ) * skyFront( a );
 	return vec3( p.x, ${CLOTH}.0, p.z );
 }
@@ -190,14 +197,15 @@ vec3 placeAt( float t ) {
 		return on + ( n1 * cos( a ) + n2 * sin( a ) ) * 1.6 + tangent * ( t - 0.5 ) * 3.0;
 	}
 	// The link: from a place at the rail to the knot where all twelve meet, and out to their needle.
-	float third = aCell.y;
+	float third = mod( aCell.y, 3.0 );
+	float member = floor( aCell.y / 3.0 );
 	float vigour = third < 0.5 ? uVigour.x : third < 1.5 ? uVigour.y : uVigour.z;
 	vec3 seat = seatAt( aCell.x );
 	// The knot: not a point but a loose gathering low ahead of the boat, each third's strand
 	// through it side by side.
 	vec3 knot = uBoat + aheadDir() * 32.0 + vec3( 0.0, - 7.0, 0.0 ) + acrossDir() * ( third - 1.0 ) * 5.0;
 	// Drawn in a little with each stroke; paid back out to a gust.
-	vec3 to = needle( third );
+	vec3 to = needle( third, member );
 	to += ( knot - to ) * 0.05 * uHaul;
 	// Each leaves the knot already turned towards its work, the way it came in: no corner.
 	vec3 toward = to - knot;
@@ -232,11 +240,13 @@ vec3 placeAt( float t ) {
 			vec3 side = normalize( cross( to - knot, vec3( 0.0, 1.0, 0.0 ) ) + vec3( 1e-4 ) );
 			float q = uTension * ( 1.8 * sin( 3.14159 * s ) * sin( uTime * 4.0 + third * 2.0 ) + 0.8 * sin( 6.28318 * s ) * sin( uTime * 5.3 + 1.0 + third ) );
 			centre += side * q + vec3( 0.0, 0.5 * q, 0.0 );
-			// A tight bundle when they pull, a little looser as they ease.
-			r = ( 0.25 + 1.4 * sin( 3.14159 * s ) * ( 1.0 - 0.6 * taut ) ) * sqrt( aSeed.z );
+			// A great rope of many filaments, as thick for its length as a hawser is (tens of metres
+			// across at a kilometre out), drawn in tight as they pull and loosening as they ease.
+			r = ( 0.6 + far * 0.022 * sin( 3.14159 * s ) * ( 1.0 - 0.45 * taut ) ) * sqrt( aSeed.z );
 		}
 	}
-	float turn = aSeed.y * 6.28318 + uTime * 0.2 * vigour * ( aSeed.x - 0.5 ) + t * 5.0;
+	// Laid up as a rope is: the filaments wind round each other along it.
+	float turn = aSeed.y * 6.28318 + uTime * 0.2 * vigour * ( aSeed.x - 0.5 ) + t * 14.0;
 	return centre + ( acrossDir() * cos( turn ) + vec3( 0.0, sin( turn ), 0.0 ) ) * r;
 }
 
@@ -258,7 +268,7 @@ void main() {
 		fresh = exp( - max( front - d, 0.0 ) / ( 0.12 * front + 40.0 ) );
 		if ( sea > 0.5 ) {
 			tint = mix( uTints[ 0 ], vec3( 1.0 ), 0.5 * fresh );
-			shown = 0.22 + 0.55 * fresh;
+			shown = 0.35 + 0.65 * fresh;
 		} else {
 			// (Only below the cloud: above it, it is in it.)
 			tint = mix( uTints[ 2 ], vec3( 1.0 ), 0.4 * fresh );
@@ -279,7 +289,7 @@ void main() {
 		shown = 0.25 + 0.4 * fresh;
 		width = 0.8;
 	} else {
-		float third = aCell.y;
+		float third = mod( aCell.y, 3.0 );
 		float vigour = third < 0.5 ? uVigour.x : third < 1.5 ? uVigour.y : uVigour.z;
 		// Tired, fewer filaments carry it, and more slowly; the ones that have given out hang faint.
 		// Pulling, the line is a little brighter.
@@ -290,7 +300,7 @@ void main() {
 		shown *= smoothstep( 1.0 - uLinkGone * 1.1, 1.0 - uLinkGone * 1.1 - 0.05, aT );
 		// (Not drawn right by the eye, where the twelve tresses from the rail would fill the picture.)
 		shown *= smoothstep( 25.0, 110.0, length( here - cameraPosition ) );
-		tint = uTints[ int( third ) ];
+		tint = uTints[ int( third + 0.5 ) ];
 		width = 0.9;
 	}
 	// The part not yet made is not there; the cloth fades slowly once the work is done.
@@ -412,11 +422,12 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 		uPixelRatio: pixelRatio,
 	};
 	const parts = [
-		{ geometry: lines(SEA_ROWS * SEA_SLOTS, 8, (i) => [Math.floor(i / SEA_SLOTS), i % SEA_SLOTS]), opacity: 0.5 },
-		{ geometry: lines(SKY_ROWS * SKY_SLOTS, 8, (i) => [Math.floor(i / SKY_SLOTS), i % SKY_SLOTS]), opacity: 0.45 },
-		{ geometry: lines(LAID, 200, (i) => [i, 0]), opacity: 0.4 },
-		{ geometry: lines(LAID * TIES, 6, (i) => [Math.floor(i / TIES), i % TIES]), opacity: 0.3 },
-		{ geometry: lines(SLOTS.length * FIBRES, 180, (i) => [SLOTS[i % SLOTS.length]!, THIRDS[i % SLOTS.length]!]), opacity: 0.11 },
+		{ geometry: lines(SEA_ROWS * SEA_SLOTS, 8, (i) => [Math.floor(i / SEA_SLOTS), i % SEA_SLOTS]), opacity: 0.85 },
+		{ geometry: lines(SKY_ROWS * SKY_SLOTS, 8, (i) => [Math.floor(i / SKY_SLOTS), i % SKY_SLOTS]), opacity: 0.8 },
+		{ geometry: lines(LAID, 200, (i) => [i, 0]), opacity: 0.65 },
+		{ geometry: lines(LAID * TIES, 6, (i) => [Math.floor(i / TIES), i % TIES]), opacity: 0.45 },
+		// (Each third's four told apart: the second number is the third, plus three for each before her in it.)
+		{ geometry: lines(SLOTS.length * FIBRES, 150, (i) => [SLOTS[i % SLOTS.length]!, THIRDS[i % SLOTS.length]! + 3 * MEMBERS[i % SLOTS.length]!]), opacity: 0.1 },
 	].map(({ geometry, opacity }, kind) => {
 		const mesh = new THREE.Mesh(
 			geometry,
