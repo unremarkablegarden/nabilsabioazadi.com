@@ -44,6 +44,19 @@ export const WEAVE_RENDER_ORDER = 10;
 export const pixelRatio = { value: 1 };
 
 // Shared by both shaders: turns a centre line into a ribbon of a set width in pixels, facing the screen.
+// Tamed (the owner, 16 October: "the colours must be tamed to 13%–26% of the bg colours"): a
+// weave's colour goes only k (0.13 to 0.26) of the way from the colour of what is behind it, uBg,
+// towards its own, and keeps its own brightness, so it still reads as light (or, by day, as laid
+// colour) but in the sea's and the sky's own hue.
+export const tameShaderChunk = /* glsl */ `
+uniform vec3 uBg;
+vec3 tame( vec3 c, float k ) {
+	float bright = max( max( c.r, c.g ), c.b );
+	vec3 bg = uBg / max( max( max( uBg.r, uBg.g ), uBg.b ), 1e-4 );
+	return mix( bg, c / max( bright, 1e-4 ), k ) * bright;
+}
+`;
+
 export const ribbonShaderChunk = /* glsl */ `
 uniform vec2 uResolution;
 uniform float uPixelRatio;

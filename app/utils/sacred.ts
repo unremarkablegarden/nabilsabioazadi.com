@@ -66,7 +66,7 @@
 //     farewell dinner.
 import * as THREE from "three";
 import type { SeaConditions } from "./manawatawhi";
-import { pixelRatio, ribbonShaderChunk, stripIndices, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
 
 // The weather once the storm's energy has been drawn in: a light air, a smooth sea, no rain, a
 // clear sky with a little high cloud, the pressure steady. (The periods and directions are left
@@ -224,6 +224,7 @@ varying float vEdge;
 varying float vPulse;
 ${common}
 ${ribbonShaderChunk}
+${tameShaderChunk}
 
 vec3 bezier( vec3 a, vec3 b, vec3 c, vec3 d, float t ) {
 	float s = 1.0 - t;
@@ -397,7 +398,8 @@ void main() {
 	else if ( uKind > 0.5 ) tint = mix( uTints[ 6 ], uTints[ 1 ], 0.5 * aSeed.y );
 	// The strongest's own are white.
 	if ( uKind < 0.5 || ( uKind < 2.5 && aWho == ${STRONGEST}.0 ) ) tint = uTints[ 7 ];
-	vTint = tint;
+	// Tamed to the colour behind it, 13 to 26%; the strongest's white stays white.
+	vTint = all( greaterThan( tint, vec3( 0.99 ) ) ) ? tint : tame( tint, 0.13 + 0.13 * aSeed.y );
 	// Warmth going up the braid in slow pulses: fire's most, the rest a little.
 	vPulse = ( uKind > 3.5 && uKind < 4.5 && t > 0.3 && t < 0.75 ) ? exp( - pow( fract( t * 2.0 - uTime * 0.07 ) - 0.5, 2.0 ) * 60.0 ) * ( aWho > 2.5 && aWho < 3.5 ? 1.0 : 0.3 ) : 0.0;
 	vEdge = aSide;
@@ -601,6 +603,8 @@ export interface SacredFrame {
 	day: number;
 	gain: number;
 	at: ReturnType<typeof sacredAt>;
+	// The colour of what is behind the weave (the air's).
+	bg: THREE.Color;
 }
 
 export function createSacred(scene: THREE.Scene, layer: number) {
@@ -613,6 +617,7 @@ export function createSacred(scene: THREE.Scene, layer: number) {
 		uWaves: { value: WAVES.map(([a, r, h, w]) => new THREE.Vector4(a, r, h, w)) },
 		uGain: { value: 1 },
 		uDay: { value: 0 },
+		uBg: { value: new THREE.Color() },
 	};
 	const windDir = { value: new THREE.Vector3(1, 0, 0) };
 	const spin = { value: 0 };
@@ -703,6 +708,7 @@ export function createSacred(scene: THREE.Scene, layer: number) {
 		shared.uBreath.value = at.breath;
 		shared.uDay.value = frame.day;
 		shared.uGain.value = frame.gain;
+		shared.uBg.value.copy(frame.bg);
 		windDir.value.copy(frame.wind).setY(0);
 		if (windDir.value.lengthSq() > 1e-6) windDir.value.normalize();
 		else windDir.value.set(frame.ahead.x, 0, frame.ahead.y);

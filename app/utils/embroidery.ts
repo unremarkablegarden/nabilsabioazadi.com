@@ -12,12 +12,23 @@
 //                  down to the cloth. The nearest are laid first and fastest.
 // The link: from each of the twelve a tress runs out to one knot ahead of the boat, where all
 // twelve meet and are one, and out of it to the three needles at work: the edge of the sea work,
-// the end of the thread Leane's four are laying, the edge of the sky work. As the hours go by they
-// tire, each third at its own pace: fewer filaments in each tress, moving more slowly. When it is
-// done the tresses are let go and the embroidery stays, fading slowly, while they rest.
+// the end of the thread Leane's four are laying, the edge of the sky work. When it is done the
+// tresses are let go and the embroidery stays, fading slowly, while they rest.
+//
+// Effort (the owner, 16 October: "the most effortful and barely coloured weaves possible"). It is
+// work against the storm (force through distance), and it shows in how the lines behave, not in
+// colour, which is all but the sea's and the sky's own:
+//   - the lines out of the knot are hawsers, pulled nearly straight, sagging only between hauls;
+//   - they haul with the breath: each stroke draws the line in and it goes taut, a little brighter;
+//     then it is held, and eased; a real gust stronger than their hold pays it back out;
+//   - under load the line quivers, slowly, as much as the real wind is strong (never a flicker);
+//   - each new stitch is pulled through and stands proud a moment before it is drawn down tight;
+//   - as the hours go by they tire: the hauls come more slowly, the tresses splay apart at the
+//     hands, and the filaments that give out do not vanish but hang slack from the knot and droop
+//     towards the sea.
 import * as THREE from "three";
 import { calmingWork } from "./channelled-storm";
-import { pixelRatio, ribbonShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, tameShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
 
 const SEA_ROWS = 70;
 const SEA_SLOTS = 90;
@@ -52,12 +63,19 @@ uniform float uSkyFront;
 uniform float uLaid;
 uniform vec3 uVigour;
 uniform float uLinkGone;
+// The haul: how far this stroke has drawn the lines in (less any paid out to a gust), how hard
+// they are pulling just now, how strong the wind is that they pull against, and how tired they are.
+uniform float uHaul;
+uniform float uPull;
+uniform float uTension;
+uniform float uFatigue;
 uniform float uFade;
 uniform vec3 uTints[ 3 ];
 varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
 ${ribbonShaderChunk}
+${tameShaderChunk}
 
 vec3 aheadDir() { return vec3( uAhead.x, 0.0, uAhead.y ); }
 vec3 acrossDir() { return vec3( - uAhead.y, 0.0, uAhead.x ); }
@@ -135,11 +153,13 @@ void stitchOf( float k, float j, float slots, float d0, out float a, out float d
 	tb = a + 1.5708 + 0.3 * sin( k * 0.9 + a * 3.0 );
 	L = 0.7 * d * 2.0 / slots;
 }
-vec3 stitchPoint( float k, float j, float slots, float d0, float lift, float t ) {
+vec3 stitchPoint( float k, float j, float slots, float d0, float lift, float front, float t ) {
 	float a, d, L, tb;
 	stitchOf( k, j, slots, d0, a, d, L, tb );
 	vec3 p = uBoat + bearing( a ) * d + bearing( tb ) * ( t - 0.5 ) * L;
-	p.y = lift * L * ( 0.1 * sin( 3.14159 * t ) - 0.03 );
+	// Just pulled through, it stands proud; then it is drawn down tight.
+	float proud = 1.0 + 2.5 * exp( - max( front - d, 0.0 ) / ( 3.0 * L ) );
+	p.y = lift * L * ( 0.1 * proud * sin( 3.14159 * t ) - 0.03 );
 	return p;
 }
 
@@ -149,11 +169,12 @@ float skyRow() { return 1300.0 * pow( 1.045, aCell.x ); }
 // Where this line is at t.
 vec3 placeAt( float t ) {
 	if ( uKind < 0.5 ) {
-		vec3 p = stitchPoint( aCell.x, aCell.y, ${SEA_SLOTS}.0, seaRow(), 1.0, t );
+		float a = ( ( aCell.y + 0.5 ) / ${SEA_SLOTS}.0 - 0.5 ) * 2.0;
+		vec3 p = stitchPoint( aCell.x, aCell.y, ${SEA_SLOTS}.0, seaRow(), 1.0, seaFront( a ), t );
 		p.y += seaAt( p.xz );
 		return p;
 	}
-	if ( uKind < 1.5 ) return stitchPoint( aCell.x, aCell.y, ${SKY_SLOTS}.0, skyRow(), - 1.2, t ) + vec3( 0.0, ${CLOTH}.0, 0.0 );
+	if ( uKind < 1.5 ) return stitchPoint( aCell.x, aCell.y, ${SKY_SLOTS}.0, skyRow(), - 1.2, skyFront( ( ( aCell.y + 0.5 ) / ${SKY_SLOTS}.0 - 0.5 ) * 2.0 ), t ) + vec3( 0.0, ${CLOTH}.0, 0.0 );
 	if ( uKind < 2.5 ) return laidPoint( aCell.x, t );
 	if ( uKind < 3.5 ) {
 		// The short stitches that catch a laid thread down: each a loose turn round it.
@@ -170,12 +191,35 @@ vec3 placeAt( float t ) {
 	float vigour = third < 0.5 ? uVigour.x : third < 1.5 ? uVigour.y : uVigour.z;
 	vec3 seat = seatAt( aCell.x );
 	vec3 knot = uBoat + aheadDir() * 70.0 + vec3( 0.0, - 4.0, 0.0 );
+	// Drawn in a little with each stroke; paid back out to a gust.
 	vec3 to = needle( third );
-	vec3 centre = t < 0.25
-		? bezier( seat, seat + aheadDir() * 12.0 - vec3( 0.0, 3.0, 0.0 ), knot - aheadDir() * 15.0, knot, t / 0.25 )
-		: bezier( knot, knot + aheadDir() * 25.0 + vec3( 0.0, 6.0, 0.0 ), to + vec3( 0.0, 60.0, 0.0 ) - ( to - knot ) * 0.2, to, ( t - 0.25 ) / 0.75 );
-	// Gathered tight at the knot, loose between.
-	float r = ( 0.3 + 3.0 * sin( 3.14159 * t ) ) * sqrt( aSeed.z ) * ( 0.15 + 0.85 * smoothstep( 0.0, 0.12, abs( t - 0.25 ) ) );
+	to += ( knot - to ) * 0.05 * uHaul;
+	float taut = 0.35 + 0.65 * uPull;
+	vec3 centre;
+	float r;
+	if ( t < 0.25 ) {
+		centre = bezier( seat, seat + aheadDir() * 12.0 - vec3( 0.0, 3.0, 0.0 ), knot - aheadDir() * 15.0, knot, t / 0.25 );
+		// Splayed apart at the hands as they tire.
+		r = ( 0.3 + 1.5 * sin( 3.14159 * t / 0.25 ) * ( 1.0 + 3.0 * uFatigue * aSeed.x ) ) * sqrt( aSeed.z ) * smoothstep( 0.25, 0.2, t ) + 0.15;
+	} else {
+		float s = ( t - 0.25 ) / 0.75;
+		if ( aSeed.w > vigour ) {
+			// Given out: hanging slack from the knot, drooping towards the sea, swaying.
+			vec3 end = knot + ( to - knot ) * ( 0.12 + 0.2 * aSeed.x ) + acrossDir() * ( aSeed.z - 0.5 ) * 40.0;
+			end.y = 1.0;
+			centre = bezier( knot, knot + aheadDir() * 8.0, end + vec3( 0.0, 10.0, 0.0 ), end, s ) + acrossDir() * sin( uTime * 0.3 + aSeed.y * 6.0 ) * 3.0 * s;
+			r = 0.2;
+		} else {
+			// Pulled nearly straight, sagging only as they ease.
+			centre = mix( knot, to, s ) - vec3( 0.0, ( 6.0 + 34.0 * ( 1.0 - taut ) ) * 4.0 * s * ( 1.0 - s ), 0.0 );
+			// Under load it quivers, slowly, as much as the wind is strong.
+			vec3 side = normalize( cross( to - knot, vec3( 0.0, 1.0, 0.0 ) ) + vec3( 1e-4 ) );
+			float q = uTension * ( 1.8 * sin( 3.14159 * s ) * sin( uTime * 4.0 + third * 2.0 ) + 0.8 * sin( 6.28318 * s ) * sin( uTime * 5.3 + 1.0 + third ) );
+			centre += side * q + vec3( 0.0, 0.5 * q, 0.0 );
+			// A tight bundle when they pull, a little looser as they ease.
+			r = ( 0.25 + 1.4 * sin( 3.14159 * s ) * ( 1.0 - 0.6 * taut ) ) * sqrt( aSeed.z );
+		}
+	}
 	float turn = aSeed.y * 6.28318 + uTime * 0.2 * vigour * ( aSeed.x - 0.5 ) + t * 5.0;
 	return centre + ( acrossDir() * cos( turn ) + vec3( 0.0, sin( turn ), 0.0 ) ) * r;
 }
@@ -221,8 +265,9 @@ void main() {
 	} else {
 		float third = aCell.y;
 		float vigour = third < 0.5 ? uVigour.x : third < 1.5 ? uVigour.y : uVigour.z;
-		// Tired, fewer filaments carry it, and more slowly.
-		shown = step( aSeed.w, vigour ) * ( 0.55 + 0.45 * sin( aT * 18.0 - uTime * ( 0.4 + 0.9 * vigour ) + aSeed.x * 30.0 ) );
+		// Tired, fewer filaments carry it, and more slowly; the ones that have given out hang faint.
+		// Pulling, the line is a little brighter.
+		shown = ( aSeed.w > vigour && aT > 0.25 ? 0.3 : 1.0 ) * ( 0.55 + 0.45 * sin( aT * 18.0 - uTime * ( 0.4 + 0.9 * vigour ) + aSeed.x * 30.0 ) ) * ( 0.7 + 0.5 * uPull );
 		// Let go from the needle's end back to the hands.
 		shown *= smoothstep( 1.0 - uLinkGone * 1.1, 1.0 - uLinkGone * 1.1 - 0.05, aT );
 		// (Not drawn right by the eye, where the twelve tresses from the rail would fill the picture.)
@@ -233,7 +278,9 @@ void main() {
 	// The part not yet made is not there; the cloth fades slowly once the work is done.
 	float made = smoothstep( grown, grown - 0.05, aT );
 	vAlpha = shown * made * ( uKind < 3.5 ? uFade : 1.0 );
-	vTint = tint;
+	// The newest work the most coloured, 26%; the oldest and the link's own threads from 13%.
+	// (The hawsers at the least: 13%.)
+	vTint = tame( tint, uKind < 3.5 ? 0.13 + 0.13 * fresh : 0.13 );
 	vEdge = aSide;
 	mat4 vp = projectionMatrix * viewMatrix;
 	gl_Position = ribbonPosition( vp * vec4( here, 1.0 ), vp * vec4( next, 1.0 ), aSide, width );
@@ -297,6 +344,10 @@ function lines(count: number, segments: number, cell: (i: number) => [number, nu
 
 export interface EmbroideryFrame {
 	time: number;
+	delta: number;
+	// 0..1 how strong the real wind is just now against them, and how much of a gust is blowing.
+	force: number;
+	gust: number;
 	boat: THREE.Vector3;
 	ahead: THREE.Vector2;
 	wind: THREE.Vector3;
@@ -311,6 +362,8 @@ export interface EmbroideryFrame {
 	gain: number;
 	// Water, air and akasha, as the channellers' colours are just now.
 	tints: THREE.Color[];
+	// The colour of what is behind the weave (the air's).
+	bg: THREE.Color;
 }
 
 export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE.Vector4[]) {
@@ -328,10 +381,15 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 		uLaid: { value: 0 },
 		uVigour: { value: new THREE.Vector3(1, 1, 1) },
 		uLinkGone: { value: 0 },
+		uHaul: { value: 0 },
+		uPull: { value: 0 },
+		uTension: { value: 0 },
+		uFatigue: { value: 0 },
 		uFade: { value: 1 },
 		uTints: { value: [new THREE.Color(), new THREE.Color(), new THREE.Color()] },
 		uGain: { value: 1 },
 		uDay: { value: 0 },
+		uBg: { value: new THREE.Color() },
 		uResolution: { value: new THREE.Vector2(1, 1) },
 		uPixelRatio: pixelRatio,
 	};
@@ -340,7 +398,7 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 		{ geometry: lines(SKY_ROWS * SKY_SLOTS, 8, (i) => [Math.floor(i / SKY_SLOTS), i % SKY_SLOTS]), opacity: 0.45 },
 		{ geometry: lines(LAID, 200, (i) => [i, 0]), opacity: 0.4 },
 		{ geometry: lines(LAID * TIES, 6, (i) => [Math.floor(i / TIES), i % TIES]), opacity: 0.3 },
-		{ geometry: lines(SLOTS.length * FIBRES, 180, (i) => [SLOTS[i % SLOTS.length]!, THIRDS[i % SLOTS.length]!]), opacity: 0.16 },
+		{ geometry: lines(SLOTS.length * FIBRES, 180, (i) => [SLOTS[i % SLOTS.length]!, THIRDS[i % SLOTS.length]!]), opacity: 0.11 },
 	].map(({ geometry, opacity }, kind) => {
 		const mesh = new THREE.Mesh(
 			geometry,
@@ -353,6 +411,9 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 		scene.add(mesh);
 		return mesh;
 	});
+
+	// Where they are in the stroke they are hauling (0..1).
+	let stroke = 0;
 
 	const update = (frame: EmbroideryFrame | undefined) => {
 		// Done and faded, or not happening: nothing to draw.
@@ -381,10 +442,22 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 		// Let go once it is done.
 		shared.uLinkGone.value = smoothstep(frame.after, 0, 0.15);
 		parts[4]!.visible = shared.uLinkGone.value < 0.999;
+		// The haul: a stroke to each slow breath, slower as they tire. Drawn in, held, eased.
+		const vigour = shared.uVigour.value;
+		const fatigue = 1 - (vigour.x + vigour.y + vigour.z) / 3;
+		stroke = (stroke + frame.delta / (7 + 6 * fatigue)) % 1;
+		const pull = smoothstep(stroke, 0, 0.3) * (1 - smoothstep(stroke, 0.45, 0.7));
+		// A gust stronger than their hold pays the line back out.
+		const slip = Math.max(0, frame.gust - 0.45) * 1.6;
+		shared.uPull.value = pull * (1 - 0.5 * slip);
+		shared.uHaul.value = smoothstep(stroke, 0, 0.45) * (1 - smoothstep(stroke, 0.6, 1)) - slip;
+		shared.uTension.value = Math.min(1, frame.force);
+		shared.uFatigue.value = fatigue;
 		shared.uFade.value = fade;
 		frame.tints.forEach((tint, i) => shared.uTints.value[i]!.copy(tint));
 		shared.uDay.value = frame.day;
 		shared.uGain.value = frame.gain;
+		shared.uBg.value.copy(frame.bg);
 		shared.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(pixelRatio.value);
 		const blending = frame.day > 0.5 ? THREE.NormalBlending : THREE.AdditiveBlending;
 		for (const mesh of parts) (mesh.material as THREE.ShaderMaterial).blending = blending;

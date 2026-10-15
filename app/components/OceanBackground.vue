@@ -1113,13 +1113,16 @@ onMounted(() => {
 			seenAt(0, reach, holeEdge);
 			holeSeen.up = Math.max(0.02, Math.abs(holeEdge.y - holeSeen.y));
 		}
-		sacred.update(holding && { time, delta, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, at: holding });
+		sacred.update(holding && { time, delta, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, at: holding, bg: mist });
 		embroideryTints[0]!.copy(skySheath[1]!);
 		embroideryTints[1]!.copy(skySheath[0]!);
 		embroideryTints[2]!.copy(skySheath[2]!);
 		embroidery.update(
 			calming && {
 				time,
+				delta,
+				force: Math.min(1, (rainWind.length() / 40) * (1 + 0.4 * gustNowRain)),
+				gust: gustNowRain,
 				boat: camera.position,
 				ahead: skyAhead,
 				wind: rainWind,
@@ -1131,6 +1134,7 @@ onMounted(() => {
 				day: daylight,
 				gain: 1.5 / steadyExposure,
 				tints: embroideryTints,
+				bg: mist,
 			},
 		);
 		skyAll.update({ time, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, sheath: skySheath, at: together ?? skyAllAt(0) });
