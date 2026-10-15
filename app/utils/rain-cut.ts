@@ -26,21 +26,22 @@
 // It takes an extraordinary amount from her (the owner, the same morning: "Give her credit. Make
 // her weaves shine like the moon, make the other flows around the water stop because they impress
 // the other channellers so much. She first cuts the rain and then she begins to stop the waves.
-// She almost burns out from all of this over 9 minutes"). So it is one act of nine minutes:
-//   0 to 3 minutes   the rain cut off, as above
-//   3½ to 9          she turns to the sea as well and begins to press the waves out of it round the
+// She almost burns out from all of this over 9 minutes"), then "do this in 88 seconds". So it
+// is one act of 88 seconds:
+//   0 to 32 s        the rain cut off, as above
+//   35 to 88 s       she turns to the sea as well and begins to press the waves out of it round the
 //                    boat: some of her canopy's threads come down and lie out over the water, and
 //                    under them the wind's sea and the swell sink (the wind still blows: she stops
 //                    the waves, not the weather), the stilled water spreading out from the boat to
 //                    a kilometre and more, the storm's sea breaking against its edge
 //   all through      her weave shines like the moon, silver, brighter the more she pours into it;
 //                    the twelve stop their own flows about the water and watch her
-//   to 9 minutes     her heat climbs towards burning out; in the last minute her light gutters
+//   to 88 s          her heat climbs towards burning out; in the last twelve seconds her light gutters
 //                    and her threads fray and hang; then she has to let go. The storm is still
 //                    there: the rain comes back down out of the cloud and the waves rise again,
 //                    and she rests.
 // Set in storm.json ("rainCut": { "from": ISO time }); ?raincut begins it as the page opens,
-// ?raincut=300 shows it five minutes in, ?raincut=off without it.
+// ?raincut=60 shows it a minute in, ?raincut=off without it.
 import * as THREE from "three";
 import { lines } from "./embroidery";
 import { pixelRatio, ribbonShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
@@ -61,26 +62,30 @@ export function rainCutSince(now: Date, asked: string | null, opened: number, ow
 }
 
 const { smoothstep } = THREE.MathUtils;
-// How long she can hold it: nine minutes, and then she is all but burnt out.
-export const LEANE_HOLDS = 540;
+// How long she can hold it: 88 seconds (the owner, after the first nine-minute version: "I want
+// you to be able to do this in 88 seconds"), and then she is all but burnt out. Everything in it
+// keeps its order and its share of the time.
+export const LEANE_HOLDS = 88;
 
 // Where she is in it, s seconds in.
 export function leaneAct(s: number) {
+	const H = LEANE_HOLDS;
 	return {
-		// 0..1 how much of the rain at the sea is cut off: her ropes out in twenty seconds, the canopy
-		// over the boat in the next three minutes; once she lets go it comes back down in a minute.
-		rain: smoothstep(s, 20, 200) * (1 - smoothstep(s, LEANE_HOLDS + 5, LEANE_HOLDS + 75)),
-		// 0..1 how far the waves round the boat are pressed down, and how far out from it (m).
-		sea: smoothstep(s, 210, 470) * (1 - smoothstep(s, LEANE_HOLDS + 15, LEANE_HOLDS + 210)),
-		reach: 60 + 1700 * smoothstep(s, 210, 520) ** 1.2,
+		// 0..1 how much of the rain at the sea is cut off: her ropes out in four seconds, the canopy
+		// over the boat by half a minute; once she lets go it comes back down in half a minute.
+		rain: smoothstep(s, 4, 32) * (1 - smoothstep(s, H + 2, H + 30)),
+		// 0..1 how far the waves round the boat are pressed down, and how far out from it (m); once
+		// she lets go they rise again over a minute.
+		sea: smoothstep(s, 35, 76) * (1 - smoothstep(s, H + 5, H + 65)),
+		reach: 60 + 1700 * smoothstep(s, 35, 85) ** 1.2,
 		// 0..1 how far the twelve have stopped their own flows to watch her.
-		watching: smoothstep(s, 40, 120) * (1 - smoothstep(s, LEANE_HOLDS, LEANE_HOLDS + 120)),
+		watching: smoothstep(s, 7, 20) * (1 - smoothstep(s, H, H + 40)),
 		// 0..1 her heat as the act goes on: nearly burnt out at the end.
-		strain: 0.2 + 0.77 * smoothstep(s, 15, LEANE_HOLDS) ** 1.3,
-		// 0..1 how spent: her light gutters in the last minute.
-		spent: smoothstep(s, LEANE_HOLDS - 60, LEANE_HOLDS),
+		strain: 0.2 + 0.77 * smoothstep(s, 3, H) ** 1.3,
+		// 0..1 how spent: her light gutters in the last twelve seconds.
+		spent: smoothstep(s, H - 12, H),
 		// 0..1.05 how far the cut has run out from her hands, once she lets go.
-		letGo: THREE.MathUtils.clamp((s - LEANE_HOLDS) / 25, 0, 1.05),
+		letGo: THREE.MathUtils.clamp((s - H) / 8, 0, 1.05),
 	};
 }
 
@@ -316,7 +321,7 @@ export function createRainCut(scene: THREE.Scene, layer: number) {
 	let heat = -1;
 	let sighing = 0;
 	let sinceSigh = 0;
-	const SIGH = 7;
+	const SIGH = 3;
 	const layerNow: RainCutLayer = { height: 0, depth: 0, reach: 0 };
 
 	const update = (frame: RainCutFrame | undefined): RainCutLayer => {
@@ -329,16 +334,16 @@ export function createRainCut(scene: THREE.Scene, layer: number) {
 		const dt = Math.min(frame.delta, 0.1);
 		const act = leaneAct(frame.seconds);
 		// Her heat follows the strain of the act; and when she can hold no more she sighs, a breath
-		// let out, and for a moment it eases (a sigh is never sooner than forty seconds after the last).
+		// let out, and for a moment it eases (never sooner than twelve seconds after the last).
 		if (heat < 0) heat = act.strain;
 		sinceSigh += dt;
-		if (sighing <= 0 && heat > 0.6 && sinceSigh > 40 && act.letGo <= 0) {
+		if (sighing <= 0 && heat > 0.6 && sinceSigh > 12 && act.letGo <= 0) {
 			sighing = SIGH;
 			sinceSigh = 0;
 		}
 		const sigh = sighing > 0 ? Math.sin(Math.PI * (1 - sighing / SIGH)) : 0;
 		sighing = Math.max(0, sighing - dt);
-		heat += (act.strain - 0.15 * sigh - heat) * Math.min(1, dt / 4);
+		heat += (act.strain - 0.15 * sigh - heat) * Math.min(1, dt / 1.5);
 		const fade = 1 - smoothstep(act.letGo, 0.9, 1.05);
 		mesh.visible = fade > 0.001;
 		const u = uniforms;
@@ -348,17 +353,17 @@ export function createRainCut(scene: THREE.Scene, layer: number) {
 		u.uUpwind.value.copy(frame.wind).setY(0).negate();
 		if (u.uUpwind.value.lengthSq() > 1e-6) u.uUpwind.value.normalize();
 		else u.uUpwind.value.set(-frame.ahead.x, 0, -frame.ahead.y);
-		// Tiring over the nine minutes, the canopy sags lower.
-		const fatigue = smoothstep(frame.seconds, 60, LEANE_HOLDS);
+		// Tiring as it goes on, the canopy sags lower.
+		const fatigue = smoothstep(frame.seconds, 10, LEANE_HOLDS);
 		u.uHeight.value = 48 - 14 * fatigue;
-		u.uSpread.value = smoothstep(frame.seconds, 20, 200);
-		u.uCast.value = smoothstep(frame.seconds, 0, 20) * 1.05;
+		u.uSpread.value = smoothstep(frame.seconds, 4, 32);
+		u.uCast.value = smoothstep(frame.seconds, 0, 4) * 1.05;
 		u.uLetGo.value = act.letGo;
 		u.uHeat.value = heat;
 		u.uSigh.value = sigh;
 		u.uFatigue.value = fatigue;
 		u.uFade.value = fade;
-		u.uSea.value = smoothstep(frame.seconds, 200, 300);
+		u.uSea.value = smoothstep(frame.seconds, 33, 50);
 		u.uReach.value = act.reach;
 		// Brighter the more she pours into it; guttering as she is spent.
 		u.uShine.value = (0.6 + 1.1 * heat) * (1 - 0.45 * act.spent);
