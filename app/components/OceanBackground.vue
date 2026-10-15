@@ -1135,6 +1135,8 @@ onMounted(() => {
 				gain: 1.5 / steadyExposure,
 				tints: embroideryTints,
 				bg: mist,
+				pressed: waveUniforms.pressed.value,
+				pressGlow: waveUniforms.pressGlow,
 			},
 		);
 		skyAll.update({ time, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, sheath: skySheath, at: together ?? skyAllAt(0) });

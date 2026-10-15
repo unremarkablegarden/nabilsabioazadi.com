@@ -17,6 +17,21 @@
 // the end of the thread Leane's four are laying, the edge of the sky work. When it is done the
 // tresses are let go and the embroidery stays, fading slowly, while they rest.
 //
+// Feeling, as heat (the owner, 16 October: "make this look like people's emotion with
+// thermodynamics"). What each of the twelve feels in this work is heat, and her weave behaves as
+// heat does:
+//   - the strain of holding the storm warms her: the real wind's force, through her temperament
+//     (Leane's eager four the quickest to heat, Siuan's steady four the slowest), and the more so
+//     the more tired she is;
+//   - hot, her rope's filaments stir and swell apart and lean faintly warm (still tamed); cool,
+//     they lie still and close: agitation is temperature;
+//   - when she can hold no more she lets it go, a sigh: her rope blooms outward, as a gas expanding
+//     cools, and wisps of her warmth rise off it into the sky;
+//   - feeling is shared as heat is, from the hotter to the cooler: when one is struggling, strands
+//     cross from her neighbour's rope to her work, and her neighbour warms as she eases;
+//   - the newest stitches shimmer with the heat of those who made them, and cool into still order;
+//   - over the hours, as the storm is calmed, they come to one temperature together: equilibrium.
+//
 // Effort (the owner, 16 October: "the most effortful and barely coloured weaves possible"). It is
 // work against the storm (force through distance), and it shows in how the lines behave, not in
 // colour, which is all but the sea's and the sky's own:
@@ -50,6 +65,21 @@ const SLOTS = [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const THIRDS = [0, 1, 0, 1, 2, 2, 1, 0, 2, 1, 0, 2];
 // Which of her third's four each is.
 const MEMBERS = THIRDS.map((third, i) => THIRDS.slice(0, i).filter((other) => other === third).length);
+// Each one's temperament, as AES_SEDAI in channellers.ts gives it (in the order of SLOTS).
+const TEMPERS = [
+	{ eager: 0.55, steady: 0.95, stamina: 0.95 },
+	{ eager: 0.8, steady: 0.65, stamina: 0.6 },
+	{ eager: 0.4, steady: 0.85, stamina: 0.85 },
+	{ eager: 0.8, steady: 0.65, stamina: 0.6 },
+	{ eager: 0.45, steady: 0.85, stamina: 0.75 },
+	{ eager: 0.35, steady: 0.9, stamina: 0.7 },
+	{ eager: 0.75, steady: 0.6, stamina: 0.6 },
+	{ eager: 0.45, steady: 0.9, stamina: 0.9 },
+	{ eager: 0.35, steady: 0.95, stamina: 0.7 },
+	{ eager: 0.75, steady: 0.6, stamina: 0.55 },
+	{ eager: 0.35, steady: 0.95, stamina: 0.85 },
+	{ eager: 0.45, steady: 0.7, stamina: 0.6 },
+];
 
 const vertex = /* glsl */ `
 attribute float aT;
@@ -76,6 +106,20 @@ uniform float uHaul;
 uniform float uPull;
 uniform float uTension;
 uniform float uFatigue;
+// Each of the twelve's heat (0..1), her sigh (0..1 through it), and how much of her rope crosses
+// to her neighbour's work; and each third's heat together (Siuan's, Leane's, Moiraine's).
+uniform float uHeat[ 12 ];
+uniform float uSigh[ 12 ];
+uniform float uBridge[ 12 ];
+uniform vec3 uThirdHeat;
+// Where each of the twelve's braid goes down into the sea (x, z), and the calm it has pressed there.
+uniform vec4 uPress[ 12 ];
+
+// Whose third, and which of its four, each of the twelve is (in the order of SLOTS).
+const float THIRD_OF[ 12 ] = float[ 12 ]( ${THIRDS.map((x) => `${x}.0`).join(", ")} );
+const float MEMBER_OF[ 12 ] = float[ 12 ]( ${MEMBERS.map((x) => `${x}.0`).join(", ")} );
+// Which of the twelve a place at the rail is (the strongest's, 2, is not among them).
+int whoAt( float seat ) { return int( seat < 1.5 ? seat : seat - 1.0 ); }
 uniform float uFade;
 uniform vec3 uTints[ 3 ];
 varying vec3 vTint;
@@ -113,6 +157,11 @@ float seaAt( vec2 p ) {
 		h += ( uSurge * w.z / k ) * sin( k * ( along - sqrt( 9.8 / k ) * uTime ) + w.y );
 	}
 	return h;
+}
+
+vec3 pressAt( int who ) {
+	vec2 p = uPress[ who ].xy;
+	return vec3( p.x, seaAt( p ) + 1.0, p.y );
 }
 
 // Where the edge of the sea work is, on a bearing, and of the sky work.
@@ -170,7 +219,7 @@ void stitchOf( float k, float j, float slots, float d0, out float a, out float d
 	L = 0.97 * d * slot;
 	tb = 0.0;
 }
-vec3 stitchPoint( float k, float j, float slots, float d0, float lift, float front, float t ) {
+vec3 stitchPoint( float k, float j, float slots, float d0, float lift, float front, float heat, float t ) {
 	float a, d, L, tb;
 	stitchOf( k, j, slots, d0, a, d, L, tb );
 	float along = a + ( t - 0.5 ) * 0.97 * 2.0 / slots;
@@ -180,6 +229,9 @@ vec3 stitchPoint( float k, float j, float slots, float d0, float lift, float fro
 	float proud = 1.0 + 2.5 * exp( - max( front - d, 0.0 ) / ( 3.0 * L ) );
 	// (Its ends fade where it goes under, rather than dipping: a dip showed as a tick.)
 	p.y = lift * L * 0.03 * proud * sin( 3.14159 * t );
+	// New work still holds its makers' heat and shimmers with it; it cools into still order.
+	float warm = heat * exp( - max( front - d, 0.0 ) / ( 0.12 * front + 40.0 ) );
+	p += ( vec3( 0.0, 1.0, 0.0 ) * sin( uTime * 1.1 + t * 9.0 + aSeed.y * 6.0 ) + bearing( a ) * 0.6 * sin( uTime * 0.8 + t * 7.0 + aSeed.z * 6.0 ) ) * L * 0.08 * warm;
 	return p;
 }
 
@@ -190,11 +242,11 @@ float skyRow() { return 1300.0 * pow( 1.045, aCell.x ); }
 vec3 placeAt( float t ) {
 	if ( uKind < 0.5 ) {
 		float a = ( ( aCell.y + 0.5 ) / ${SEA_SLOTS}.0 - 0.5 ) * 2.0;
-		vec3 p = stitchPoint( aCell.x, aCell.y, ${SEA_SLOTS}.0, seaRow(), 1.0, seaFront( a ), t );
+		vec3 p = stitchPoint( aCell.x, aCell.y, ${SEA_SLOTS}.0, seaRow(), 1.0, seaFront( a ), uThirdHeat.x, t );
 		p.y += seaAt( p.xz );
 		return p;
 	}
-	if ( uKind < 1.5 ) return stitchPoint( aCell.x, aCell.y, ${SKY_SLOTS}.0, skyRow(), - 1.2, skyFront( ( ( aCell.y + 0.5 ) / ${SKY_SLOTS}.0 - 0.5 ) * 2.0 ), t ) + vec3( 0.0, ${CLOTH}.0, 0.0 );
+	if ( uKind < 1.5 ) return stitchPoint( aCell.x, aCell.y, ${SKY_SLOTS}.0, skyRow(), - 1.2, skyFront( ( ( aCell.y + 0.5 ) / ${SKY_SLOTS}.0 - 0.5 ) * 2.0 ), uThirdHeat.z, t ) + vec3( 0.0, ${CLOTH}.0, 0.0 );
 	if ( uKind < 2.5 ) return laidPoint( aCell.x, t );
 	if ( uKind < 3.5 ) {
 		// The short stitches that catch a laid thread down: each a loose turn round it.
@@ -214,8 +266,16 @@ vec3 placeAt( float t ) {
 	// The knot: not a point but a loose gathering low ahead of the boat, each third's strand
 	// through it side by side.
 	vec3 knot = uBoat + aheadDir() * 32.0 + vec3( 0.0, - 7.0, 0.0 ) + acrossDir() * ( third - 1.0 ) * 5.0;
-	// Drawn in a little with each stroke; paid back out to a gust.
-	vec3 to = needle( third, member );
+	int who = whoAt( aCell.x );
+	float heat = uHeat[ who ];
+	float sigh = uSigh[ who ];
+	// Drawn in a little with each stroke; paid back out to a gust. Some of her strands, when her
+	// neighbour is the hotter, cross to her neighbour's work and take some of it.
+	// Each drives her braid down into the sea where she is pressing the swell out of it (the owner:
+	// "you are dealing now with the strongest living channellers... think about how they would work
+	// with the ocean").
+	vec3 to = pressAt( who );
+	if ( aSeed.x < uBridge[ who ] ) to = pressAt( ( who + 1 ) % 12 );
 	to += ( knot - to ) * 0.05 * uHaul;
 	// Each leaves the knot already turned towards its work, the way it came in: no corner.
 	vec3 toward = to - knot;
@@ -224,6 +284,7 @@ vec3 placeAt( float t ) {
 	float taut = 0.35 + 0.65 * uPull;
 	vec3 centre;
 	float r;
+	vec3 stir = vec3( 0.0 );
 	if ( t < 0.25 ) {
 		centre = bezier( seat, seat + aheadDir() * 8.0 - vec3( 0.0, 2.0, 0.0 ), knot - leave * 12.0, knot, t / 0.25 );
 		// Splayed apart at the hands as they tire; loosely gathered at the knot.
@@ -241,7 +302,8 @@ vec3 placeAt( float t ) {
 			// the work from above; its belly drawn up as they haul and deepening as they ease, and
 			// bowed downwind by the wind they are pulling against.
 			float far = length( to - knot );
-			centre = bezier( knot, knot + leave * 0.35 * far + vec3( 0.0, 0.04 * far, 0.0 ), to + vec3( 0.0, 0.25 * far, 0.0 ) - ( to - knot ) * 0.2, to, s );
+			// (Down into the sea from high above it, as a blow is struck.)
+			centre = bezier( knot, knot + leave * 0.35 * far + vec3( 0.0, 0.08 * far, 0.0 ), to + vec3( 0.0, 0.35 * far, 0.0 ) + acrossDir() * 0.12 * far * ( mod( float( who ), 2.0 ) * 2.0 - 1.0 ) - ( to - knot ) * 0.1, to, s );
 			float belly = 4.0 * s * ( 1.0 - s );
 			// (In proportion to its length: a long line bows as much as a short one, to the eye.)
 			centre -= vec3( 0.0, far * ( 0.03 + 0.06 * ( 1.0 - taut ) ) * belly, 0.0 );
@@ -253,11 +315,24 @@ vec3 placeAt( float t ) {
 			// A great rope of many filaments, as thick for its length as a hawser is (tens of metres
 			// across at a kilometre out), drawn in tight as they pull and loosening as they ease.
 			r = ( 0.6 + far * 0.022 * sin( 3.14159 * s ) * ( 1.0 - 0.45 * taut ) ) * sqrt( aSeed.z );
+			// Her heat: the warmer she is the more the rope swells and its filaments stir; sighing,
+			// it blooms out wide, and some of its filaments rise off it as wisps of warmth.
+			r *= ( 0.7 + 0.8 * heat ) * ( 1.0 + 1.1 * sigh );
+			// Drawn into one dense blasting braid where it goes down into the water.
+			r *= mix( 1.0, 0.18, smoothstep( 0.7, 1.0, s ) );
+			stir = vec3(
+				sin( uTime * ( 0.6 + 0.9 * heat ) + aSeed.x * 40.0 + s * 11.0 ),
+				sin( uTime * ( 0.5 + 0.8 * heat ) * 1.3 + aSeed.y * 30.0 + s * 7.0 ),
+				cos( uTime * ( 0.7 + 0.9 * heat ) + aSeed.z * 50.0 + s * 13.0 )
+			) * r * 0.5 * heat;
+			if ( aSeed.y > 0.72 ) stir += ( vec3( 0.0, 1.0, 0.0 ) * ( 15.0 + far * 0.05 ) * aSeed.z + uWindDir * 20.0 * s ) * sigh * sin( 3.14159 * s );
 		}
 	}
 	// Laid up as a rope is: the filaments wind round each other along it.
-	float turn = aSeed.y * 6.28318 + uTime * 0.2 * vigour * ( aSeed.x - 0.5 ) + t * 14.0;
-	return centre + ( acrossDir() * cos( turn ) + vec3( 0.0, sin( turn ), 0.0 ) ) * r;
+	// (And, driving down into the sea, winding ever tighter round the braid, as water drawn down
+	// into a vortex does.)
+	float turn = aSeed.y * 6.28318 + uTime * 0.2 * vigour * ( aSeed.x - 0.5 ) + t * 14.0 + ( t > 0.25 ? 18.0 * pow( smoothstep( 0.7, 1.0, ( t - 0.25 ) / 0.75 ), 2.0 ) - uTime * 0.6 * smoothstep( 0.7, 1.0, ( t - 0.25 ) / 0.75 ) : 0.0 );
+	return centre + ( acrossDir() * cos( turn ) + vec3( 0.0, sin( turn ), 0.0 ) ) * r + stir;
 }
 
 void main() {
@@ -304,13 +379,17 @@ void main() {
 		// Tired, fewer filaments carry it, and more slowly; the ones that have given out hang faint.
 		// Pulling, the line is a little brighter.
 		shown = ( aSeed.w > vigour && aT > 0.25 ? 0.3 : 1.0 ) * ( 0.55 + 0.45 * sin( aT * 18.0 - uTime * ( 0.4 + 0.9 * vigour ) + aSeed.x * 30.0 ) ) * ( 0.7 + 0.5 * uPull );
-		// Lost into the work at its end, not ending in a point.
-		shown *= smoothstep( 1.0, 0.88, aT );
+		// Into the water at its end, brightest where it goes in.
+		shown *= 1.0 + 1.5 * smoothstep( 0.8, 1.0, aT );
 		// Let go from the needle's end back to the hands.
 		shown *= smoothstep( 1.0 - uLinkGone * 1.1, 1.0 - uLinkGone * 1.1 - 0.05, aT );
 		// (Not drawn right by the eye, where the twelve tresses from the rail would fill the picture.)
 		shown *= smoothstep( 25.0, 110.0, length( here - cameraPosition ) );
-		tint = uTints[ int( third + 0.5 ) ];
+		// Warmer, a little brighter and leaning faintly towards ember.
+		float heat = uHeat[ whoAt( aCell.x ) ];
+		shown *= 0.6 + 0.7 * heat;
+		tint = mix( uTints[ int( third + 0.5 ) ], vec3( 1.0, 0.72, 0.5 ), 0.6 * heat );
+		fresh = heat;
 		width = 0.9;
 	}
 	// The part not yet made is not there; the cloth fades slowly once the work is done.
@@ -319,7 +398,8 @@ void main() {
 	vAlpha = shown * made * ( uKind < 3.5 ? uFade : 1.0 );
 	// The newest work the most coloured, 26%; the oldest and the link's own threads from 13%.
 	// (The hawsers at the least: 13%.)
-	vTint = tame( tint, uKind < 3.5 ? 0.13 + 0.13 * fresh : 0.13 );
+	// (The hawsers at 13%, up to 26% as they warm.)
+	vTint = tame( tint, 0.13 + 0.13 * fresh );
 	vEdge = aSide;
 	mat4 vp = projectionMatrix * viewMatrix;
 	vec4 clip = vp * vec4( here, 1.0 );
@@ -404,12 +484,15 @@ export interface EmbroideryFrame {
 	gain: number;
 	// Water, air and akasha, as the channellers' colours are just now.
 	tints: THREE.Color[];
+	// The water's pressed places (GerstnerUniforms.pressed), filled in here, and its pressGlow.
+	pressed: THREE.Vector4[];
+	pressGlow: { value: number };
 	// The colour of what is behind the weave (the air's).
 	bg: THREE.Color;
 }
 
 export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE.Vector4[]) {
-	const shared = {
+	const shared_ = {
 		uTime: { value: 0 },
 		uBoat: { value: new THREE.Vector3() },
 		uAhead: { value: new THREE.Vector2(0, -1) },
@@ -427,6 +510,11 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 		uPull: { value: 0 },
 		uTension: { value: 0 },
 		uFatigue: { value: 0 },
+		uHeat: { value: Array.from({ length: 12 }, () => 0.2) },
+		uSigh: { value: Array.from({ length: 12 }, () => 0) },
+		uBridge: { value: Array.from({ length: 12 }, () => 0) },
+		uThirdHeat: { value: new THREE.Vector3() },
+		uPress: { value: Array.from({ length: 12 }, () => new THREE.Vector4()) },
 		uFade: { value: 1 },
 		uTints: { value: [new THREE.Color(), new THREE.Color(), new THREE.Color()] },
 		uGain: { value: 1 },
@@ -435,6 +523,7 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 		uResolution: { value: new THREE.Vector2(1, 1) },
 		uPixelRatio: pixelRatio,
 	};
+	const shared = shared_;
 	const parts = [
 		{ geometry: lines(SEA_ROWS * SEA_SLOTS, 8, (i) => [Math.floor(i / SEA_SLOTS), i % SEA_SLOTS]), opacity: 0.85 },
 		{ geometry: lines(SKY_ROWS * SKY_SLOTS, 8, (i) => [Math.floor(i / SKY_SLOTS), i % SKY_SLOTS]), opacity: 0.8 },
@@ -455,14 +544,48 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 		return mesh;
 	});
 
+	// The water's pressed places, to let go of when the work is gone.
+	let lastPressed: THREE.Vector4[] | undefined;
 	// Where they are in the stroke they are hauling (0..1).
 	let stroke = 0;
+	// Each of the twelve's heat, and how long is left of her sigh (seconds; 0 when not sighing).
+	const heat = TEMPERS.map(() => 0.15 + 0.1 * Math.random());
+	const sighing = TEMPERS.map(() => 0);
+	const SIGH = 7;
+	const feel = (frame: EmbroideryFrame, fatigue: number) => {
+		const dt = Math.min(frame.delta, 0.1);
+		const thirds = [0, 1, 2].map((third) => {
+			const ones = heat.filter((_, i) => THIRDS[i] === third);
+			return ones.reduce((sum, h) => sum + h, 0) / ones.length;
+		});
+		const was = [...heat];
+		TEMPERS.forEach(({ eager, steady, stamina }, i) => {
+			// Warmed by the strain, through her temperament, the more for being tired.
+			const strain = 0.25 * frame.force * (1.15 - steady) * (0.7 + 0.6 * eager) * (1 + (1.5 * fatigue) / stamina);
+			// Shared with those beside her in the link, and with her own third.
+			const shared = 0.05 * (was[(i + 11) % 12]! - was[i]! + was[(i + 1) % 12]! - was[i]!) + 0.03 * (thirds[THIRDS[i]!]! - was[i]!);
+			// Given off slowly, and in a sigh when she can hold no more.
+			if (sighing[i]! <= 0 && was[i]! > 0.7 + 0.15 * steady) sighing[i] = SIGH;
+			const sigh = sighing[i]! > 0 ? Math.sin(Math.PI * (1 - sighing[i]! / SIGH)) : 0;
+			sighing[i] = Math.max(0, sighing[i]! - dt);
+			heat[i] = THREE.MathUtils.clamp(was[i]! + dt * (strain + shared - 0.03 * (was[i]! - 0.1) - 0.14 * sigh), 0, 1);
+			shared_.uHeat.value[i] = heat[i]!;
+			shared_.uSigh.value[i] = sigh;
+			// When her neighbour is the hotter, some of her strands cross to help.
+			shared_.uBridge.value[i] = THREE.MathUtils.clamp((was[(i + 1) % 12]! - was[i]!) * 0.9, 0, 0.35);
+		});
+		shared_.uThirdHeat.value.set(thirds[0]!, thirds[1]!, thirds[2]!);
+	};
 
 	const update = (frame: EmbroideryFrame | undefined) => {
 		// Done and faded, or not happening: nothing to draw.
 		const fade = frame ? 1 - THREE.MathUtils.smoothstep(frame.after, 0.5, 3) : 0;
 		for (const mesh of parts) mesh.visible = fade > 0.001;
-		if (!frame || fade <= 0.001) return;
+		if (!frame || fade <= 0.001) {
+			if (lastPressed) for (const place of lastPressed) place.w = 0;
+			return;
+		}
+		lastPressed = frame.pressed;
 		const { smoothstep } = THREE.MathUtils;
 		const p = frame.progress;
 		const work = calmingWork(p);
@@ -496,6 +619,24 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 		shared.uHaul.value = smoothstep(stroke, 0, 0.45) * (1 - smoothstep(stroke, 0.6, 1)) - slip;
 		shared.uTension.value = Math.min(1, frame.force);
 		shared.uFatigue.value = fatigue;
+		feel(frame, fatigue);
+		// Where each drives her braid into the sea, spread across the sea ahead, and the calm she
+		// has pressed out there: growing over the hours until they meet and the whole sea is still.
+		const along = 1 - (1 - p) ** 2.2;
+		TEMPERS.forEach((_, i) => {
+			// Each third works together, loosely: Siuan's to the left, Leane's ahead, Moiraine's to the
+			// right, each of the four her own way off from the others, near and far (not in a row).
+			const third = THIRDS[i]!;
+			const a = [-0.5, 0.02, 0.5][third]! + (MEMBERS[i]! - 1.5) * 0.11 + 0.08 * Math.sin(i * 2.3) + 0.04 * Math.sin(frame.time * 0.01 + i);
+			const d = 230 + 950 * ((i * 0.618 + 0.3) % 1) ** 1.3;
+			const x = frame.boat.x + (frame.ahead.x * Math.cos(a) - frame.ahead.y * Math.sin(a)) * d;
+			const z = frame.boat.z + (frame.ahead.y * Math.cos(a) + frame.ahead.x * Math.sin(a)) * d;
+			const reach = (70 + 1100 * along * (0.8 + 0.4 * ((i * 0.37) % 1))) * (1 + 0.15 * shared_.uSigh.value[i]!);
+			const strength = Math.min(1, 0.45 + 0.55 * smoothstep(p, 0, 0.3)) * (0.7 + 0.3 * heat[i]!) * fade;
+			shared_.uPress.value[i]!.set(x, z, reach, 0);
+			frame.pressed[i]!.set(x, z, reach, strength);
+		});
+		frame.pressGlow.value = 0.04 * frame.gain * (1 - shared.uLinkGone.value);
 		shared.uFade.value = fade;
 		frame.tints.forEach((tint, i) => shared.uTints.value[i]!.copy(tint));
 		shared.uDay.value = frame.day;

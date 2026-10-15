@@ -283,6 +283,9 @@ export interface GerstnerUniforms {
 	channelBalm: THREE.IUniform<number>;
 	// The glow of healed water from within, before tone mapping.
 	channelBalmGlow: THREE.IUniform<number>;
+	// The great calming's pressed water (see pressedCalm), and the braids' light in it, before tone mapping.
+	pressed: THREE.IUniform<THREE.Vector4[]>;
+	pressGlow: THREE.IUniform<number>;
 	// The boat's electric lamps on the water round it, before tone mapping. 0 is unlit.
 	boatLamp: THREE.IUniform<number>;
 	channelLight: THREE.IUniform<number>;
@@ -308,6 +311,33 @@ export interface GerstnerUniforms {
 	internalWaves: THREE.IUniform<number>;
 }
 
+const pressedChunk = /* glsl */ `
+// Where the twelve's braids have pressed the swell out of the sea in the great calming
+// (embroidery.ts): for each, where it goes into the sea (x, z), the reach of the calm it has made
+// there, and 0..1 how fully. Gives 1 where nothing is pressed, less within; in rim how far a point
+// is at the edge of a calm, where the storm's waves pile up and die, and in core how near it is to
+// where a braid goes down.
+uniform vec4 pressed[ 12 ];
+float pressedCalm( vec2 p, out float rim, out float core ) {
+	float calm = 1.0;
+	rim = 0.0;
+	core = 0.0;
+	for ( int i = 0; i < 12; i ++ ) {
+		vec4 q = pressed[ i ];
+		if ( q.w <= 0.0 ) continue;
+		vec2 off = p - q.xy;
+		float d = length( off );
+		float a = atan( off.y, off.x );
+		// Not a circle: its edge runs in and out, and moves.
+		float R = q.z * ( 1.0 + 0.16 * sin( a * 3.0 + float( i ) * 1.7 ) + 0.07 * sin( a * 7.0 + float( i ) + waveTime * 0.04 ) );
+		calm *= 1.0 - q.w * ( 1.0 - smoothstep( 0.45 * R, R, d ) );
+		rim = max( rim, q.w * exp( - pow( ( d - R ) / ( 0.1 * R + 8.0 ), 2.0 ) ) );
+		core = max( core, q.w * exp( - d / ( 0.12 * R + 10.0 ) ) );
+	}
+	return calm;
+}
+`;
+
 const vertexPars = /* glsl */ `
 uniform float waveTime;
 uniform float waveSteepness;
@@ -327,6 +357,7 @@ uniform float crestWarp;
 uniform float channelFeed;
 ${channelPathChunk}
 uniform vec4 giantWaves[${GIANT_WAVES.length}];
+${pressedChunk}
 varying vec3 vWaveNormal;
 varying float vCrest;
 varying float vGust;
@@ -456,6 +487,16 @@ vec3 gerstner( vec3 p, out vec3 normal, out float crest, out float gust ) {
 		binormal.y += weavePull * slope.y;
 		crest += weavePull * 0.035 * ( h - mound );
 	}
+	// Pressed calm by the twelve: the swell taken out of the water, and at the calm's edge the
+	// storm's waves piling up and dying in a smooth swell and foam. (Not under the boat, which
+	// rides the sea as measured.)
+	float pressRim, pressCore;
+	float pressCalm = mix( 1.0, pressedCalm( p.xz, pressRim, pressCore ), smoothstep( 150.0, 260.0, distance( p.xz, cameraPosition.xz ) ) );
+	offset *= pressCalm;
+	tangent = mix( vec3( 1.0, 0.0, 0.0 ), tangent, pressCalm );
+	binormal = mix( vec3( 0.0, 0.0, 1.0 ), binormal, pressCalm );
+	crest = crest * pressCalm + 1.2 * pressRim;
+	offset.y += 4.0 * pressRim;
 	normal = normalize( cross( binormal, tangent ) );
 	return p + offset;
 }
@@ -495,6 +536,8 @@ uniform float channelLight;
 uniform float channelBalm;
 uniform vec4 healed[ 4 ];
 uniform float channelBalmGlow;
+uniform float pressGlow;
+${pressedChunk}
 uniform float boatLamp;
 uniform float deepWeave;
 uniform float deepMaster;
@@ -636,6 +679,12 @@ const fragmentFoam = /* glsl */ `
 	mended = min( mended, 1.0 ) * ( 1.0 - foamMask );
 	outgoingLight *= mix( vec3( 1.0 ), vec3( 0.46, 0.94, 1.34 ), channelBalm * mended * ( 1.0 - 0.6 * reflectance ) );
 	outgoingLight += vec3( 0.03, 0.2, 0.75 ) * channelBalmGlow * mended * ( 1.0 - reflectance );
+	// Pressed calm, the cold water drawn up from below shows: darker, clearer, a little greener;
+	// and where each braid goes down into the sea its light is seen going down into the water.
+	float pressRim, pressCore;
+	float pressCalm = pressedCalm( worldPosition.xz, pressRim, pressCore );
+	outgoingLight *= mix( vec3( 1.0 ), vec3( 0.78, 0.95, 1.0 ), ( 1.0 - pressCalm ) * 0.6 );
+	outgoingLight += vec3( 0.55, 0.7, 0.8 ) * pressGlow * pressCore * ( 1.0 - reflectance );
 
 	// Slowing the boat is the work of the weaker channellers (the owner's). They do not weave out
 	// towards Hawai'i but down: plaits laid in rings close round the boat, just under the level of
@@ -788,6 +837,8 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		healed: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
 		channelBalm: { value: 0 },
 		channelBalmGlow: { value: 0 },
+		pressed: { value: Array.from({ length: 12 }, () => new THREE.Vector4()) },
+		pressGlow: { value: 0 },
 		boatLamp: { value: 0 },
 		channelLight: { value: 0 },
 		foam: { value: 0 },
