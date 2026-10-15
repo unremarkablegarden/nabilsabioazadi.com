@@ -18,7 +18,10 @@
 // Effort (the owner, 16 October: "the most effortful and barely coloured weaves possible"). It is
 // work against the storm (force through distance), and it shows in how the lines behave, not in
 // colour, which is all but the sea's and the sky's own:
-//   - the lines out of the knot are hawsers, pulled nearly straight, sagging only between hauls;
+//   - the lines out of the knot are hawsers, each one long unbroken curve from the hands through
+//     the knot to the work (the owner: "too angular" when they were pulled straight): hauling,
+//     the curve tightens and its belly is drawn up; easing, it deepens again, and the wind they
+//     pull against bows it downwind;
 //   - they haul with the breath: each stroke draws the line in and it goes taut, a little brighter;
 //     then it is held, and eased; a real gust stronger than their hold pays it back out;
 //   - under load the line quivers, slowly, as much as the real wind is strong (never a flicker);
@@ -190,28 +193,41 @@ vec3 placeAt( float t ) {
 	float third = aCell.y;
 	float vigour = third < 0.5 ? uVigour.x : third < 1.5 ? uVigour.y : uVigour.z;
 	vec3 seat = seatAt( aCell.x );
-	vec3 knot = uBoat + aheadDir() * 70.0 + vec3( 0.0, - 4.0, 0.0 );
+	// The knot: not a point but a loose gathering low ahead of the boat, each third's strand
+	// through it side by side.
+	vec3 knot = uBoat + aheadDir() * 32.0 + vec3( 0.0, - 7.0, 0.0 ) + acrossDir() * ( third - 1.0 ) * 5.0;
 	// Drawn in a little with each stroke; paid back out to a gust.
 	vec3 to = needle( third );
 	to += ( knot - to ) * 0.05 * uHaul;
+	// Each leaves the knot already turned towards its work, the way it came in: no corner.
+	vec3 toward = to - knot;
+	toward.y = 0.0;
+	vec3 leave = normalize( aheadDir() + normalize( toward + vec3( 1e-4 ) ) );
 	float taut = 0.35 + 0.65 * uPull;
 	vec3 centre;
 	float r;
 	if ( t < 0.25 ) {
-		centre = bezier( seat, seat + aheadDir() * 12.0 - vec3( 0.0, 3.0, 0.0 ), knot - aheadDir() * 15.0, knot, t / 0.25 );
-		// Splayed apart at the hands as they tire.
-		r = ( 0.3 + 1.5 * sin( 3.14159 * t / 0.25 ) * ( 1.0 + 3.0 * uFatigue * aSeed.x ) ) * sqrt( aSeed.z ) * smoothstep( 0.25, 0.2, t ) + 0.15;
+		centre = bezier( seat, seat + aheadDir() * 8.0 - vec3( 0.0, 2.0, 0.0 ), knot - leave * 12.0, knot, t / 0.25 );
+		// Splayed apart at the hands as they tire; loosely gathered at the knot.
+		r = ( 0.3 + 1.5 * sin( 3.14159 * t / 0.25 ) * ( 1.0 + 3.0 * uFatigue * aSeed.x ) ) * sqrt( aSeed.z ) * smoothstep( 0.25, 0.2, t ) + 1.2 * sqrt( aSeed.z );
 	} else {
 		float s = ( t - 0.25 ) / 0.75;
 		if ( aSeed.w > vigour ) {
 			// Given out: hanging slack from the knot, drooping towards the sea, swaying.
 			vec3 end = knot + ( to - knot ) * ( 0.12 + 0.2 * aSeed.x ) + acrossDir() * ( aSeed.z - 0.5 ) * 40.0;
 			end.y = 1.0;
-			centre = bezier( knot, knot + aheadDir() * 8.0, end + vec3( 0.0, 10.0, 0.0 ), end, s ) + acrossDir() * sin( uTime * 0.3 + aSeed.y * 6.0 ) * 3.0 * s;
+			centre = bezier( knot, knot + leave * 8.0, end + vec3( 0.0, 10.0, 0.0 ), end, s ) + acrossDir() * sin( uTime * 0.3 + aSeed.y * 6.0 ) * 3.0 * s;
 			r = 0.2;
 		} else {
-			// Pulled nearly straight, sagging only as they ease.
-			centre = mix( knot, to, s ) - vec3( 0.0, ( 6.0 + 34.0 * ( 1.0 - taut ) ) * 4.0 * s * ( 1.0 - s ), 0.0 );
+			// One curve on from the knot, leaving it the way the tress came in (no corner), arriving at
+			// the work from above; its belly drawn up as they haul and deepening as they ease, and
+			// bowed downwind by the wind they are pulling against.
+			float far = length( to - knot );
+			centre = bezier( knot, knot + leave * 0.35 * far + vec3( 0.0, 0.04 * far, 0.0 ), to + vec3( 0.0, 0.25 * far, 0.0 ) - ( to - knot ) * 0.2, to, s );
+			float belly = 4.0 * s * ( 1.0 - s );
+			// (In proportion to its length: a long line bows as much as a short one, to the eye.)
+			centre -= vec3( 0.0, far * ( 0.03 + 0.06 * ( 1.0 - taut ) ) * belly, 0.0 );
+			centre += uWindDir * far * ( 0.06 + 0.1 * uTension ) * belly;
 			// Under load it quivers, slowly, as much as the wind is strong.
 			vec3 side = normalize( cross( to - knot, vec3( 0.0, 1.0, 0.0 ) ) + vec3( 1e-4 ) );
 			float q = uTension * ( 1.8 * sin( 3.14159 * s ) * sin( uTime * 4.0 + third * 2.0 ) + 0.8 * sin( 6.28318 * s ) * sin( uTime * 5.3 + 1.0 + third ) );
@@ -268,6 +284,8 @@ void main() {
 		// Tired, fewer filaments carry it, and more slowly; the ones that have given out hang faint.
 		// Pulling, the line is a little brighter.
 		shown = ( aSeed.w > vigour && aT > 0.25 ? 0.3 : 1.0 ) * ( 0.55 + 0.45 * sin( aT * 18.0 - uTime * ( 0.4 + 0.9 * vigour ) + aSeed.x * 30.0 ) ) * ( 0.7 + 0.5 * uPull );
+		// Lost into the work at its end, not ending in a point.
+		shown *= smoothstep( 1.0, 0.88, aT );
 		// Let go from the needle's end back to the hands.
 		shown *= smoothstep( 1.0 - uLinkGone * 1.1, 1.0 - uLinkGone * 1.1 - 0.05, aT );
 		// (Not drawn right by the eye, where the twelve tresses from the rail would fill the picture.)
