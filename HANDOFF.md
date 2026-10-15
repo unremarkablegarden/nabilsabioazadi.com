@@ -143,6 +143,7 @@ All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerst
 
 | Address | Shows |
 |---|---|
+| `/?storm` | a channelled storm, for this visit only: past hurricane force, the twelve as versions of Siuan, Leane and Moiraine, the weaves' colours graded, and the menu row "Weather · Channelled, honouring spirits met across Te Moana-nui-a-Kiwa". `/?storm=off` shows the site without it while one is on for everyone |
 | `/?controls` | every live figure, including rows "unusual", "strongest", "storm" |
 | `/?hour=19.2`, `/?hour=22`, `/?hour=13` | dusk, night, midday at the boat |
 | `/?date=2027-03-01` | another day of the voyage |
@@ -178,6 +179,20 @@ All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerst
    storm, and its drawing cost on a phone is unmeasured. The owner has seen none of it yet.
 
 10. **Speed** (13 October; the README's entry "Keeping the picture moving smoothly" has what was done and what is left). Measured only on the owner's M1 laptop, in a headless browser at 2560 by 1326: never on a phone, nor on a slow machine. The owner has not yet said whether the softer picture a slow machine now gets (down to 1 pixel to 1) is acceptable, or whether sharpness should be held and smoothness given up; `/?ratio=` shows each.
+
+## A channelled storm, for everyone (15 October)
+
+The owner can call one up at will. It is set in `storm.json` at the root of the site: `"until"`
+an end time (and `"from"` a start, if wanted), as ISO times with their offset, e.g.
+`"2026-10-15T22:00:00+13:00"`; both `null` is off. It goes live with "commit and push" and ends by
+itself at `"until"`, with no further push; an open page takes it up or lets it go within half a
+minute, easing over. Everything about it is in `app/utils/channelled-storm.ts` (the figures and
+the menu's words), `setChannelledStorm` in `channellers.ts` (the crew, `AES_SEDAI`, and the grade,
+`uGraded`, `GRADED_COLOURS`) and `OceanBackground.vue`. A private address to flip it from a
+phone would need a small store on Vercel (Vercel KV or Upstash), which only the owner can sign up for.
+
+The realer lightning and the wind-blown smoke of 15 October are not part of it: they are always
+on, and show whenever there is real thunder at the boat (the owner's choice).
 
 ## Things only the owner can do
 

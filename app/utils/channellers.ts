@@ -43,7 +43,10 @@ import { pixelRatio, ribbonShaderChunk, stripIndices, WEAVE_RENDER_ORDER } from 
 // each filament shows only for a stretch at a time, and those stretches travel outward, which
 // is what makes the whole seem to flow. Most are a pale blue-white. A few are gold, shorter and
 // brighter and looser, and fly about the tress like sparks.
-const TINTS = [0xb0cdfb, 0xdde8fd, 0xe8d3ae].map((hex) => new THREE.Color(hex));
+const TINTS = [0xb0cdfb, 0xdde8fd, 0xf0c98e].map((hex) => new THREE.Color(hex));
+// The gold ones, during a channelled storm: a softer champagne (the grade, below).
+const GOLD_GRADED = new THREE.Color(0xe8d3ae);
+const GOLD_PLAIN = TINTS[2]!.clone();
 // When the four are linked and working with their whole strength, every element shows in its
 // own colour (the owner's): akasha whiter, air bluer, earth green, fire yellow to red, water a
 // deeper blue, metal grey and half seen through. Graded, at the owner's direction, so that they
@@ -123,6 +126,8 @@ uniform vec4 uTempo;
 // 0..1 how far it is day. By day a weave is not seen as light (see the fragment shader), and
 // what they weave is akasha, air and water: for each seat, the element its occupant is weaving.
 uniform float uDay;
+// 0..1 how far the colours are graded, during a channelled storm (see GRADE).
+uniform float uGraded;
 uniform vec4 uSeatElement;
 // Tending. For each seat: which reading its occupant is at (0 the water, 1 the wind, 2 the
 // pressure), and for how many seconds. And what is really there to be read, from the forecast:
@@ -664,15 +669,19 @@ void main() {
 	vTint = mix( vTint, vec3( 1.0, 0.98, 0.94 ), 0.7 * held );
 	// Held back, it takes the sea's own deeper blue.
 	vTint = mix( vTint, vec3( 0.46, 0.62, 0.88 ), 0.6 * channelHold );
-	// Each element's colour, at its fullest (its sheath's), and then paled.
+	// Each element's colour, at its fullest (its sheath's).
 	vec3 dye = uSheath[ element == 4 ? 1 : element == 1 ? 0 : 2 ];
 	dye /= max( max( dye.r, dye.g ), max( dye.b, 0.001 ) );
-	// By day, seen as colour and not as light, each thread is a pale silk of its element's
-	// colour, so that the colour is carried by the sheath beside it and not by the thread too.
-	vec3 byDay = mix( vec3( 1.0 ), dye, 0.5 );
+	// By day, seen as colour and not as light, each element has a colour that holds against a
+	// pale sea and sky: water the green-blue of clear shallows, air the blue of the high sky,
+	// akasha a warm pearl. (Graded, each thread is instead a pale silk of its element's colour,
+	// so that the colour is carried by the sheath beside it and not by the thread too.)
+	vec3 byDay = element == 4 ? vec3( 0.2, 0.74, 0.76 ) : element == 1 ? vec3( 0.42, 0.62, 1.0 ) : vec3( 1.0, 0.95, 0.85 );
+	byDay = mix( byDay, mix( vec3( 1.0 ), dye, 0.5 ), uGraded );
 	vTint = mix( vTint, mix( byDay, vTint, 0.25 + 0.3 * leaning ), uDay );
 	// By night, tending, the light of each leans to its element's colour.
-	vec3 byNight = mix( vec3( 1.0 ), dye, 0.55 );
+	// (The same colour as its sheath by day, at its fullest and then paled.)
+	vec3 byNight = mix( vec3( 1.0 ), dye, mix( 0.62, 0.55, uGraded ) );
 	vTint = mix( vTint, byNight, 0.85 * tendingNow * ( 1.0 - uDay ) );
 	// A reading takes the colour of what it finds.
 	vTint = mix( vTint, found, finding );
@@ -696,11 +705,12 @@ void main() {
 	vSheath = mix( vSheath, vec3( dot( vSheath, vec3( 0.2126, 0.7152, 0.0722 ) ) ), muted );
 	// (Each element of a water reading has its own colour beside it by day, deeper than its light.)
 	vSheath = mix( vSheath, found * found * 0.75, dyed * ( 1.0 - vWhite ) );
-	// The grade (the owner, 15 October: "they should still look like the elements but not in a
-	// comic book way"). Every colour, thread and sheath, keeps only part of its saturation, so the
-	// elements read as leanings of one quiet light, like dyed silk seen in weather, and none
-	// shouts over the others. The strongest's white and deep blue are left as they are.
-	float grade = mix( ${GRADE}, 1.0, vWhite );
+	// The grade, during a channelled storm (the owner, 15 October: "they should still look like
+	// the elements but not in a comic book way"). Every colour, thread and sheath, keeps only part
+	// of its saturation, so the elements read as leanings of one quiet light, like dyed silk seen
+	// in weather, and none shouts over the others. The strongest's white and deep blue are left
+	// as they are.
+	float grade = mix( mix( 1.0, ${GRADE}, uGraded ), 1.0, vWhite );
 	vTint = mix( vec3( dot( vTint, vec3( 0.2126, 0.7152, 0.0722 ) ) ), vTint, grade );
 	vSheath = mix( vec3( dot( vSheath, vec3( 0.2126, 0.7152, 0.0722 ) ) ), vSheath, grade );
 	vAlpha *= mix( 1.0, 1.0 + 0.7 * soften, vWhite * ( 1.0 - aSoft ) );
@@ -748,10 +758,10 @@ void main() {
 // (Air is not the sky's own blue, which cannot be seen against the sky: it leans to violet.)
 // (They are uniforms, uSheath, in this order, so that the owner can change them on the page:
 // /?colours shows a strip of four swatches, and the choice is kept in the address.)
-// (Graded on 15 October, at the owner's word, from air #9e7bf3, water #00b0a2, akasha #e0b065:
-// the same three families, each nearer a grey of its own lightness. Air a dusk lavender, water
-// sea glass, akasha old gold.)
-export const ELEMENT_COLOURS = { air: "#8e8ac4", water: "#4f978e", akasha: "#c3a574", strongest: "#0050cb" };
+export const ELEMENT_COLOURS = { air: "#9e7bf3", water: "#00b0a2", akasha: "#e0b065", strongest: "#0050cb" };
+// During a channelled storm, graded (the owner, 15 October): the same three families, each nearer
+// a grey of its own lightness. Air a dusk lavender, water sea glass, akasha old gold.
+export const GRADED_COLOURS = { air: "#8e8ac4", water: "#4f978e", akasha: "#c3a574", strongest: "#0050cb" };
 export type ElementColours = typeof ELEMENT_COLOURS;
 
 // By day: how much more of itself a weave of colour needs than one of light, how deep that
@@ -759,7 +769,7 @@ export type ElementColours = typeof ELEMENT_COLOURS;
 const DAY_BODY = "1.8";
 const DAY_TONE = "0.6";
 const DAY_SHADE = "1.6";
-// How much of its saturation every colour of the weaving keeps (the grade, above).
+// How much of its saturation every colour of the weaving keeps during a channelled storm (the grade, above).
 const GRADE = "0.72";
 
 const fragmentShader = /* glsl */ `
@@ -767,6 +777,7 @@ uniform float uGain;
 uniform float uSoften;
 uniform float uWhite;
 uniform float uDay;
+uniform float uGraded;
 varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
@@ -803,7 +814,7 @@ void main() {
 	// (The thread itself is a pale tint of its element's colour, leaning to whatever it has found:
 	// where many lie together, as in the healing flow, there is no room for sheaths, and the
 	// threads must carry the colour themselves.)
-	vec3 body = mix( mix( mix( vec3( 1.0 ), vSheath, 0.42 ), hue, 0.4 ) * 0.96, pale, vWhite ) * uWhite;
+	vec3 body = mix( mix( mix( vec3( 1.0 ), vSheath, 0.42 ), mix( hue * hue, hue, uGraded ), 0.4 ) * 0.96, pale, vWhite ) * uWhite;
 	float solid = max( vWhite, uDay );
 	vec3 colour = mix( gl_FragColor.rgb, body, solid ) * amount;
 	float cover = amount * solid;
@@ -1454,6 +1465,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uLoose: { value: new THREE.Vector4(0.5, 0.5, 0.5, 0.5) },
 		uTempo: { value: new THREE.Vector4() },
 		uTints: { value: TINTS },
+		uGraded: { value: 0 },
 		uElements: { value: ELEMENTS },
 		uBaseTone: { value: BASE },
 		uPixelRatio: pixelRatio,
@@ -2178,40 +2190,57 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	// to 0.8). And they differ in how much they long and how fast, which is no fault: "let not him
 	// who longs much say to him who longs little, 'Wherefore are you slow and halting?'" Three were
 	// renamed for it: Gale, Spark and Drift are Sail, Lantern and Mist.)
-	// (15 October, the owner's: the twelve become versions of three Aes Sedai of The Wheel of
-	// Time, four of each, each keeping the temperament of the one they replace, leant a little
-	// towards her. Siuan Sanche, the Tairen fisherman's daughter: water, blunt and unshakeable.
-	// Leane Sharif: quick, tall, decisive, keen to step forward. Moiraine Damodred: cool, patient,
-	// watching, keeping her own counsel.)
-	const TEMPERS = [
+	const PILGRIMS = [
 		{ name: "the strongest", air: 0.84, water: 0.84, eager: 1, stamina: 1, steady: 1, sociable: 0.5, curious: 1 },
 		// The rudder: holds a place longest and lies stillest; reason that serves and does not rule.
-		{ name: "Siuan · Keel", air: 0.5, water: 0.7, eager: 0.55, stamina: 0.95, steady: 0.95, sociable: 0.6, curious: 0.35 },
+		{ name: "Keel", air: 0.5, water: 0.55, eager: 0.55, stamina: 0.95, steady: 0.95, sociable: 0.65, curious: 0.35 },
 		// Air, and free because held: first to feel a shift in the wind, never carried off by it.
-		{ name: "Leane · Kite", air: 0.9, water: 0.35, eager: 0.8, stamina: 0.6, steady: 0.65, sociable: 0.5, curious: 0.7 },
+		{ name: "Kite", air: 0.9, water: 0.35, eager: 0.75, stamina: 0.6, steady: 0.65, sociable: 0.5, curious: 0.7 },
 		// Patient water: comes in slowly, goes deepest, and does not hurry back with what it finds.
-		{ name: "Siuan · Fathom", air: 0.3, water: 0.95, eager: 0.4, stamina: 0.85, steady: 0.85, sociable: 0.4, curious: 0.9 },
+		{ name: "Fathom", air: 0.3, water: 0.95, eager: 0.35, stamina: 0.85, steady: 0.85, sociable: 0.4, curious: 0.9 },
 		// Warmth that lasts: comes in readily, and burns low and long rather than bright and short.
-		{ name: "Leane · Ember", air: 0.6, water: 0.45, eager: 0.8, stamina: 0.6, steady: 0.65, sociable: 0.55, curious: 0.5 },
+		{ name: "Ember", air: 0.6, water: 0.45, eager: 0.8, stamina: 0.55, steady: 0.65, sociable: 0.55, curious: 0.5 },
 		// Joins without binding: lays a tress in with the others and keeps a space between them.
-		{ name: "Moiraine · Loom", air: 0.55, water: 0.55, eager: 0.45, stamina: 0.75, steady: 0.85, sociable: 0.7, curious: 0.6 },
+		{ name: "Loom", air: 0.5, water: 0.55, eager: 0.5, stamina: 0.75, steady: 0.8, sociable: 0.8, curious: 0.5 },
 		// Quiet and attentive, to pressure most of all: listens long before moving, often sounding.
-		{ name: "Moiraine · Listener", air: 0.8, water: 0.6, eager: 0.35, stamina: 0.7, steady: 0.9, sociable: 0.35, curious: 0.95 },
+		{ name: "Listener", air: 0.75, water: 0.6, eager: 0.35, stamina: 0.7, steady: 0.9, sociable: 0.4, curious: 0.85 },
 		// Passion with a rudder: answers a strong wind fully, and lets it go when it has passed.
-		{ name: "Leane · Sail", air: 0.9, water: 0.35, eager: 0.75, stamina: 0.6, steady: 0.6, sociable: 0.55, curious: 0.45 },
+		{ name: "Sail", air: 0.9, water: 0.35, eager: 0.7, stamina: 0.55, steady: 0.6, sociable: 0.5, curious: 0.45 },
 		// Constant water: holds a place a long time, keeps their own counsel without turning away.
-		{ name: "Siuan · Reef", air: 0.3, water: 0.95, eager: 0.45, stamina: 0.9, steady: 0.9, sociable: 0.35, curious: 0.55 },
+		{ name: "Reef", air: 0.3, water: 0.85, eager: 0.4, stamina: 0.9, steady: 0.9, sociable: 0.35, curious: 0.55 },
 		// For still weather: forward when little is happening; clear, and still.
-		{ name: "Moiraine · Glass", air: 0.4, water: 0.45, eager: 0.35, stamina: 0.7, steady: 0.95, sociable: 0.35, curious: 0.55 },
+		{ name: "Glass", air: 0.35, water: 0.45, eager: 0.35, stamina: 0.7, steady: 0.95, sociable: 0.35, curious: 0.45 },
 		// The youngest: open to all of it, still learning to hold; carries what is given and passes
 		// it on ("empty and dark shall I raise my lantern").
-		{ name: "Leane · Lantern", air: 0.65, water: 0.65, eager: 0.75, stamina: 0.55, steady: 0.6, sociable: 0.65, curious: 0.8 },
+		{ name: "Lantern", air: 0.65, water: 0.65, eager: 0.7, stamina: 0.5, steady: 0.6, sociable: 0.65, curious: 0.8 },
 		// Slow and grounding: late in, unhurried once there, a weight the others steady themselves by.
-		{ name: "Siuan · Ballast", air: 0.3, water: 0.85, eager: 0.35, stamina: 0.85, steady: 0.95, sociable: 0.6, curious: 0.35 },
+		{ name: "Ballast", air: 0.3, water: 0.75, eager: 0.3, stamina: 0.85, steady: 0.95, sociable: 0.6, curious: 0.35 },
 		// A dreamer, who wanders in thought and not in hand: goes where the others are and sees what
 		// they miss ("life, and all that lives, is conceived in the mist and not in the crystal").
+		{ name: "Mist", air: 0.55, water: 0.6, eager: 0.45, stamina: 0.6, steady: 0.65, sociable: 0.7, curious: 0.8 },
+	];
+	// During a channelled storm (15 October, the owner's) the twelve become versions of three Aes
+	// Sedai of The Wheel of Time, four of each, each keeping the temperament of the one they
+	// replace, leant a little towards her. Siuan Sanche, the Tairen fisherman's daughter: water,
+	// blunt and unshakeable. Leane Sharif: quick, tall, decisive, keen to step forward. Moiraine
+	// Damodred: cool, patient, watching, keeping her own counsel.
+	const AES_SEDAI = [
+		{ name: "the strongest", air: 0.84, water: 0.84, eager: 1, stamina: 1, steady: 1, sociable: 0.5, curious: 1 },
+		{ name: "Siuan · Keel", air: 0.5, water: 0.7, eager: 0.55, stamina: 0.95, steady: 0.95, sociable: 0.6, curious: 0.35 },
+		{ name: "Leane · Kite", air: 0.9, water: 0.35, eager: 0.8, stamina: 0.6, steady: 0.65, sociable: 0.5, curious: 0.7 },
+		{ name: "Siuan · Fathom", air: 0.3, water: 0.95, eager: 0.4, stamina: 0.85, steady: 0.85, sociable: 0.4, curious: 0.9 },
+		{ name: "Leane · Ember", air: 0.6, water: 0.45, eager: 0.8, stamina: 0.6, steady: 0.65, sociable: 0.55, curious: 0.5 },
+		{ name: "Moiraine · Loom", air: 0.55, water: 0.55, eager: 0.45, stamina: 0.75, steady: 0.85, sociable: 0.7, curious: 0.6 },
+		{ name: "Moiraine · Listener", air: 0.8, water: 0.6, eager: 0.35, stamina: 0.7, steady: 0.9, sociable: 0.35, curious: 0.95 },
+		{ name: "Leane · Sail", air: 0.9, water: 0.35, eager: 0.75, stamina: 0.6, steady: 0.6, sociable: 0.55, curious: 0.45 },
+		{ name: "Siuan · Reef", air: 0.3, water: 0.95, eager: 0.45, stamina: 0.9, steady: 0.9, sociable: 0.35, curious: 0.55 },
+		{ name: "Moiraine · Glass", air: 0.4, water: 0.45, eager: 0.35, stamina: 0.7, steady: 0.95, sociable: 0.35, curious: 0.55 },
+		{ name: "Leane · Lantern", air: 0.65, water: 0.65, eager: 0.75, stamina: 0.55, steady: 0.6, sociable: 0.65, curious: 0.8 },
+		{ name: "Siuan · Ballast", air: 0.3, water: 0.85, eager: 0.35, stamina: 0.85, steady: 0.95, sociable: 0.6, curious: 0.35 },
 		{ name: "Moiraine · Mist", air: 0.6, water: 0.6, eager: 0.45, stamina: 0.6, steady: 0.7, sociable: 0.6, curious: 0.9 },
 	];
+	// Who is on the boat just now: the pilgrims, or during a channelled storm the Aes Sedai.
+	let TEMPERS = PILGRIMS;
 	// One of them, more likely the more a weight favours them.
 	const pick = <T>(from: T[], weight: (one: T) => number) => {
 		const weights = from.map((one) => Math.max(0.01, weight(one)));
@@ -2589,10 +2618,37 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		return { told, working: any ? 1 : 0, anything: any || scoutMesh.visible || soundingMesh.visible ? 1 : 0, surge: surge * (1 - masters), pull, flowPoint, masters };
 	};
 
-	// The elements' colours, as the owner picks them (CSS colours, as seen on a screen).
-	const setColours = (colours: ElementColours) => {
-		[colours.air, colours.water, colours.akasha, colours.strongest].forEach((colour, i) => uniforms.uSheath.value[i]!.set(colour));
+	// The elements' colours, as the owner picks them (CSS colours, as seen on a screen). Eased
+	// over a few seconds when a channelled storm begins or ends; at once from the colour picker.
+	const sheathTarget = [new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color()];
+	let colourEase = 0;
+	const setColours = (colours: ElementColours, ease = false) => {
+		[colours.air, colours.water, colours.akasha, colours.strongest].forEach((colour, i) => {
+			sheathTarget[i]!.set(colour);
+			if (!ease) uniforms.uSheath.value[i]!.copy(sheathTarget[i]!);
+		});
+		colourEase = ease ? 1 : 0;
 	};
 	setColours(ELEMENT_COLOURS);
-	return { update, setColours };
+	// A channelled storm (the owner's, 15 October): the Aes Sedai take the pilgrims' places, and
+	// the colours are graded. Taken up and let go over some seconds, never at a stroke.
+	let graded = 0;
+	const setChannelledStorm = (on: boolean) => {
+		TEMPERS = on ? AES_SEDAI : PILGRIMS;
+		graded = on ? 1 : 0;
+	};
+	const ease = (delta: number) => {
+		const step = Math.min(1, delta / 4);
+		uniforms.uGraded.value += (graded - uniforms.uGraded.value) * step;
+		TINTS[2]!.copy(GOLD_PLAIN).lerp(GOLD_GRADED, uniforms.uGraded.value);
+		if (colourEase > 0) uniforms.uSheath.value.forEach((colour, i) => colour.lerp(sheathTarget[i]!, step));
+	};
+	return {
+		update: (state: ChannellerState) => {
+			ease(state.delta);
+			return update(state);
+		},
+		setColours,
+		setChannelledStorm,
+	};
 }

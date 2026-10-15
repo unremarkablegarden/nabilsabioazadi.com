@@ -54,7 +54,7 @@ const motionPaused = useState("motion-paused", () => false);
 const menuOpen = useState("menu-open", () => false);
 // The navigation can show the place, time and conditions itself, in which case the caption here is left out.
 const readout = useState<{ place?: string; time: string; waves?: string; wind?: string; weather?: string }>("scene-readout", () => ({ time: "" }));
-// When the weather is not the measured weather (?pretend=), the menu says so.
+// When the weather is not the measured weather (a channelled storm, or ?pretend=), the menu says so.
 const channelled = ref(false);
 const captionInNavigation = useState("caption-in-navigation", () => false);
 let dispose: (() => void) | undefined;
@@ -153,7 +153,7 @@ const liveFigures = computed(() => {
 
 watchEffect(() => {
 	shownAt.value = dateAtBoatHour(hour.value, pretendDate.value ?? new Date()).getTime();
-	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: channelled.value ? "Channelled, honouring spirits met across Te Moana-nui-a-Kiwa" : undefined };
+	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: channelled.value ? CHANNELLED_WORDS : undefined };
 });
 
 onMounted(() => {
@@ -484,8 +484,20 @@ onMounted(() => {
 	if (query.get("date")) pretendDate.value = new Date(`${query.get("date")}T00:00:00Z`);
 	// For trying weather that is not there today: ?pretend=waveHeight:6,windSpeed:70,windGusts:95
 	// replaces those live figures (names as in SeaConditions).
-	const pretend = Object.fromEntries((query.get("pretend") ?? "").split(",").filter(Boolean).map((pair) => [pair.split(":")[0], Number(pair.split(":")[1])]));
+	const asPretended = Object.fromEntries((query.get("pretend") ?? "").split(",").filter(Boolean).map((pair) => [pair.split(":")[0], Number(pair.split(":")[1])]));
+	// A channelled storm (see channelled-storm.ts): on for everyone by storm.json, or for this
+	// visit by ?storm; ?storm=off looks at the site without it. Its figures go under any pretended.
+	const stormAsked = query.get("storm");
+	const stormNow = () => (stormAsked === "off" ? false : stormAsked !== null ? true : channelledStormOn(new Date()));
+	let stormOn = stormNow();
+	const pretendNow = () => (stormOn ? { ...CHANNELLED_STORM, ...asPretended } : asPretended);
+	let pretend = pretendNow();
 	channelled.value = Object.keys(pretend).length > 0;
+	// Its colours, unless the address gives colours of its own.
+	const coloursGiven = COLOUR_NAMES.some((name) => query.has(name));
+	if (stormOn && !coloursGiven) Object.assign(colours, GRADED_COLOURS);
+	// The last measured figures, to go back to when a storm ends.
+	let measured = conditions.value;
 	// The conditions come from the site's own server, which keeps one fresh copy for everyone;
 	// failing that (no server, or a pretended day, which means a different place) straight from
 	// Open-Meteo. The last real figures are also kept in the visitor's browser for next time.
@@ -494,6 +506,7 @@ onMounted(() => {
 		(pretendDate.value ? Promise.reject() : $fetch<SeaConditions>("/api/conditions"))
 			.catch(() => fetchSeaConditions(boatAt(pretendDate.value ?? new Date())))
 			.then((result) => {
+				measured = result;
 				conditions.value = { ...result, ...pretend };
 				try {
 					localStorage.setItem(REMEMBERED, JSON.stringify({ at: Date.now(), conditions: result }));
@@ -698,6 +711,21 @@ onMounted(() => {
 	const channellers = createChannellers(scene, camera, waveUniforms);
 	applyColours = channellers.setColours;
 	channellers.setColours(colours);
+	channellers.setChannelledStorm(stormOn);
+	// A storm begins or ends while the page is open: the sea and sky move over to the new figures
+	// over a few seconds as they always do, and the crew and colours change over gradually.
+	const stormInterval = setInterval(() => {
+		if (stormNow() === stormOn) return;
+		stormOn = !stormOn;
+		pretend = pretendNow();
+		channelled.value = Object.keys(pretend).length > 0;
+		channellers.setChannelledStorm(stormOn);
+		if (!coloursGiven) {
+			Object.assign(colours, stormOn ? GRADED_COLOURS : ELEMENT_COLOURS);
+			channellers.setColours(colours, true);
+		}
+		if (measured) conditions.value = { ...measured, ...pretend };
+	}, 30_000);
 	const stars = createStars(scene, camera, PLACE, planetPositions);
 	waveUniforms.weaveCentre.value.set(knotPosition.x, knotPosition.z);
 	const projected = new THREE.Vector3();
@@ -1052,6 +1080,7 @@ onMounted(() => {
 		window.removeEventListener("pointermove", onPointerMove);
 		clearInterval(clockInterval);
 		clearInterval(conditionsInterval);
+		clearInterval(stormInterval);
 		clearTimeout(revealAnyway);
 		stopWatching();
 		fluid.dispose();
