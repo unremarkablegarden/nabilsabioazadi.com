@@ -267,3 +267,37 @@ nearly straight, and a small hump of the old sea shows where the leaf's tip is; 
 day is a broad pale band, more haze than threads; the reading still looks a little like a drawn
 rope; nothing watched in motion, only stills at set points; never on a phone (2,660 more lines,
 each 200 to 300 segments).
+
+## 13. Leane cuts the rain off (16 October)
+
+The owner: "Leane has cut the rain off using an innovative weave." Read as Leane · Kite, the most
+air-minded of Leane's four, at the front just left of the viewer, alone, during the storm and the
+calming. `rain-cut.ts` has the whole reasoning; `storm.json` `"rainCut": { "from": ISO }` (set to
+the moment the owner said it); `/?storm&raincut=400` shows her 400 seconds in, `/?raincut` from
+the page opening, `/?raincut=off` without.
+
+- **The lever**: she leaves the cloud alone and cuts the rain's way down. Below the cloud she
+  warms and dries the air, and the drops evaporate in it before they reach the sea, as virga does
+  over a desert. The cost is latent heat, about 2.5 MJ a kilogram: the storm's rain asks some
+  40 kW of every square metre kept dry, so her weave is a heater laid where the wind carries its
+  warmth over the boat.
+- **Seen**: two ropes out of her hands rise and run out upwind and across the wind; along them
+  their filaments peel off one by one and stream downwind over the boat, level, some 40 m up,
+  swaying like kites' tails (a canopy of warm thread, tamed air colour warming towards ember as
+  she heats). The rain is drawn falling out of the cloud and thinning to nothing in the band below
+  her canopy (`uCut` in `rain.ts`); the sea and the air round the boat are dry, the shelter before
+  the channeller's eyes is put down.
+- **The figures**: precipitation at the sea goes to nothing over three minutes; a rain code
+  becomes overcast; thunder stays thunder. The rain above is still the storm's, and the drawn rain
+  follows it.
+- **Effort as heat**: her strain is the rain she holds off, through her eager temperament; hot,
+  the threads shimmer; she sighs, the canopy billows and the rain comes a little lower for a
+  moment; over the hours she tires and the cut sags lower.
+- **With the stilling**: she is the one of the twelve who does not stand back. She holds the cut
+  until the strongest has emptied the cloud (the rain above under about half a millimetre), then
+  lets go, the cut running out along her ropes from her hands. At the storm's end likewise.
+
+Not yet right: her threads, seen from beneath, still run together into long strokes across the
+upper sky, so they are kept faint; by day the canopy is hardly there and the cut shows only as
+dry air; the rain above her reads as rows of short dashes near the horizon (the storm's own rain
+flying almost level); never watched in motion.

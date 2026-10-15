@@ -59,6 +59,9 @@ uniform float uHold;
 // The opened sky (sky-opening.ts): where its column stands on the sea (x, z), how wide the dry
 // circle under it is, and how high its arms are.
 uniform vec4 uCanopy;
+// Cut off by Leane (rain-cut.ts): the height under which the drops are gone, the depth of the band
+// in which they evaporate, and how far out from the boat (0: not cut).
+uniform vec3 uCut;
 uniform float uFar;
 varying float vAlpha;
 varying float vEdge;
@@ -137,10 +140,20 @@ void main() {
 	shown *= 1.0 - smoothstep( 18.0, 55.0, risen );
 	// The curtain lifted: nothing below its bottom edge.
 	shown *= smoothstep( uCurtain - 6.0, uCurtain + 6.0, at.y );
+	// Falling into the warm dry air under Leane's canopy, a drop evaporates: it thins and is gone
+	// before the sea, raggedly, where the warmth lies unevenly.
+	float evaporating = 0.0;
+	if ( uCut.z > 0.0 ) {
+		float under = 1.0 - smoothstep( 0.8 * uCut.z, uCut.z, out_ );
+		float base = uCut.x + ( noise( at * 0.04 + vec3( uTime * 0.05, 0.0, - uTime * 0.03 ) ) - 0.5 ) * uCut.y * 1.6;
+		evaporating = under * smoothstep( base + uCut.y, base, at.y );
+		shown *= 1.0 - under * smoothstep( base, base - 0.5 * uCut.y, at.y );
+	}
 
 	// The streak: where the drop is, and where it was a moment ago, both bent by the shelter.
 	vec3 head = at;
-	vec3 tail = at - velocity * uExposure;
+	// (Evaporating, it is smaller and shows a shorter streak.)
+	vec3 tail = at - velocity * uExposure * ( 1.0 - 0.7 * evaporating );
 	// (Going up, it is seen as a soft upward smudge.)
 	if ( risen > 0.0 ) tail = mix( tail, at - vec3( 0.0, 0.4 + 0.15 * risen, 0.0 ), smoothstep( 0.0, 2.0, risen ) );
 	float hold = uHold * ( 1.0 - 0.35 * step( 0.82, fract( aSeed.z * 13.1 + floor( uTime * 0.7 ) * 0.37 ) ) );
@@ -179,7 +192,7 @@ void main() {
 	// Hanging, each drop glimmers a little, as a drop held in the light does; gone back up, it is
 	// mist: broad, faint.
 	float glimmer = 1.0 + uHang * 0.9 * sin( uTime * 2.3 + aSeed.z * 60.0 );
-	vAlpha = shown * glimmer * ( 1.0 - 0.75 * max( uRise, mist ) ) * ( 0.35 / ( 1.0 + 3.0 * blur ) ) * exp( - distance / uFar ) * ( beading > 0.0 ? 0.5 : 1.0 );
+	vAlpha = shown * ( 1.0 - 0.75 * evaporating ) * glimmer * ( 1.0 - 0.75 * max( uRise, mist ) ) * ( 0.35 / ( 1.0 + 3.0 * blur ) ) * exp( - distance / uFar ) * ( beading > 0.0 ? 0.5 : 1.0 );
 	// Behind the camera: nothing.
 	vAlpha *= step( 1.2, headClip.w ) * step( 1.2, tailClip.w );
 	vEdge = aCorner.y;
@@ -236,6 +249,7 @@ function rainVolume(count: number, box: THREE.Vector3, ahead: number, far: numbe
 		uBreath: { value: 0 },
 		uFront: { value: -1 },
 		uCanopy: { value: new THREE.Vector4(0, 0, 0, 0) },
+		uCut: { value: new THREE.Vector3(0, 0, 0) },
 		uFar: { value: far },
 		uColour: { value: new THREE.Color() },
 		uOpacity: { value: 0 },
@@ -280,6 +294,9 @@ export interface RainFrame {
 	// to go back up, in metres (-1: not).
 	breath: number;
 	front: number;
+	// Cut off by Leane (rain-cut.ts), if she is: the height it is gone under, the depth it thins
+	// over, and how far out from the boat.
+	cut?: { height: number; depth: number; reach: number };
 }
 
 export function createRain(scene: THREE.Scene, camera: THREE.PerspectiveCamera, layer: number) {
@@ -338,6 +355,7 @@ export function createRain(scene: THREE.Scene, camera: THREE.PerspectiveCamera, 
 			// In a gust it gives a little.
 			u.uHold.value = frame.hold * (1 - 0.25 * frame.gust);
 			u.uCanopy.value.copy(frame.canopy);
+			u.uCut.value.set(frame.cut?.height ?? 0, frame.cut?.depth ?? 0, frame.cut?.reach ?? 0);
 			u.uColour.value.copy(frame.light).lerp(new THREE.Color(1, 1, 1), 0.6 * frame.flash);
 			u.uOpacity.value = 0.6 + 0.4 * frame.flash;
 		}

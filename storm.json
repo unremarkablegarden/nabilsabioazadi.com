@@ -2,5 +2,6 @@
 	"from": null,
 	"until": "2026-10-16T21:00:00+13:00",
 	"calming": { "from": "2026-10-16T04:30:00+13:00", "hours": 7 },
+	"rainCut": { "from": "2026-10-16T07:19:00+13:00" },
 	"stilling": { "from": null }
 }

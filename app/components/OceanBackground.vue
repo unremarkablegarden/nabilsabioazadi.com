@@ -577,6 +577,9 @@ onMounted(() => {
 	const calmAsked = query.get("calm") !== null && Number.isFinite(Number(query.get("calm"))) ? Number(query.get("calm")) : undefined;
 	const embroideryTints = [new THREE.Color(), new THREE.Color(), new THREE.Color()];
 	const stilling = createStilling(scene, SCREEN_LAYER);
+	// Leane cutting the rain off (rain-cut.ts): set in storm.json, or ?raincut for this visit.
+	const rainCut = createRainCut(scene, SCREEN_LAYER);
+	const rainCutAsked = query.get("raincut");
 	const stillSheath = new THREE.Color();
 	// The measured weather alone, eased as drawnFrom is: what the stilling goes to.
 	let drawnMeasured: SeaConditions | undefined;
@@ -862,13 +865,26 @@ onMounted(() => {
 			}
 		}
 		const standBack = stillShare < 0 ? 1 : stillDone ? THREE.MathUtils.smoothstep((stillBegun?.hours ?? 0) - stillHours, 0.05, 0.5) : 0;
-		const drawn = !followLive.value
+		const uncut = !followLive.value
 			? undefined
 			: stillDone
 				? drawnMeasured
 				: stillShare >= 0
 					? stilledConditions(stillFrom, drawnMeasured, stillShare, stillHours)
 					: onScreen;
+		// Under Leane's canopy the rain no longer reaches the sea, though the cloud still rains.
+		const cutSince = rainCutSince(new Date(), rainCutAsked, pageOpened, stormAsked !== null);
+		const rainAloft = uncut?.precipitation ?? 0;
+		const cutCover = cutSince !== undefined ? rainCutCover(cutSince) : 0;
+		const drawn =
+			uncut && cutCover > 0
+				? {
+						...uncut,
+						precipitation: rainAloft * (1 - cutCover),
+						// (Thunder is still thunder; rain that no longer reaches the sea is only cloud.)
+						weatherCode: uncut.weatherCode < 95 && uncut.weatherCode >= 51 && cutCover > 0.5 ? 3 : uncut.weatherCode,
+					}
+				: uncut;
 		const air = ambientAir(drawn);
 		// By hand, the story stands still and its white-out and stillness are left out.
 		let moment: StormMoment;
@@ -979,7 +995,9 @@ onMounted(() => {
 		veil.value!.style.backgroundColor = mist.getStyle();
 		veil.value!.style.opacity = String(Math.max(0.15 * fogAmount, moment.veil));
 
-		const liveRain = liveOnly ? rainAmount(liveOnly) : 0;
+		// (The rain drawn is the rain falling out of the cloud: under Leane's canopy it is cut off on
+		// its way down, in rain.ts.)
+		const liveRain = liveOnly ? rainAmount(cutSince !== undefined ? { ...liveOnly, precipitation: rainAloft } : liveOnly) : 0;
 		const rain = calmMotion ? 0 : Math.max(THREE.MathUtils.smoothstep(fury, 0.15, 0.6), liveRain) * alive;
 		// The weave, and what its knot does to the sea and the clouds around it.
 		const oldWeave = stagedLight.value || followStory.value || weaveByHand.value ? moment.weave * (1 - Math.max(darkness, controlLevel, gathering)) : 0;
@@ -1130,7 +1148,8 @@ onMounted(() => {
 		const gustFactor = liveOnly ? THREE.MathUtils.clamp(liveOnly.windGusts / Math.max(liveOnly.windSpeed, 1) - 1, 0, 1) : 0.3;
 		const gustNowRain = gustFactor * (0.5 + 0.5 * Math.sin(time * 0.9) * Math.sin(time * 0.37 + 1.1));
 		// (Not needed once the sky is open over them.)
-		shelterHold += ((stormOn && rain > 0.3 && opening.canopy < 0.5 ? 1 : 0) - shelterHold) * Math.min(1, delta / 4);
+		// (Nor once Leane has cut the rain off before it reaches them.)
+		shelterHold += ((stormOn && rain > 0.3 && opening.canopy < 0.5 && cutCover < 0.5 ? 1 : 0) - shelterHold) * Math.min(1, delta / 4);
 		skyFoot.set(camera.position.x + skyAhead.x * SKY_OPENING.ahead, 0, camera.position.z + skyAhead.y * SKY_OPENING.ahead);
 		// (The dry circle is the reach of its arms: the edge of the rain sweeps out over the boat and away.)
 		skyCanopy.set(skyFoot.x, skyFoot.z, 0.9 * SKY_OPENING.spread * opening.canopy, SKY_OPENING.height);
@@ -1142,7 +1161,12 @@ onMounted(() => {
 		skyOpening.update({ time, boat: camera.position, ahead: skyAhead, gather: opening.gather, lift: opening.lift, open: opening.open, release: opening.release, day: daylight, gain: 1.5 / steadyExposure, sheath: skySheath, wind: rainWind });
 		shelterAt.set(-0.75, -0.3, -2.5).applyEuler(camera.rotation).add(camera.position);
 		rainLight.copy(rainNight).lerp(rainDay, daylight).multiplyScalar(1 / steadyExposure);
-		rainfall.update({ time, delta, rain, wind: rainWind, gust: gustNowRain, light: rainLight, flash, shelter: shelterAt, shelterRadius: 0.9, hold: shelterHold, canopy: skyCanopy, hang: together?.hang ?? breathing?.hang ?? 0, rise: together?.rise ?? 0, murmur: together?.murmur ?? 0, curtain: together && together.curtain > 0 ? -10 + 320 * together.curtain : (breathing?.curtain ?? -1000), breath: breathing?.breath ?? 0, front: breathing?.front ?? holding?.rainFront ?? -1 });
+		const cutLayer = rainCut.update(
+			cutSince !== undefined && !calmMotion
+				? { time, delta, seconds: cutSince, held: THREE.MathUtils.smoothstep(rainAloft, 0.05, 0.4), aloft: rainAloft, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, tint: skySheath[0]!, bg: mist }
+				: undefined,
+		);
+		rainfall.update({ cut: cutLayer, time, delta, rain, wind: rainWind, gust: gustNowRain, light: rainLight, flash, shelter: shelterAt, shelterRadius: 0.9, hold: shelterHold, canopy: skyCanopy, hang: together?.hang ?? breathing?.hang ?? 0, rise: together?.rise ?? 0, murmur: together?.murmur ?? 0, curtain: together && together.curtain > 0 ? -10 + 320 * together.curtain : (breathing?.curtain ?? -1000), breath: breathing?.breath ?? 0, front: breathing?.front ?? holding?.rainFront ?? -1 });
 		skyBreath.update(breathing && { boat: camera.position, ahead: skyAhead, day: daylight, gain: 1.5 / steadyExposure, at: breathing });
 		// Where the hole is seen, for the fog to thin under it: its middle, and how far its edge
 		// reaches across and up the screen.
@@ -1287,6 +1311,7 @@ onMounted(() => {
 		sacred.dispose();
 		embroidery.dispose();
 		stilling.dispose();
+		rainCut.dispose();
 		stopWatching();
 		fluid.dispose();
 		renderer.setAnimationLoop(null);
