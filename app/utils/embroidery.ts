@@ -155,21 +155,31 @@ vec3 bezier( vec3 a, vec3 b, vec3 c, vec3 d, float t ) {
 	return s * s * s * a + 3.0 * s * s * t * b + 3.0 * s * t * t * c + t * t * t * d;
 }
 
-// A running stitch on row k of the cloth (its distance d0), slot j of slots: its bearing a, its
-// distance d, its length L, and the way it runs, tb.
+// A running stitch on row k of the cloth (its distance d0), slot j of slots. Fine thread, not
+// dashes (the owner: "oblong blobs have got to stop"): each stitch lies along its row's own curve
+// and fills nearly all of its slot, so that a row reads as one thread lying on the cloth, going
+// under it only for a moment between stitches. Gives its bearing a, its distance d and its length L.
+float rowAt( float k, float a, float d0 ) {
+	return d0 * ( 1.0 + 0.06 * sin( a * 7.0 + k * 1.7 ) + 0.03 * sin( a * 17.0 + k * 0.6 ) );
+}
 void stitchOf( float k, float j, float slots, float d0, out float a, out float d, out float L, out float tb ) {
-	a = ( ( j + 0.5 + 0.6 * ( aSeed.x - 0.5 ) ) / slots - 0.5 ) * 2.0;
-	d = d0 * ( 1.0 + 0.06 * sin( a * 7.0 + k * 1.7 ) + 0.03 * sin( a * 17.0 + k * 0.6 ) );
-	tb = a + 1.5708 + 0.3 * sin( k * 0.9 + a * 3.0 );
-	L = 0.7 * d * 2.0 / slots;
+	float slot = 2.0 / slots;
+	// Each row's stitches staggered against the last, as a hand sews (lined up, their gaps made a grid).
+	a = ( ( j + 0.5 + fract( k * 0.618 ) ) / slots - 0.5 ) * 2.0 + ( aSeed.x - 0.5 ) * 0.2 * slot;
+	d = rowAt( k, a, d0 );
+	L = 0.97 * d * slot;
+	tb = 0.0;
 }
 vec3 stitchPoint( float k, float j, float slots, float d0, float lift, float front, float t ) {
 	float a, d, L, tb;
 	stitchOf( k, j, slots, d0, a, d, L, tb );
-	vec3 p = uBoat + bearing( a ) * d + bearing( tb ) * ( t - 0.5 ) * L;
-	// Just pulled through, it stands proud; then it is drawn down tight.
+	float along = a + ( t - 0.5 ) * 0.97 * 2.0 / slots;
+	vec3 p = uBoat + bearing( along ) * rowAt( k, along, d0 );
+	// Lying on the cloth, barely raised; just pulled through, it stands a little proud, then is
+	// drawn down tight.
 	float proud = 1.0 + 2.5 * exp( - max( front - d, 0.0 ) / ( 3.0 * L ) );
-	p.y = lift * L * ( 0.1 * proud * sin( 3.14159 * t ) - 0.03 );
+	// (Its ends fade where it goes under, rather than dipping: a dip showed as a tick.)
+	p.y = lift * L * 0.03 * proud * sin( 3.14159 * t );
 	return p;
 }
 
@@ -194,7 +204,7 @@ vec3 placeAt( float t ) {
 		vec3 n1 = normalize( cross( tangent, vec3( 0.0, 1.0, 0.0 ) ) + vec3( 1e-4 ) );
 		vec3 n2 = cross( n1, tangent );
 		float a = 6.28318 * t * 1.3;
-		return on + ( n1 * cos( a ) + n2 * sin( a ) ) * 1.6 + tangent * ( t - 0.5 ) * 3.0;
+		return on + ( n1 * cos( a ) + n2 * sin( a ) ) * 0.7 + tangent * ( t - 0.5 ) * 1.2;
 	}
 	// The link: from a place at the rail to the knot where all twelve meet, and out to their needle.
 	float third = mod( aCell.y, 3.0 );
@@ -258,7 +268,7 @@ void main() {
 	float grown = 2.0;
 	float fresh = 0.0;
 	vec3 tint = uTints[ 0 ];
-	float width = 1.3;
+	float width = 0.7;
 	if ( uKind < 1.5 ) {
 		float sea = uKind < 0.5 ? 1.0 : 0.0;
 		float a, d, L, tb;
@@ -273,7 +283,7 @@ void main() {
 			// (Only below the cloud: above it, it is in it.)
 			tint = mix( uTints[ 2 ], vec3( 1.0 ), 0.4 * fresh );
 			shown = ( 0.25 + 0.75 * fresh ) * smoothstep( ${CLOTH}.0 + 1.0, ${CLOTH}.0 - 1.0, here.y ) * exp( - d / 5000.0 );
-			width = 1.5;
+			width = 0.8;
 		}
 	} else if ( uKind < 2.5 ) {
 		grown = clamp( laidSoFar() - aCell.x, 0.0, 1.0 );
@@ -305,13 +315,17 @@ void main() {
 	}
 	// The part not yet made is not there; the cloth fades slowly once the work is done.
 	float made = smoothstep( grown, grown - 0.05, aT );
+	if ( uKind < 1.5 ) made *= smoothstep( 0.0, 0.04, aT ) * smoothstep( 1.0, 0.96, aT );
 	vAlpha = shown * made * ( uKind < 3.5 ? uFade : 1.0 );
 	// The newest work the most coloured, 26%; the oldest and the link's own threads from 13%.
 	// (The hawsers at the least: 13%.)
 	vTint = tame( tint, uKind < 3.5 ? 0.13 + 0.13 * fresh : 0.13 );
 	vEdge = aSide;
 	mat4 vp = projectionMatrix * viewMatrix;
-	gl_Position = ribbonPosition( vp * vec4( here, 1.0 ), vp * vec4( next, 1.0 ), aSide, width );
+	vec4 clip = vp * vec4( here, 1.0 );
+	// (Stitches stay fine thread close to the eye too: not broadened as much as the weave's lines.)
+	if ( uKind < 1.5 ) width *= clamp( 300.0 / clip.w, 0.7, 1.2 ) / clamp( 300.0 / clip.w, 0.7, 2.6 );
+	gl_Position = ribbonPosition( clip, vp * vec4( next, 1.0 ), aSide, width );
 }
 `;
 
@@ -425,7 +439,7 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 		{ geometry: lines(SEA_ROWS * SEA_SLOTS, 8, (i) => [Math.floor(i / SEA_SLOTS), i % SEA_SLOTS]), opacity: 0.85 },
 		{ geometry: lines(SKY_ROWS * SKY_SLOTS, 8, (i) => [Math.floor(i / SKY_SLOTS), i % SKY_SLOTS]), opacity: 0.8 },
 		{ geometry: lines(LAID, 200, (i) => [i, 0]), opacity: 0.65 },
-		{ geometry: lines(LAID * TIES, 6, (i) => [Math.floor(i / TIES), i % TIES]), opacity: 0.45 },
+		{ geometry: lines(LAID * TIES, 10, (i) => [Math.floor(i / TIES), i % TIES]), opacity: 0.18 },
 		// (Each third's four told apart: the second number is the third, plus three for each before her in it.)
 		{ geometry: lines(SLOTS.length * FIBRES, 150, (i) => [SLOTS[i % SLOTS.length]!, THIRDS[i % SLOTS.length]! + 3 * MEMBERS[i % SLOTS.length]!]), opacity: 0.1 },
 	].map(({ geometry, opacity }, kind) => {
