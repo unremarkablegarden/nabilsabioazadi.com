@@ -49,6 +49,12 @@ varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
 varying float vWhite;
+// Painterly (the owner: "more painterly"): how far along the thread, the thread's own seed, how
+// much of a brush stroke this is (0 a fine thread, 1 a broad stroke), and whether it is the wash.
+varying float vAlong;
+varying float vSeed;
+varying float vBrush;
+varying float vWash;
 ${ribbonShaderChunk}
 
 const float PI2 = 6.28318;
@@ -121,16 +127,23 @@ vec3 threadPoint( float t ) {
 		return low + round_;
 	}
 	if ( t < 0.78 ) return columnPoint( ( t - 0.18 ) / 0.6, phase, breath, foot );
-	// The arms: from where this thread left the column, on round and out, rising and falling
-	// as they go and carried a little downwind; each to its own reach.
+	// The arms: not a disc. Like smoke that reaches a ceiling, each thread leaves the top its own
+	// way and spreads in a short uneven sweep, wandering as it goes, some stopping short and a few
+	// reaching far, all of it carried downwind, so the shape is lopsided and has no rim (the owner:
+	// "more abstract and less geometric").
 	float u = ( t - 0.78 ) / 0.22;
 	vec3 top = columnPoint( 1.0, phase, breath, foot );
 	vec3 centre = foot + columnAxis( 1.0 );
 	vec2 out_ = top.xz - centre.xz;
-	float a = atan( out_.y, out_.x ) + u * 2.2;
-	float r = mix( length( out_ ), uSpread * ( 0.65 + 0.5 * fract( seed * 5.1 ) ), u ) * breath;
-	vec3 p = centre + vec3( cos( a ) * r, 0.0, sin( a ) * r ) + vec3( uLean.x, 0.0, uLean.y ) * 160.0 * u;
-	p.y = top.y + 26.0 * sin( u * 5.0 + a * 2.0 + uTime * 0.2 ) * u - 40.0 * u * u;
+	float rope = floor( fract( seed * 7.77 ) * 5.0 );
+	float sweep = ( 0.25 + 0.9 * fract( seed * 9.1 ) ) * ( mod( rope, 2.0 ) < 0.5 ? 1.0 : - 0.6 );
+	float a = atan( out_.y, out_.x ) + sweep * u;
+	float reach = uSpread * ( 0.12 + 0.88 * pow( fract( seed * 5.1 ), 2.0 ) );
+	float r = mix( length( out_ ), reach, pow( u, 0.8 ) ) * breath;
+	vec3 p = centre + vec3( cos( a ) * r, 0.0, sin( a ) * r );
+	p += vec3( uLean.x, 0.0, uLean.y ) * 260.0 * u;
+	p += vec3( sin( u * 4.0 + seed * 20.0 + uTime * 0.05 ), 0.0, cos( u * 3.3 + seed * 13.0 - uTime * 0.04 ) ) * 45.0 * u;
+	p.y = top.y + 40.0 * sin( u * 3.0 + seed * 10.0 + uTime * 0.07 ) * u + ( fract( seed * 8.3 ) - 0.5 ) * 70.0 * u - 30.0 * u * u;
 	return p;
 }
 void main() {
@@ -156,12 +169,30 @@ void main() {
 	float high = lifting * smoothstep( 0.3, 1.0, t );
 	// The arms are not rings: they break into wisps, with gaps that drift.
 	float wisps = mix( 1.0, smoothstep( 0.25, 0.65, 0.5 + 0.5 * sin( t * 23.0 + seed * 50.0 + uTime * 0.1 ) ), lifting * smoothstep( 0.76, 0.84, t ) );
+	// And they thin away to nothing as they spread.
+	wisps *= 1.0 - lifting * smoothstep( 0.82, 1.0, t ) * 0.85;
 	// Light travels along each: inward on the in-breath, upward on the out-breath; in longer,
 	// slower swells the higher it is, so the arms are not broken into beads.
 	float pulse = 0.6 + 0.4 * sin( t * mix( 38.0, 9.0, high ) - uTime * ( 1.6 + 0.6 * seed ) * ( lifting > 0.5 ? 1.0 : - 1.0 ) + seed * 40.0 );
 	// (Faint, each one: a hundred and twenty of them lie on one another in the column, and
 	// strength is not brightness.)
+	// The column is laid in brush strokes, not drawn in line: each thread is broken into strokes
+	// of its own lengths, each pressed on, carried and lifted (broad and full where pressed, thin
+	// and dry as it lifts), with gaps between. A few very broad, faint strokes behind are the wash
+	// that gives it body.
+	float inColumn = lifting * smoothstep( 0.16, 0.24, t ) * ( 1.0 - smoothstep( 0.74, 0.86, t ) );
+	float strokeLength = 0.07 + 0.08 * fract( seed * 3.17 );
+	float along = fract( ( t + fract( seed * 5.3 ) ) / strokeLength );
+	float press = smoothstep( 0.0, 0.18, along ) * ( 1.0 - smoothstep( 0.55, 0.95, along ) );
+	float wash = step( 0.82, fract( seed * 2.71 ) );
+	float brush = inColumn * ( 1.0 - wash );
 	vAlpha = shown * wisps * pulse * ( 0.16 - 0.11 * high ) * smoothstep( 0.0, 0.03, t ) * ( lifting > 0.5 ? 1.0 : 0.8 );
+	vAlpha *= mix( 1.0, 0.2 + 0.75 * press, brush );
+	vAlpha *= mix( 1.0, 0.22, inColumn * wash );
+	vAlong = along;
+	vSeed = seed;
+	vBrush = brush;
+	vWash = inColumn * wash;
 	// Colour: mostly air, for this is the air's work, some water from the gathering, the
 	// strongest's white.
 	vWhite = step( 0.94, fract( seed * 7.31 ) );
@@ -170,7 +201,11 @@ void main() {
 	vec3 hue = mix( air, water, ( 1.0 - lifting ) * 0.7 + 0.15 * step( 0.7, fract( seed * 3.3 ) ) );
 	vTint = mix( mix( vec3( 1.0 ), hue, 0.45 ), vec3( 1.0 ), vWhite );
 	vEdge = aSide;
-	gl_Position = ribbonPosition( clip, clipAhead, aSide, mix( 0.9, 0.6, high ) * ( 1.0 + 0.5 * vWhite ) );
+	float width = mix( 0.9, 0.6, high ) * ( 1.0 + 0.5 * vWhite );
+	// Strokes broad where the brush is pressed; the wash broadest of all.
+	width *= mix( 1.0, 1.5 + 4.0 * press * ( 0.5 + fract( seed * 6.1 ) ), brush );
+	width *= mix( 1.0, 16.0, vWash );
+	gl_Position = ribbonPosition( clip, clipAhead, aSide, width );
 }
 `;
 
@@ -181,10 +216,22 @@ varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
 varying float vWhite;
+varying float vAlong;
+varying float vSeed;
+varying float vBrush;
+varying float vWash;
 void main() {
 	// Soft across: a thread of light, not a wire.
 	float across = abs( vEdge );
 	float body = exp( - across * across * 3.0 ) * ( 1.0 - smoothstep( 0.8, 1.0, across ) );
+	// A brush stroke: the bristles' streaks run along it, and as the brush lifts and runs dry the
+	// streaks break up; its edges are ragged, not even.
+	float bristles = 0.55 + 0.45 * sin( vEdge * 19.0 + vSeed * 40.0 ) * sin( vEdge * 7.0 - vSeed * 13.0 );
+	float dry = smoothstep( 0.35, 0.9, vAlong ) * ( 0.5 + 0.5 * sin( vAlong * 90.0 + vEdge * 11.0 + vSeed * 70.0 ) );
+	float ragged = 1.0 - smoothstep( 0.55 + 0.3 * sin( vAlong * 40.0 + vSeed * 9.0 ), 1.0, across );
+	body = mix( body, ( 1.0 - across * 0.4 ) * bristles * ( 1.0 - 0.8 * dry ) * ragged, vBrush );
+	// The wash: one soft breadth, with no line in it.
+	body = mix( body, exp( - across * across * 2.0 ), vWash );
 	// By night it is light added to the dark; by day light cannot be seen against the day, so it
 	// is drawn as a pale colour laid over the sky.
 	vec3 colour = vTint * mix( uGain, 1.0, uDay );
