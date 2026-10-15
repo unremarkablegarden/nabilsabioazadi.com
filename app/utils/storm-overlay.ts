@@ -55,6 +55,9 @@ export function createStormOverlay(canvas: HTMLCanvasElement) {
 		const { width, height } = canvas;
 		context.clearRect(0, 0, width, height);
 		if (rain <= 0) return;
+		// (After a pause, a page brought back or opened late, one long step would carry every
+		// drop off at once, and they would all come back in together as one wall of rain.)
+		delta = Math.min(delta, 1 / 20);
 		time += delta;
 		// Gusts: the drive comes and goes over some seconds.
 		const gust = 1 + 0.35 * gale * Math.sin(time * 0.9) * Math.sin(time * 0.37 + 1.1);
@@ -71,12 +74,13 @@ export function createStormOverlay(canvas: HTMLCanvasElement) {
 			const vy = drop.speed + dx * carry;
 			drop.x += vx * delta;
 			drop.y += vy * delta;
-			if (drop.y > 1 || drop.x < -0.1 || drop.x > 1.1) {
+			if (drop.y > 1 || (drop.x < -0.4 && vx <= 0) || (drop.x > 1.4 && vx >= 0)) {
 				// Back in from the top, or from the side the wind comes from, as often as the
 				// slant brings drops in from there.
 				const fromSide = Math.random() < Math.abs(vx) / (Math.abs(vx) + Math.abs(vy));
-				drop.x = fromSide ? (vx > 0 ? -0.05 : 1.05) : Math.random() * 1.2 - 0.1;
-				drop.y = fromSide ? Math.random() : -drop.length;
+				// (A little way off the edge at random, so that they come in scattered, not in a line.)
+				drop.x = fromSide ? (vx > 0 ? -0.05 - 0.3 * Math.random() : 1.05 + 0.3 * Math.random()) : Math.random() * 1.2 - 0.1;
+				drop.y = fromSide ? Math.random() : -drop.length - 0.3 * Math.random();
 			}
 			// Sheets of heavier rain sweeping across with the wind, and lighter between.
 			const sheet = 0.5 + 0.5 * Math.sin((drop.x - 0.35 * drop.y * Math.sign(drive || 1)) * 7 - time * (0.6 + 1.6 * Math.abs(drive)));
