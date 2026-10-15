@@ -139,9 +139,15 @@ export interface WaveSystem {
 
 // The sea as measured, in metres and true directions. The scene is in metres and the viewer
 // faces the compass bearing `facing`.
+// Each train's phase is k x - ω t: when its period changes slowly (the stilling moves the swell's
+// period over hours), ω t would leap by ever more the longer the page is open, and the crests
+// would race. So each train keeps the shift that holds its phase where it was as ω changes.
+const phaseKept = { omega: new Array<number>(TRAIN_COUNT).fill(0), shift: new Array<number>(TRAIN_COUNT).fill(0) };
+
 export function useMeasuredSea(
 	uniforms: GerstnerUniforms,
 	sea: { swell: WaveSystem; secondSwell: WaveSystem; windSea: WaveSystem; wind: { speed: number; from: number }; facing: number },
+	time = 0,
 ) {
 	// Angle off the view of something travelling away from the compass direction it comes from.
 	const heading = (from: number) => THREE.MathUtils.degToRad(from + 180 - sea.facing);
@@ -154,7 +160,10 @@ export function useMeasuredSea(
 		for (const train of shape.trains) {
 			// In deep water a wave's length follows from its period: g T² / 2π.
 			const length = (9.8 * (peakPeriod / train.frequency) ** 2) / (2 * Math.PI);
-			uniforms.waves.value[i]!.set(heading(system.from) + train.off, train.phase, (amplitude * 2 * Math.PI) / length, length);
+			const omega = Math.sqrt((9.8 * 2 * Math.PI) / length);
+			if (phaseKept.omega[i]) phaseKept.shift[i] = (phaseKept.shift[i]! + (omega - phaseKept.omega[i]!) * time) % (2 * Math.PI);
+			phaseKept.omega[i] = omega;
+			uniforms.waves.value[i]!.set(heading(system.from) + train.off, train.phase + phaseKept.shift[i]!, (amplitude * 2 * Math.PI) / length, length);
 			uniforms.waveWind.value[i] = wind;
 			i++;
 		}
@@ -285,6 +294,11 @@ export interface GerstnerUniforms {
 	channelBalmGlow: THREE.IUniform<number>;
 	// The great calming's pressed water (see pressedCalm), and the braids' light in it, before tone mapping.
 	pressed: THREE.IUniform<THREE.Vector4[]>;
+	// The strongest's stilled water (see stillOutside): where it reaches, the way ahead, and how
+	// the sea beyond it differs.
+	stillFront: THREE.IUniform<THREE.Vector4>;
+	stillAhead: THREE.IUniform<THREE.Vector2>;
+	stillSea: THREE.IUniform<THREE.Vector4>;
 	pressGlow: THREE.IUniform<number>;
 	// The boat's electric lamps on the water round it, before tone mapping. 0 is unlit.
 	boatLamp: THREE.IUniform<number>;
@@ -338,6 +352,37 @@ float pressedCalm( vec2 p, out float rim, out float core ) {
 }
 `;
 
+// The strongest's stilling (stilling.ts): the water they have stilled opens out from the boat
+// ahead like a great leaf, its two sides leaving the boat sideways and curving round to meet far
+// ahead, and widens until it holds all the sea in sight. Within it the sea is the sea of the
+// stilled figures (the one the whole picture is drawn from); beyond it, still the weather being
+// stilled, which piles up against their weave at the edge and breaks white and dies there.
+// stillFront: the boat (x, z), how far ahead the leaf reaches (m) and its widest half-width (m);
+// stillSea: how much higher the sea beyond is, the edge's foam, the foam beyond, and a slow
+// phase for the edge's wandering. (stillHalfWidth is the same in stilling.ts.)
+export const stillChunk = /* glsl */ `
+uniform vec4 stillFront;
+uniform vec2 stillAhead;
+uniform vec4 stillSea;
+float stillHalfWidth( float x, float side ) {
+	float f = clamp( x / max( stillFront.z, 1.0 ), 0.0, 1.0 );
+	return stillFront.w * 1.45 * sqrt( f ) * pow( 1.0 - f, 0.15 ) * ( 1.0 + 0.1 * sin( x * 0.0021 + 1.7 + 2.1 * side + stillSea.w ) + 0.05 * sin( x * 0.0063 + side + 2.0 * stillSea.w ) );
+}
+// 0 within the stilled water, 1 beyond it; in rim how near a point is to its edge.
+float stillOutside( vec2 p, out float rim ) {
+	rim = 0.0;
+	if ( stillFront.z <= 0.0 ) return 0.0;
+	vec2 rel = p - stillFront.xy;
+	float x = dot( stillAhead, rel );
+	float y = stillAhead.x * rel.y - stillAhead.y * rel.x;
+	float w = stillHalfWidth( x, sign( y ) );
+	float g = max( abs( y ) - w, max( x - stillFront.z, - x ) );
+	float m = 0.03 * stillFront.w + 6.0;
+	rim = stillSea.y * exp( - g * g / ( m * m ) ) * smoothstep( 0.0, 40.0, w );
+	return smoothstep( - m, m, g );
+}
+`;
+
 const vertexPars = /* glsl */ `
 uniform float waveTime;
 uniform float waveSteepness;
@@ -358,6 +403,7 @@ uniform float channelFeed;
 ${channelPathChunk}
 uniform vec4 giantWaves[${GIANT_WAVES.length}];
 ${pressedChunk}
+${stillChunk}
 varying vec3 vWaveNormal;
 varying float vCrest;
 varying float vGust;
@@ -497,6 +543,20 @@ vec3 gerstner( vec3 p, out vec3 normal, out float crest, out float gust ) {
 	binormal = mix( vec3( 0.0, 0.0, 1.0 ), binormal, pressCalm );
 	crest = crest * pressCalm + 1.2 * pressRim;
 	offset.y += 4.0 * pressRim;
+	// Beyond the strongest's stilled water the sea is still the weather being stilled: higher (or,
+	// where the twelve's calm still holds it down, lower). At the edge it piles up and breaks.
+	// (Not about the boat, which is always within it.)
+	float stillRim;
+	// (Nor far off, where the sea is drawn too coarsely to carry it: it stood up as a smooth hill.)
+	float beyond = stillOutside( p.xz, stillRim ) * smoothstep( 60.0, 140.0, distanceToEye ) * ( 1.0 - smoothstep( 2500.0, 5000.0, distanceToEye ) );
+	float lift = mix( 1.0, stillSea.x, beyond );
+	offset.y *= lift;
+	offset.xz *= min( lift, 1.3 );
+	tangent.y *= lift;
+	binormal.y *= lift;
+	stillRim *= 1.0 - smoothstep( 2500.0, 5000.0, distanceToEye );
+	crest = crest * mix( 1.0, min( lift, 1.6 ), beyond ) + 1.4 * stillRim;
+	offset.y += 5.0 * stillRim;
 	normal = normalize( cross( binormal, tangent ) );
 	return p + offset;
 }
@@ -538,6 +598,7 @@ uniform vec4 healed[ 4 ];
 uniform float channelBalmGlow;
 uniform float pressGlow;
 ${pressedChunk}
+${stillChunk}
 uniform float boatLamp;
 uniform float deepWeave;
 uniform float deepMaster;
@@ -621,6 +682,9 @@ const fragmentNormal = /* glsl */ `
 // Foam takes its brightness from the reflected sky plus sunlight, so it follows the time of day.
 const fragmentFoam = /* glsl */ `
 	vec3 outgoingLight = albedo;
+	// (Beyond the strongest's stilled water the foam is the stilled weather's.)
+	float stillRim;
+	float foam = mix( foam, stillSea.z, stillOutside( worldPosition.xz, stillRim ) );
 	// In a storm the foam reaches further down the crests.
 	float foamMask = foam * smoothstep( mix( 0.35, 0.12, foam ), mix( 0.8, 0.5, foam ), vCrest + noise.x * 0.3 );
 	// Streaks of foam torn off by the gusts, stretched along the wind and drifting with it.
@@ -642,6 +706,8 @@ const fragmentFoam = /* glsl */ `
 	// Within a pressed calm no foam at all; at its edge the storm's waves break white and die.
 	foamMask *= pressCalm;
 	foamMask = max( foamMask, pressRim * smoothstep( 0.2, 0.6, 0.5 + 0.5 * noise.x + 0.3 * sin( worldPosition.x * 0.07 + worldPosition.z * 0.05 + waveTime * 0.6 ) ) );
+	// Against the strongest's weave the storm's sea breaks white, in a broken line, and dies.
+	foamMask = max( foamMask, stillRim * smoothstep( 0.25, 0.65, 0.5 + 0.5 * noise.x + 0.3 * sin( worldPosition.x * 0.05 - worldPosition.z * 0.06 + waveTime * 0.5 ) ) );
 
 	outgoingLight = mix( outgoingLight, foamColor, foamMask );
 	// The channellers' braids light the sea they run over. Each is a line of light a little above
@@ -846,6 +912,9 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		channelBalmGlow: { value: 0 },
 		pressed: { value: Array.from({ length: 12 }, () => new THREE.Vector4()) },
 		pressGlow: { value: 0 },
+		stillFront: { value: new THREE.Vector4() },
+		stillAhead: { value: new THREE.Vector2(0, -1) },
+		stillSea: { value: new THREE.Vector4(1, 0, 0, 0) },
 		boatLamp: { value: 0 },
 		channelLight: { value: 0 },
 		foam: { value: 0 },

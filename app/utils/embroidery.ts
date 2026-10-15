@@ -429,7 +429,7 @@ void main() {
 `;
 
 // count lines of segments each; cell(i) gives each line's two numbers.
-function lines(count: number, segments: number, cell: (i: number) => [number, number]) {
+export function lines(count: number, segments: number, cell: (i: number) => [number, number]) {
 	const vertices = count * (segments + 1) * 2;
 	const along = new Float32Array(vertices);
 	const side = new Float32Array(vertices);
@@ -489,6 +489,8 @@ export interface EmbroideryFrame {
 	pressGlow: { value: number };
 	// The colour of what is behind the weave (the air's).
 	bg: THREE.Color;
+	// 0..1 how far they have let go of it to the strongest, who stills the weather (stilling.ts).
+	letGo?: number;
 }
 
 export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE.Vector4[]) {
@@ -579,7 +581,7 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 
 	const update = (frame: EmbroideryFrame | undefined) => {
 		// Done and faded, or not happening: nothing to draw.
-		const fade = frame ? 1 - THREE.MathUtils.smoothstep(frame.after, 0.5, 3) : 0;
+		const fade = frame ? (1 - THREE.MathUtils.smoothstep(frame.after, 0.5, 3)) * (1 - (frame.letGo ?? 0)) : 0;
 		for (const mesh of parts) mesh.visible = fade > 0.001;
 		if (!frame || fade <= 0.001) {
 			if (lastPressed) for (const place of lastPressed) place.w = 0;
@@ -606,7 +608,7 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 		// They tire: Leane's first (the least stamina), Siuan's last.
 		shared.uVigour.value.set(1 - 0.6 * smoothstep(p, 0.3, 1), 1 - 0.7 * smoothstep(p, 0.15, 0.85), 1 - 0.6 * smoothstep(p, 0.45, 1));
 		// Let go once it is done.
-		shared.uLinkGone.value = smoothstep(frame.after, 0, 0.15);
+		shared.uLinkGone.value = Math.max(smoothstep(frame.after, 0, 0.15), frame.letGo ?? 0);
 		parts[4]!.visible = shared.uLinkGone.value < 0.999;
 		// The haul: a stroke to each slow breath, slower as they tire. Drawn in, held, eased.
 		const vigour = shared.uVigour.value;

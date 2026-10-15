@@ -1,0 +1,365 @@
+// The stilling, as it is seen (channelled-storm.ts has the why and the weather): the strongest,
+// alone, stills whatever weather is on screen until it is the weather as measured. Their weave is
+// white, and it is one great thing, never a few threads: 1,400 filaments in their sea weave, which
+// is 1.8 times all the twelve's hawsers together (the owner: "strongest... immensely stronger").
+//
+//   reading   first, alone, as the strongest always goes into what is unusual: one long rope out
+//             low from their hands, up in a curve to the cloud base, over and down into the sea
+//             far ahead, and back under the water to the boat. Air first, then water.
+//   the sky   out of their two hands, one either side, a great rope runs out and up to the cloud
+//             base and along it, all one curve from the left hand round to the right: the edge of
+//             what they have stilled overhead. It lies along that edge as a loose roller of many
+//             filaments, turning over as it goes, and rolls outward across the sky while the
+//             thunder, the rain and the cloud go out of the weather behind it.
+//   the sea   then the same on the sea: the rope lies along the edge of the water they have
+//             stilled, half in the sea, rolling outward from the boat to the horizon. Within it the
+//             sea is the stilled sea; beyond it, still the weather being stilled, which piles up
+//             against the roller and breaks white and dies there (gerstner-waves.ts, stillChunk).
+//   let go    each is cut at the hands when its work is done, and the cut runs out along it.
+//
+// Effort, shown in the sea and the sky and in how the rope behaves, never in brightness: they roll
+// it out with the breath, a slow stroke of some ten seconds (deeper than the twelve's), the roller
+// tightening and turning faster as they haul and the edge going out a little further each time; a
+// real gust bows it back downwind; under the real wind's load it quivers, slowly. Every line is one
+// curve: the roller's filaments wind loosely round it, each at its own pace, so none line up; the
+// edge runs in and out; both ends come back to the boat, to the strongest's two hands.
+import * as THREE from "three";
+import { lines } from "./embroidery";
+import { pixelRatio, ribbonShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
+
+const SEA_FILAMENTS = 1400;
+const SKY_FILAMENTS = 900;
+const READING_FILAMENTS = 360;
+
+const vertex = /* glsl */ `
+attribute float aT;
+attribute float aSide;
+attribute vec2 aCell;
+attribute vec4 aSeed;
+uniform float uKind;
+uniform float uTime;
+uniform vec3 uBoat;
+uniform vec2 uAhead;
+// The edge: how far ahead it reaches (m), its widest half-width (m), its height (0 on the sea, the
+// cloud base in the sky), and how thick the roller is for its distance.
+uniform vec4 uFront;
+uniform float uEdgePhase;
+uniform float uCast;
+uniform float uLetGo;
+uniform float uRoll;
+uniform float uHaul;
+uniform float uGust;
+uniform float uTension;
+uniform vec3 uWindDir;
+uniform float uFade;
+uniform float uDay;
+// 1 for the deep blue sheath laid under the white by day.
+uniform float uSheathPass;
+varying float vAlpha;
+varying float vEdge;
+${ribbonShaderChunk}
+
+vec3 aheadDir() { return vec3( uAhead.x, 0.0, uAhead.y ); }
+vec3 acrossDir() { return vec3( - uAhead.y, 0.0, uAhead.x ); }
+vec3 bearing( float a ) { return aheadDir() * cos( a ) + acrossDir() * sin( a ); }
+
+// The strongest's hands: their seat is the third at the rail, just right of the viewer.
+vec3 hand( float side ) { return uBoat + acrossDir() * ( 0.75 + 0.35 * side ) + vec3( 0.0, - 1.2, 0.0 ) + aheadDir() * 0.5; }
+
+// The same edge as the water's (stillHalfWidth in gerstner-waves.ts): how far it reaches across
+// at x ahead, on one side.
+float halfWidth( float x, float side ) {
+	float f = clamp( x / max( uFront.x, 1.0 ), 0.0, 1.0 );
+	return uFront.y * 1.45 * sqrt( f ) * pow( 1.0 - f, 0.15 ) * ( 1.0 + 0.1 * sin( x * 0.0021 + 1.7 + 2.1 * side + uEdgePhase ) + 0.05 * sin( x * 0.0063 + side + 2.0 * uEdgePhase ) );
+}
+
+// The edge at s, from the left hand (0) out and round the far tip (0.5) and back to the right
+// hand (1): leaving the boat sideways and curving forward, never straight.
+vec3 edgeAt( float s ) {
+	float side = s < 0.5 ? - 1.0 : 1.0;
+	float x = uFront.x * 0.5 * ( 1.0 - cos( 6.28318 * clamp( s, 0.0, 1.0 ) ) );
+	vec3 p = uBoat + aheadDir() * x + acrossDir() * side * halfWidth( x, side );
+	float away = 2.0 * min( s, 1.0 - s );
+	vec3 h = hand( side );
+	// Out of the hands, and (in the sky) up in one long rise.
+	float y = mix( h.y, uFront.z, uFront.z > 1.0 ? smoothstep( 0.0, 0.5, away ) : smoothstep( 0.0, 0.03, away ) );
+	p = mix( h, p, smoothstep( 0.0, 0.02, away ) );
+	p.y = y;
+	return p;
+}
+
+vec3 rollerPoint( float s ) {
+	vec3 c = edgeAt( s );
+	vec3 along = normalize( edgeAt( s + 0.003 ) - edgeAt( s - 0.003 ) + vec3( 1e-5 ) );
+	vec3 radial = c - uBoat;
+	radial.y = 0.0;
+	float dist = length( radial );
+	vec3 outward = normalize( cross( along, vec3( 0.0, 1.0, 0.0 ) ) + vec3( 1e-5 ) );
+	if ( dot( outward, radial ) < 0.0 ) outward = - outward;
+	vec3 up = normalize( cross( outward, along ) );
+	if ( up.y < 0.0 ) up = - up;
+	float span = sin( 3.14159 * s );
+	// As thick for its distance as a hawser is, drawn in a little as they haul; and like a stroke
+	// of a brush, not a pipe, swelling and thinning along its length.
+	float swell = max( 0.22, 0.6 + 0.4 * sin( s * 9.0 + 1.3 + uTime * 0.02 + uKind ) + 0.3 * sin( s * 23.0 + 0.7 + 2.0 * uKind ) );
+	float rad = ( 0.5 + uFront.w * 0.045 * dist ) * ( 1.0 - 0.16 * uHaul ) * swell;
+	// A gust bows it back downwind; under load it quivers, slowly.
+	c += uWindDir * uGust * 0.012 * dist * span;
+	c += up * uTension * 0.004 * dist * sin( uTime * 0.9 + s * 14.0 + uKind ) * span;
+	// Each filament winds round it at its own pace, so that none line up with another.
+	float turns = 7.0 + 5.0 * aSeed.x;
+	float phi = aSeed.y * 6.28318 + s * turns * 6.28318 - uRoll * ( 0.85 + 0.3 * aSeed.z );
+	float rr = rad * ( 0.15 + 0.85 * sqrt( aSeed.z ) ) * ( 1.0 + 0.5 * sin( s * ( 13.0 + 11.0 * aSeed.w ) + aSeed.x * 30.0 + uTime * 0.15 ) );
+	// A quarter of them trail back from it over what is stilled, as a brush drags: on the sea
+	// lying low on the water and in and out of it, in the sky hanging under the cloud.
+	if ( aSeed.w > 0.75 ) {
+		float back = ( aSeed.w - 0.75 ) / 0.25;
+		vec3 behind = - outward * rad * ( 1.5 + 9.0 * back ) * ( 0.6 + 0.4 * sin( s * 7.0 + aSeed.x * 20.0 + uTime * 0.05 ) );
+		vec3 along_ = along * rad * 2.0 * sin( s * 5.0 + aSeed.y * 9.0 );
+		float low = uFront.z > 1.0 ? - rad * ( 0.3 + 0.8 * back ) : 0.4 + 0.4 * sin( s * 31.0 + aSeed.z * 9.0 + uTime * 0.3 );
+		return c + behind + along_ + vec3( 0.0, low, 0.0 ) + up * rr * 0.15 * sin( phi );
+	}
+	// The curl leans forward at its top, as a breaking sea's does.
+	return c + outward * rr * ( cos( phi ) + 0.3 * ( 1.0 + sin( phi ) ) ) + up * rr * 0.9 * sin( phi );
+}
+
+vec3 bezier( vec3 a, vec3 b, vec3 c, vec3 d, float t ) {
+	float s = 1.0 - t;
+	return s * s * s * a + 3.0 * s * s * t * b + 3.0 * s * t * t * c + t * t * t * d;
+}
+
+// The reading: out low and long from the left hand over the sea, up in a broad curve leaning with
+// the wind to the cloud base, along under it, and down into the sea far ahead; back under the
+// water to the right hand. Three curves meeting smoothly.
+vec3 readingCentre( float s ) {
+	vec3 A = aheadDir();
+	vec3 X = acrossDir();
+	vec3 W = uWindDir * 0.35;
+	vec3 top = uBoat + A * 1300.0 + X * 150.0 + W * 400.0 + vec3( 0.0, 420.0, 0.0 );
+	vec3 into = uBoat + A * 2300.0 + X * 450.0 + vec3( 0.0, - 15.0, 0.0 );
+	vec3 before = uBoat + A * 2200.0 + X * 380.0 + vec3( 0.0, 160.0, 0.0 );
+	if ( s < 0.45 ) return bezier( hand( - 1.0 ), uBoat + A * 400.0 - X * 140.0 + vec3( 0.0, 2.0, 0.0 ), uBoat + A * 950.0 - X * 60.0 + W * 200.0 + vec3( 0.0, 330.0, 0.0 ), top, s / 0.45 );
+	vec3 onward = normalize( top - ( uBoat + A * 950.0 - X * 60.0 + W * 200.0 + vec3( 0.0, 330.0, 0.0 ) ) );
+	if ( s < 0.75 ) return bezier( top, top + onward * 450.0, before, into, ( s - 0.45 ) / 0.3 );
+	return bezier( into, into + ( into - before ) * 0.3, uBoat + A * 400.0 + X * 60.0 + vec3( 0.0, - 40.0, 0.0 ), hand( 1.0 ), ( s - 0.75 ) / 0.25 );
+}
+
+vec3 readingPoint( float s ) {
+	vec3 c = readingCentre( s );
+	float dist = length( ( c - uBoat ).xz );
+	// (Swelling and thinning along its length, as a stroke of a brush does, never a pipe.)
+	float rad = ( 0.3 + 0.02 * dist ) * ( 1.0 - 0.2 * uHaul ) * max( 0.3, 0.7 + 0.35 * sin( s * 11.0 + 0.4 ) + 0.25 * sin( s * 29.0 + 1.9 ) );
+	vec3 side = normalize( cross( readingCentre( s + 0.003 ) - readingCentre( s - 0.003 ), vec3( 0.0, 1.0, 0.0 ) ) + vec3( 1e-5 ) );
+	vec3 up = vec3( 0.0, 1.0, 0.0 );
+	float phi = aSeed.y * 6.28318 + s * ( 5.0 + 4.0 * aSeed.x ) * 6.28318 + uTime * 0.1 * ( aSeed.z - 0.5 );
+	// Loose, each filament wandering in and out of it at its own pace: a rope feeling its way.
+	float rr = rad * ( 0.2 + 0.8 * sqrt( aSeed.z ) ) * ( 1.0 + 0.45 * sin( s * ( 11.0 + 9.0 * aSeed.w ) + aSeed.x * 30.0 + uTime * 0.2 ) );
+	c += uWindDir * uGust * 0.01 * dist * sin( 3.14159 * s );
+	return c + ( side * cos( phi ) + up * sin( phi ) ) * rr;
+}
+
+vec3 placeAt( float t ) { return uKind < 0.5 ? readingPoint( t ) : rollerPoint( t ); }
+
+void main() {
+	vec3 here = placeAt( aT );
+	vec3 next = placeAt( min( aT + 0.004, 1.0 ) ) + ( aT >= 0.996 ? here - placeAt( aT - 0.004 ) : vec3( 0.0 ) );
+	float shown = 1.0;
+	if ( uKind < 0.5 ) {
+		// Cast out from the left hand; cut at the hands and the cut runs on round.
+		shown *= smoothstep( uCast, uCast - 0.03, aT ) * smoothstep( uLetGo, uLetGo + 0.03, aT );
+	} else {
+		// Cast out of both hands at once, meeting far off; let go the same way.
+		float m = min( aT, 1.0 - aT );
+		shown *= smoothstep( 0.5 * uCast, 0.5 * uCast - 0.015, m ) * smoothstep( 0.5 * uLetGo, 0.5 * uLetGo + 0.015, m );
+		// (In the sky, the top of the roller turns up into the cloud and is lost in it.)
+		if ( uKind < 1.5 ) shown *= 0.4 + 0.6 * smoothstep( uFront.z + 0.4 * uFront.w * 0.045 * length( ( here - uBoat ).xz ) + 2.0, uFront.z - 2.0, here.y );
+	}
+	float far = length( here - cameraPosition );
+	// (Not right by the eye, where it would fill the picture; and fading into the far air.)
+	shown *= smoothstep( 12.0, 70.0, far ) * exp( - far / 9000.0 );
+	// A little brighter as they haul.
+	shown *= 0.8 + 0.35 * uHaul;
+	// Laid on unevenly along its length, as a brush lays colour, never in dashes.
+	shown *= 0.55 + 0.45 * smoothstep( - 0.6, 0.6, sin( aT * 5.0 + aSeed.y * 2.0 + 1.0 ) + 0.5 * sin( aT * 13.0 + 2.0 ) );
+	vAlpha = shown * uFade * ( uSheathPass > 0.5 ? smoothstep( 0.3, 0.7, uDay ) : 1.0 );
+	vEdge = aSide;
+	mat4 vp = projectionMatrix * viewMatrix;
+	gl_Position = ribbonPosition( vp * vec4( here, 1.0 ), vp * vec4( next, 1.0 ), aSide, uSheathPass > 0.5 ? 5.0 : mix( 1.0, 1.3, uDay ) );
+}
+`;
+
+const fragment = /* glsl */ `
+uniform float uGain;
+uniform float uDay;
+uniform float uWhite;
+uniform vec3 uSheath;
+uniform float uOpacity;
+uniform float uSheathPass;
+varying float vAlpha;
+varying float vEdge;
+void main() {
+	float across = abs( vEdge );
+	// By night white light. By day white threads over a broad, soft sheath of the deep blue of the
+	// site's bar, as all the strongest's weaves are (never white on white): the sheath is laid
+	// first, wide and faint, so that the mass of the weave reads against the pale sky and sea.
+	if ( uSheathPass > 0.5 ) {
+		gl_FragColor = vec4( uSheath, exp( - across * across * 2.5 ) * min( 1.0, vAlpha * 1.6 ) );
+	} else {
+		float body = 1.0 - smoothstep( 0.7, 1.0, across );
+		vec3 night = vec3( 0.93, 0.96, 1.0 ) * uGain;
+		gl_FragColor = vec4( mix( night, vec3( uWhite ), uDay ), body * vAlpha * uOpacity * mix( 1.0, 3.0, uDay ) );
+	}
+	#include <tonemapping_fragment>
+	#include <colorspace_fragment>
+}
+`;
+
+export interface StillingFrame {
+	time: number;
+	delta: number;
+	// 0..1 how far through it is, and 0..1 how much there is to still at all.
+	share: number;
+	presence: number;
+	// How strong the real wind is against them, and how much of a gust is blowing.
+	force: number;
+	gust: number;
+	boat: THREE.Vector3;
+	ahead: THREE.Vector2;
+	wind: THREE.Vector3;
+	day: number;
+	gain: number;
+	white: number;
+	sheath: THREE.Color;
+}
+
+const { smoothstep } = THREE.MathUtils;
+const ease = (x: number) => smoothstep(x, 0, 1);
+const within = (u: number, from: number, to: number) => THREE.MathUtils.clamp((u - from) / (to - from), 0, 1);
+
+// Where the stilled water reaches at u: how far ahead in metres (0: not yet), and its widest
+// half-width. A narrow leaf ahead at first, opening wide to hold all the sea in sight.
+export function stilledSeaEdge(u: number) {
+	if (u < 0.2 || u >= 1) return { reach: 0, width: 0 };
+	// (Held within a few kilometres for most of it, where the work can be seen, and pushed out
+	// past the horizon only at the end.)
+	// (Its sides kept slanting across the view while it goes out, so that they are seen sweeping
+	// through it as curves; flung wide only at the end. Wide early, it was only ever a straight
+	// band along the horizon.)
+	const out = ease(within(u, 0.22, 0.97));
+	const reach = 80 + 9000 * out ** 2.2;
+	return { reach, width: reach * (0.35 + 0.45 * out) + 6000 * smoothstep(out, 0.8, 1) };
+}
+
+export function createStilling(scene: THREE.Scene, layer: number) {
+	const shared = {
+		uTime: { value: 0 },
+		uBoat: { value: new THREE.Vector3() },
+		uAhead: { value: new THREE.Vector2(0, -1) },
+		uEdgePhase: { value: 0 },
+		uRoll: { value: 0 },
+		uHaul: { value: 0 },
+		uGust: { value: 0 },
+		uTension: { value: 0 },
+		uWindDir: { value: new THREE.Vector3(1, 0, 0) },
+		uDay: { value: 0 },
+		uGain: { value: 1 },
+		uWhite: { value: 1 },
+		uSheath: { value: new THREE.Color() },
+		uResolution: { value: new THREE.Vector2(1, 1) },
+		uPixelRatio: pixelRatio,
+	};
+	const parts = [
+		{ geometry: lines(READING_FILAMENTS, 200, (i) => [i, 0]), opacity: 0.03 },
+		{ geometry: lines(SKY_FILAMENTS, 260, (i) => [i, 0]), opacity: 0.018 },
+		{ geometry: lines(SEA_FILAMENTS, 300, (i) => [i, 0]), opacity: 0.018 },
+	].map(({ geometry, opacity }, kind) => {
+		const own = {
+			uKind: { value: kind },
+			uOpacity: { value: opacity },
+			uFront: { value: new THREE.Vector4() },
+			uCast: { value: 0 },
+			uLetGo: { value: 0 },
+			uFade: { value: 0 },
+		};
+		// (Two of each: the white threads, and by day the sheath laid under them.)
+		const meshes = [1, 0].map((sheath) => {
+			const mesh = new THREE.Mesh(geometry, new THREE.ShaderMaterial({ uniforms: { ...shared, ...own, uSheathPass: { value: sheath } }, vertexShader: vertex, fragmentShader: fragment, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+			mesh.frustumCulled = false;
+			mesh.renderOrder = WEAVE_RENDER_ORDER - sheath;
+			mesh.layers.set(layer);
+			mesh.visible = false;
+			scene.add(mesh);
+			return mesh;
+		});
+		return { meshes, own, sheath: meshes[0]!, mesh: meshes[1]! };
+	});
+
+	// Where they are in the slow stroke of their breath (0..1).
+	let stroke = 0;
+	let roll = 0;
+	const update = (frame: StillingFrame | undefined) => {
+		if (!frame || frame.presence <= 0.001) {
+			for (const { meshes } of parts) for (const mesh of meshes) mesh.visible = false;
+			return;
+		}
+		const u = frame.share;
+		stroke = (stroke + frame.delta / 10) % 1;
+		const haul = smoothstep(stroke, 0, 0.3) * (1 - smoothstep(stroke, 0.5, 0.85));
+		// Rolled outward, faster as they haul.
+		roll += frame.delta * (0.06 + 0.3 * haul);
+		shared.uTime.value = frame.time;
+		shared.uBoat.value.copy(frame.boat);
+		shared.uAhead.value.copy(frame.ahead);
+		shared.uEdgePhase.value = frame.time * 0.004;
+		shared.uRoll.value = roll;
+		shared.uHaul.value = haul;
+		shared.uGust.value = Math.max(0, frame.gust - 0.4) * 1.5;
+		shared.uTension.value = Math.min(1, frame.force);
+		shared.uWindDir.value.copy(frame.wind).setY(0);
+		if (shared.uWindDir.value.lengthSq() > 1e-6) shared.uWindDir.value.normalize();
+		shared.uDay.value = frame.day;
+		shared.uGain.value = frame.gain;
+		shared.uWhite.value = frame.white;
+		shared.uSheath.value.copy(frame.sheath);
+		shared.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(pixelRatio.value);
+		// Each edge goes out a little further with each haul.
+		const breath = 1 + 0.012 * haul;
+		const [reading, sky, sea] = parts as [(typeof parts)[0], (typeof parts)[0], (typeof parts)[0]];
+		reading.own.uCast.value = smoothstep(u, 0, 0.025) * 1.05;
+		reading.own.uLetGo.value = smoothstep(u, 0.045, 0.07) * 1.05;
+		reading.own.uFade.value = u < 0.075 ? frame.presence : 0;
+		const skyOut = ease(within(u, 0.05, 0.45));
+		const skyReach = 300 + 8500 * skyOut ** 1.3;
+		sky.own.uFront.value.set(skyReach * breath, skyReach * (0.4 + 2.0 * skyOut ** 1.5), 420, 1.3);
+		sky.own.uCast.value = smoothstep(u, 0.045, 0.085) * 1.05;
+		sky.own.uLetGo.value = smoothstep(u, 0.42, 0.47) * 1.05;
+		sky.own.uFade.value = u > 0.04 && u < 0.475 ? frame.presence : 0;
+		const edge = stilledSeaEdge(u);
+		sea.own.uFront.value.set(edge.reach * breath, edge.width * breath, 0, 2);
+		sea.own.uCast.value = smoothstep(u, 0.2, 0.25) * 1.05;
+		sea.own.uLetGo.value = smoothstep(u, 0.955, 0.995) * 1.05;
+		sea.own.uFade.value = edge.reach > 0 ? frame.presence : 0;
+		const blending = frame.day > 0.5 ? THREE.NormalBlending : THREE.AdditiveBlending;
+		for (const { mesh, sheath, own } of parts) {
+			mesh.visible = own.uFade.value > 0.001;
+			sheath.visible = own.uFade.value > 0.001 && frame.day > 0.3;
+			(mesh.material as THREE.ShaderMaterial).blending = blending;
+			(sheath.material as THREE.ShaderMaterial).blending = THREE.NormalBlending;
+		}
+	};
+
+	// The breath's own share of the sea edge, for the water to go out with it.
+	const breath = () => 1 + 0.012 * shared.uHaul.value;
+
+	const dispose = () => {
+		for (const { meshes } of parts) {
+			for (const mesh of meshes) {
+				scene.remove(mesh);
+				(mesh.material as THREE.Material).dispose();
+			}
+			meshes[0]!.geometry.dispose();
+		}
+	};
+
+	return { update, dispose, breath, edgePhase: () => shared.uEdgePhase.value };
+}

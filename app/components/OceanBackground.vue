@@ -487,9 +487,15 @@ onMounted(() => {
 	// A channelled storm (see channelled-storm.ts): on for everyone by storm.json, or for this
 	// visit by ?storm; ?storm=off looks at the site without it. Its figures go under any pretended.
 	const stormAsked = query.get("storm");
-	const stormNow = () => (stormAsked === "off" ? false : stormAsked !== null ? true : channelledStormOn(new Date()));
+	// The strongest's stilling (channelled-storm.ts, stilling.ts): set in storm.json, or ?still for
+	// this visit from now, ?still=0.5 half-way through, ?still=off without it. Once it is done the
+	// weather is the measured again: no storm, nothing pretended.
+	const stillAsked = query.get("still");
+	const pageOpened = Date.now();
+	let stillDone = false;
+	const stormNow = () => (stillDone || stormAsked === "off" ? false : stormAsked !== null ? true : channelledStormOn(new Date()));
 	let stormOn = stormNow();
-	const pretendNow = () => (stormOn ? { ...CHANNELLED_STORM, ...asPretended } : asPretended);
+	const pretendNow = () => (stillDone ? {} : stormOn ? { ...CHANNELLED_STORM, ...asPretended } : asPretended);
 	let pretend = pretendNow();
 	channelled.value = Object.keys(pretend).length > 0;
 	// Its colours, unless the address gives colours of its own.
@@ -570,6 +576,13 @@ onMounted(() => {
 	const embroidery = createEmbroidery(scene, SCREEN_LAYER, GIANT_WAVES);
 	const calmAsked = query.get("calm") !== null && Number.isFinite(Number(query.get("calm"))) ? Number(query.get("calm")) : undefined;
 	const embroideryTints = [new THREE.Color(), new THREE.Color(), new THREE.Color()];
+	const stilling = createStilling(scene, SCREEN_LAYER);
+	const stillSheath = new THREE.Color();
+	// The measured weather alone, eased as drawnFrom is: what the stilling goes to.
+	let drawnMeasured: SeaConditions | undefined;
+	// The stilling's gap and hours, worked out once there are measured figures to go to.
+	let stillHours = 0;
+	let stillGap = 0;
 	const holeSeen = { x: 0.5, y: 0.2, across: 0.2, up: 0.2, open: 0 };
 	const holeEdge = { x: 0, y: 0 };
 	const holeDirection = new THREE.Vector3();
@@ -751,9 +764,9 @@ onMounted(() => {
 	channellers.setChannelledStorm(stormOn);
 	// A storm begins or ends while the page is open: the sea and sky move over to the new figures
 	// over a few seconds as they always do, and the crew and colours change over gradually.
-	const stormInterval = setInterval(() => {
-		if (stormNow() === stormOn) return;
-		stormOn = !stormOn;
+	const followSwitch = () => {
+		if (stormNow() === stormOn && !(stillDone && channelled.value)) return;
+		stormOn = stormNow();
 		pretend = pretendNow();
 		channelled.value = Object.keys(pretend).length > 0;
 		channellers.setChannelledStorm(stormOn);
@@ -763,7 +776,8 @@ onMounted(() => {
 			channellers.setColours(colours, true);
 		}
 		if (measured) conditions.value = { ...measured, ...pretend };
-	}, 30_000);
+	};
+	const stormInterval = setInterval(followSwitch, 30_000);
 	const stars = createStars(scene, camera, PLACE, planetPositions, skyBreath.hole);
 	waveUniforms.weaveCentre.value.set(knotPosition.x, knotPosition.z);
 	const projected = new THREE.Vector3();
@@ -809,22 +823,52 @@ onMounted(() => {
 		if (stormSince < 0) stormSince = time;
 		const skySeconds = time - stormSince + (query.get("show") === "sky" ? 33 : 0);
 		const calming = stormOn && !calmMotion ? calmingNow(new Date(), calmAsked) : undefined;
+		// (Nor is the sky opened while the strongest is stilling it.)
+		const stillingAny = stillingBegun(new Date(), stillAsked, pageOpened, stormAsked !== null) !== undefined;
 		// (While the twelve are linked, and resting after, the sky is not opened.)
-		const together = stormOn && !calmMotion && allAtOnce && !calming ? skyAllAt(skySeconds) : undefined;
+		const together = stormOn && !calmMotion && allAtOnce && !calming && !stillingAny ? skyAllAt(skySeconds) : undefined;
 		const breathing = stormOn && !calmMotion && byBreath ? skyBreathAt(skySeconds) : undefined;
 		const holding = !calmMotion && bySacred ? sacredAt(skySeconds, drawnFrom) : undefined;
-		const opening = together ?? (breathing ? { ...NO_SKY, canopy: breathing.canopy } : holding ? { ...NO_SKY, canopy: holding.command } : stormOn && !calmMotion && !calming ? skyOpeningAt(skySeconds) : NO_SKY);
+		const opening = together ?? (breathing ? { ...NO_SKY, canopy: breathing.canopy } : holding ? { ...NO_SKY, canopy: holding.command } : stormOn && !calmMotion && !calming && !stillingAny ? skyOpeningAt(skySeconds) : NO_SKY);
 		// The figures the picture is drawn from move towards the latest real ones, or towards the
 		// usual sea while there are none yet. (At once for a single still frame.)
 		drawnFrom = towardsConditions(drawnFrom, conditions.value ?? drawnFrom, motionPaused.value ? 1 : 1 - Math.exp(-delta / 1.5));
 		// Once the channellers have overcommanded it (sacred.ts), the weather is theirs.
+		const onScreen = holding && holding.command > 0
+			? towardsConditions(drawnFrom, { ...drawnFrom, ...STILLED }, holding.command)
+			: calming
+				? { ...drawnFrom, ...calmedConditions(drawnFrom, calming.progress) }
+				: drawnFrom;
+		// The strongest's stilling takes whatever is on screen to the measured weather.
+		const stillBegun = stillingBegun(new Date(), stillAsked, pageOpened, stormAsked !== null);
+		const measuredNow = measured ?? drawnMeasured ?? drawnFrom;
+		drawnMeasured = drawnMeasured ? towardsConditions(drawnMeasured, measuredNow, motionPaused.value ? 1 : 1 - Math.exp(-delta / 1.5)) : measuredNow;
+		let stillShare = -1;
+		// What they still: the weather on screen as they began (the twelve let go of the calming then).
+		let stillFrom = onScreen;
+		if (stillBegun) {
+			// How far it has to go is measured from the weather as it was when they began (the
+			// calming as far as it had got then), so that every visitor sees the same moment.
+			const begunAt = stillBegun.hours !== undefined ? new Date(Date.now() - stillBegun.hours * 3_600_000) : new Date();
+			const calmThen = stormOn ? calmingNow(begunAt, calmAsked) : undefined;
+			if (calmThen && !calmMotion && !(holding && holding.command > 0)) stillFrom = { ...drawnFrom, ...calmedConditions(drawnFrom, calmThen.progress) };
+			stillGap = stillingGap(stillFrom, drawnMeasured);
+			stillHours = stillingHours(stillGap);
+			stillShare = stillBegun.share ?? Math.min(1, stillBegun.hours! / stillHours);
+			// Done: they let go, and the site follows the measured weather again.
+			if (stillShare >= 1 && stillBegun.share === undefined && !stillDone) {
+				stillDone = true;
+				followSwitch();
+			}
+		}
+		const standBack = stillShare < 0 ? 1 : stillDone ? THREE.MathUtils.smoothstep((stillBegun?.hours ?? 0) - stillHours, 0.05, 0.5) : 0;
 		const drawn = !followLive.value
 			? undefined
-			: holding && holding.command > 0
-				? towardsConditions(drawnFrom, { ...drawnFrom, ...STILLED }, holding.command)
-				: calming
-					? { ...drawnFrom, ...calmedConditions(drawnFrom, calming.progress) }
-					: drawnFrom;
+			: stillDone
+				? drawnMeasured
+				: stillShare >= 0
+					? stilledConditions(stillFrom, drawnMeasured, stillShare, stillHours)
+					: onScreen;
 		const air = ambientAir(drawn);
 		// By hand, the story stands still and its white-out and stillness are left out.
 		let moment: StormMoment;
@@ -859,7 +903,7 @@ onMounted(() => {
 				windSea: { height: liveOnly.windWaveHeight, period: liveOnly.windWavePeriod, from: liveOnly.windWaveDirection },
 				wind: { speed: windSpeed, from: liveOnly.windDirection },
 				facing: PLACE.bearing,
-			});
+			}, time);
 			waveUniforms.foam.value = whitecaps(windSpeed);
 			steepness = 1;
 			crosswind = Math.sin(THREE.MathUtils.degToRad(liveOnly.windDirection + 180 - PLACE.bearing)) * Math.min(1, windSpeed / 15);
@@ -1011,18 +1055,21 @@ onMounted(() => {
 			swellFrom: liveOnly ? THREE.MathUtils.degToRad(((liveOnly.swellDirection - PLACE.bearing + 540) % 360) - 180) : 0,
 			// Enough to stand whiter than a day sky; less at night, where little is needed to read as white.
 			white: lerp(0.5, 3.5, daylight) / steadyExposure,
-			unusual: liveOnly ? unusual(liveOnly) : NOTHING_UNUSUAL,
+			// (While the strongest stills it, their looking into it is the stilling's own reading.)
+			unusual: liveOnly && standBack > 0.5 ? unusual(liveOnly) : NOTHING_UNUSUAL,
 			below: liveOnly ? strengthBelow(liveOnly, PLACE.bearing) : 0,
 			// On a quiet night of theirs one of them scouts: not in a storm, nor while the boat is
 			// being held back, nor when the sea calls for nearly all four.
-			scout: liveOnly ? darkness * quietEnoughToScout(liveOnly) * (1 - controlLevel) * (1 - THREE.MathUtils.smoothstep(need, 0.45, 0.6)) * alive : 0,
+			scout: liveOnly ? darkness * quietEnoughToScout(liveOnly) * (1 - controlLevel) * (1 - THREE.MathUtils.smoothstep(need, 0.45, 0.6)) * alive * standBack : 0,
 			tomorrow: liveOnly ? tomorrowsWind(liveOnly) : NO_WIND,
 			aloft: liveOnly ? windsOverhead(liveOnly) : STILL_AIR,
 			slowToRise: liveOnly ? slowToRise(liveOnly) : ORDINARY_SKY,
 			thermal: liveOnly ? thermal(liveOnly) : 0,
 			current: liveOnly ? Math.sin(THREE.MathUtils.degToRad(liveOnly.currentDirection - PLACE.bearing)) * Math.min(1, liveOnly.currentSpeed / 3) : 0,
 			// (All twelve are in the calming while it lasts, and rest for hours after it.)
-			strength: Math.max(darkness, controlLevel, gathering) * alive * (1 - (holding?.quiet ?? 0)) * (calming ? THREE.MathUtils.smoothstep(calming.after, 2, 10) : 1),
+			// (And while the strongest stills the weather the twelve stand back, coming back over the
+			// half hour after it is done.)
+			strength: Math.max(darkness, controlLevel, gathering) * alive * (1 - (holding?.quiet ?? 0)) * (calming ? THREE.MathUtils.smoothstep(calming.after, 2, 10) : 1) * standBack,
 			// More light by day, when it has a bright sea to show against.
 			// (And more under a moon, whose light on the sea would otherwise drown it.)
 			gain: (0.3 + 0.6 * daylight + 0.6 * nightfall * (1 - darkness)) / steadyExposure,
@@ -1137,8 +1184,40 @@ onMounted(() => {
 				bg: mist,
 				pressed: waveUniforms.pressed.value,
 				pressGlow: waveUniforms.pressGlow,
+				// The twelve let go of it as the strongest takes the weather in hand.
+				// (First, while the strongest reads it: the strongest goes in alone.)
+				letGo: stillShare >= 0 ? THREE.MathUtils.smoothstep(stillShare, 0, 0.035) : stillDone ? 1 : 0,
 			},
 		);
+		// The strongest's stilling, and the water they have stilled with the weather still beyond it.
+		const stillingSeen = stillShare >= 0 && !stillDone && !calmMotion && !!drawn;
+		stilling.update(
+			stillingSeen
+				? {
+						time,
+						delta,
+						share: stillShare,
+						presence: THREE.MathUtils.smoothstep(stillGap, 0.004, 0.03),
+						force: Math.min(1, (rainWind.length() / 40) * (1 + 0.4 * gustNowRain)),
+						gust: gustNowRain,
+						boat: camera.position,
+						ahead: skyAhead,
+						wind: rainWind,
+						day: daylight,
+						gain: 1.5 / steadyExposure,
+						white: lerp(0.5, 3.5, daylight) / steadyExposure,
+						sheath: stillSheath.set(colours.strongest),
+					}
+				: undefined,
+		);
+		const seaEdge = stillingSeen ? stilledSeaEdge(stillShare) : { reach: 0, width: 0 };
+		waveUniforms.stillFront.value.set(camera.position.x, camera.position.z, seaEdge.reach * stilling.breath(), seaEdge.width * stilling.breath());
+		waveUniforms.stillAhead.value.copy(skyAhead);
+		if (seaEdge.reach > 0 && drawn) {
+			const lift = THREE.MathUtils.clamp(stillFrom.waveHeight / Math.max(drawn.waveHeight, 0.1), 0.3, 3);
+			const breaking = THREE.MathUtils.smoothstep(stillShare, 0.2, 0.26) * (1 - THREE.MathUtils.smoothstep(stillShare, 0.93, 0.99));
+			waveUniforms.stillSea.value.set(lift, 0.9 * Math.min(1, Math.abs(lift - 1) * 1.5) * breaking * alive, whitecaps(stillFrom.windSpeed / 3.6) * alive, stilling.edgePhase());
+		}
 		skyAll.update({ time, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, sheath: skySheath, at: together ?? skyAllAt(0) });
 		const strike = bolts.update(time, 4 / steadyExposure, air.vapour, stormFog);
 		if (strike > 0) {
@@ -1207,6 +1286,7 @@ onMounted(() => {
 		skyBreath.dispose();
 		sacred.dispose();
 		embroidery.dispose();
+		stilling.dispose();
 		stopWatching();
 		fluid.dispose();
 		renderer.setAnimationLoop(null);

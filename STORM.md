@@ -213,3 +213,57 @@ with `HANDOFF.md`, `WEAVES.md` and §1–10 above.
 
 **Seeing it**: `~/.local/node/bin/node scripts/shoot.mjs "http://localhost:3000/?storm&hour=4.6&calm=0.5" /tmp/x 12`
 (headless Brave; the app's browser pane stops drawing when hidden). `&hour=` sets the light.
+
+## 12. The stilling (16 October, the strongest alone)
+
+The owner: "I want myself, the strongest channeller on the boat, to stop every weather element at
+will until it matches normal weather meteo conditions." The strongest is the owner ("they").
+
+**At will.** `storm.json`: `"stilling": { "from": "2026-10-16T18:00:00+13:00" }` (an ISO time; null
+is off), then commit and push. It takes whatever weather is on screen at that moment (the
+channelled storm, the great calming as far as it had got, any `?pretend=`) to the measured weather
+at the boat, then lets go: the storm is off, the menu row goes, the twelve come back over half an
+hour, and the site follows Open-Meteo again with nothing more to push. To look without changing
+anything: `/?storm&still=0.5` (half-way through), `/?still` (begins as the page opens, for that
+visit), `/?still=off`. Any `&hour=` for the light. A private address that flips it from a phone
+would still need a small store on Vercel, which only the owner can sign up for.
+
+**How long.** The element furthest from the measured sets it (`stillingGap`, each measured
+against the channelled storm's own figure, so the full storm is 1): the twelve took seven hours
+over the storm, the strongest 1.8 times their strength takes 7 / 1.8, about 3.9 hours, for all of
+it, in proportion for less, never under 15 minutes. Today's numbers: the full storm 3.9 h, what
+the calming had left 2.9 h (the swell's period, 18 s against 10.7 measured, is the slowest
+lever), a breeze 20 km/h too strong about 25 minutes.
+
+**Each element by its own lever, in their own order** (`stilledConditions`, `STILLING_STAGES`
+in `channelled-storm.ts`): they read it first (air, then water); draw the heat out of the rising
+towers (the thunder goes first, then the downdraft gusts); the rain falls out of cloud already
+made; the cloud clears low, middle, then the high anvil last; they fill the low (pressure rises,
+and the wind, driven by its gradient, falls with the root of what is left; the barometer's trend
+is the real rate of filling); the wind's sea dies a little behind the wind; the swell, which is
+not the wind's here, is pressed out of the sea last, its height, period and direction moving
+together. Where the channelled weather is weaker than the measured (after the calming the real
+wind is the stronger), the same lever is let go instead. Everything ends exactly on the measured
+figures. The sea keeps each wave's phase as its period changes (`phaseKept` in
+`gerstner-waves.ts`), so the crests never race or jump; this also smooths the storm's natural end.
+
+**The twelve stand back**, and say so in the code: they are spent from the calming, and this is
+the strongest's own act; one channeller moving all the weather is what shows the 1.8. They let
+go of the calming's link while the strongest reads, and their ordinary weaving rests until half
+an hour after.
+
+**Seen** (`stilling.ts`; white, 1,400 filaments in the sea weave, 1.8 times the twelve's hawsers
+together): the reading, one long brushed rope out low, up to the cloud base and down into the
+sea far ahead; then out of both hands a great loose roller of filaments along the edge of what
+they have stilled, first along the cloud base, then on the sea. The stilled water opens from the
+boat like a leaf whose sides leave the boat sideways and curve round to meet far ahead, slanting
+across the view as it goes out and flung wide at the end; within it the sea is the stilled sea,
+beyond it the old weather still, which piles against the roller and breaks white (`stillChunk` in
+`gerstner-waves.ts`). They roll it out on a ten-second breath; gusts bow it back; it quivers under
+the real wind. By day each thread is white over a soft sheath of the site's deep blue.
+
+**Not yet right**: once the edge is beyond about three kilometres it is a band along the horizon,
+nearly straight, and a small hump of the old sea shows where the leaf's tip is; the sky roller by
+day is a broad pale band, more haze than threads; the reading still looks a little like a drawn
+rope; nothing watched in motion, only stills at set points; never on a phone (2,660 more lines,
+each 200 to 300 segments).

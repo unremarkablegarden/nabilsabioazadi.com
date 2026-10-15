@@ -140,3 +140,157 @@ export function calmedConditions(storm: SeaConditions, p: number): Partial<SeaCo
 		waveTrend: p < 1 ? -1.5 : 0,
 	};
 }
+
+// The stilling (the owner, 16 October: "I want myself, the strongest channeller on the boat, to
+// stop every weather element at will until it matches normal weather meteo conditions"). The
+// strongest alone, at a moment they choose, takes whatever weather is on screen (the channelled
+// storm, the great calming, any ?pretend=) back to the weather as measured at the boat, element by
+// element, each by what really drives it; then lets go, and the site follows the measured weather.
+// Set in storm.json ("stilling": { "from": ISO time }); ?still begins it as the page opens, for
+// that visit; ?still=0.5 shows it half-way through; ?still=off looks at the site without it.
+//
+// The twelve stand back. They are spent from the great calming, and this is the strongest's own
+// act: one channeller moving all the weather is what shows them to be 1.8 times the twelve.
+//
+// How long it takes follows how far the weather on screen is from the measured: the element
+// furthest off sets it. The twelve together took seven hours over the storm and were exhausted;
+// the strongest, 1.8 times their strength, takes seven over 1.8, about four, for the whole of it,
+// and less in proportion for less (a fresh breeze too many is some twenty minutes; never under 15).
+//
+// In their own order, each element by its own lever:
+//   they read it first   air, then water, before touching anything (the first twentieth)
+//   the convection       the heat in the rising towers (cape) is drawn out: without strong
+//                        updrafts there is no charge, so the thunder goes first, then the gusts
+//                        their downdrafts make
+//   the rain             falls out of the cloud already made, after the updrafts stop
+//   the cloud            the low with the rain, the middle after, the high anvil last, as it
+//                        is in nature; the air clears as the rain and the spray stop
+//   the low              they fill it: the pressure rises to the measured, and the wind, which
+//                        is driven by its gradient, falls with the root of what is left of it
+//   the wind's sea       dies down a little behind the wind
+//   the swell            not the wind's here but come from far off, so it has to be pressed out
+//                        of the sea itself, outward from the boat; its height, period and
+//                        direction move together and smoothly, never jumping (the sea keeps
+//                        each wave's phase as its period changes: useMeasuredSea)
+// Wherever the channelled weather is weaker than the measured (after the calming the real wind
+// is the stronger), the same lever is let go instead, and the real weather comes back.
+// (storm.json's stilling is the switch's storm's: it is left out when the address asks for a
+// storm or a stilling of its own.)
+export function stillingBegun(now: Date, asked: string | null, opened: number, ownStorm = false): { share?: number; hours?: number } | undefined {
+	if (asked === "off") return undefined;
+	if (asked !== null) {
+		if (asked !== "" && Number.isFinite(Number(asked))) return { share: Math.min(1, Math.max(0, Number(asked))) };
+		return { hours: (now.getTime() - opened) / 3_600_000 };
+	}
+	if (ownStorm) return undefined;
+	const { stilling } = stormSwitch as { stilling?: { from: string | null } };
+	if (!stilling?.from) return undefined;
+	const hours = (now.getTime() - new Date(stilling.from).getTime()) / 3_600_000;
+	return hours < 0 ? undefined : { hours };
+}
+
+const heldTrend = (trend: number) => Math.min(40, Math.max(-40, trend));
+const turnBetween = (a: number, b: number) => Math.abs(((((a - b) % 360) + 540) % 360) - 180);
+
+// How far the weather on screen is from the measured, 0 (the same) to 1 (the channelled storm
+// against an ordinary day; each element is measured against the storm's own): the element
+// furthest off.
+export function stillingGap(on: SeaConditions, real: SeaConditions) {
+	const off = (key: keyof SeaConditions) => Math.abs((on[key] as number) - (real[key] as number));
+	return Math.max(
+		off("windSpeed") / 200,
+		off("windGusts") / 260,
+		off("pressure") / 100,
+		off("cape") / 3500,
+		off("precipitation") / 14,
+		(off("cloudLow") + off("cloudMid") + off("cloudHigh")) / 300,
+		Math.abs(Math.log(Math.max(on.visibility, 1) / Math.max(real.visibility, 1))) / Math.log(40),
+		off("windWaveHeight") / 11,
+		off("swellHeight") / 16,
+		off("secondSwellHeight") / 8,
+		off("swellPeriod") / 10,
+		(0.6 * turnBetween(on.swellDirection, real.swellDirection)) / 180,
+	);
+}
+
+// Hours the strongest takes over a gap.
+export const stillingHours = (gap: number) => Math.max(0.25, (7 / 1.8) * Math.min(gap, 1.5));
+
+// When in the stilling (0..1 of it) each lever is worked: [begins, done].
+export const STILLING_STAGES = {
+	reading: [0, 0.05],
+	convection: [0.05, 0.3],
+	rain: [0.1, 0.42],
+	lowCloud: [0.12, 0.48],
+	midCloud: [0.15, 0.56],
+	highCloud: [0.2, 0.7],
+	low: [0.22, 0.78],
+	windSea: [0.22, 0.62],
+	swell: [0.24, 0.82],
+	rest: [0.05, 0.9],
+} as const;
+
+// How much of the gap is left of a lever at u through the stilling.
+export function leftOf(u: number, [from, to]: readonly [number, number]) {
+	return 1 - ease(clamp01((u - from) / (to - from)));
+}
+
+// The weather u through the stilling (0..1), from what is on screen to the measured. Over `hours`,
+// for the barometer's and the wind's trends, which are how fast they move.
+export function stilledConditions(on: SeaConditions, real: SeaConditions, u: number, hours: number): SeaConditions {
+	const S = STILLING_STAGES;
+	const towards = (from: number, to: number, left: number) => to + (from - to) * left;
+	const turned = (from: number, to: number, left: number) => (to + (((((from - to) % 360) + 540) % 360) - 180) * left + 360) % 360;
+	const rest = leftOf(u, S.rest);
+	const moved = { ...real } as SeaConditions;
+	// Everything without a lever of its own (warmth, humidity, current, the winds aloft) eases over.
+	for (const [key, value] of Object.entries(real)) {
+		const from = (on as unknown as Record<string, unknown>)[key];
+		if (typeof value !== "number" || typeof from !== "number") continue;
+		(moved as unknown as Record<string, number>)[key] = key.endsWith("Direction") ? turned(from, value, rest) : towards(from, value, rest);
+	}
+	const convection = leftOf(u, S.convection);
+	const rain = leftOf(u, S.rain);
+	const low = leftOf(u, S.low);
+	// The wind follows the pressure gradient's root.
+	const wind = Math.sqrt(low);
+	const windSea = Math.max(leftOf(u, S.windSea), Math.sqrt(leftOf(u - 0.06, S.low)));
+	const swell = leftOf(u, S.swell);
+	moved.cape = towards(on.cape, real.cape, convection);
+	moved.pressure = towards(on.pressure, real.pressure, low);
+	moved.windSpeed = Math.max(0, towards(on.windSpeed, real.windSpeed, wind));
+	// The gusts are the downdrafts' as well as the wind's: their excess goes with the convection.
+	const gustFactor = (c: SeaConditions) => c.windGusts / Math.max(c.windSpeed, 1);
+	moved.windGusts = Math.max(moved.windSpeed, moved.windSpeed * towards(gustFactor(on), gustFactor(real), Math.max(convection, wind * 0.5)));
+	moved.windDirection = turned(on.windDirection, real.windDirection, wind);
+	moved.precipitation = Math.max(0, towards(on.precipitation, real.precipitation, rain));
+	moved.cloudLow = towards(on.cloudLow, real.cloudLow, Math.max(rain, leftOf(u, S.lowCloud)));
+	moved.cloudMid = towards(on.cloudMid, real.cloudMid, leftOf(u, S.midCloud));
+	moved.cloudHigh = towards(on.cloudHigh, real.cloudHigh, leftOf(u, S.highCloud));
+	moved.cloudCover = towards(on.cloudCover, real.cloudCover, leftOf(u, S.midCloud));
+	// The air clears as the rain and the spray stop (felt as ratios, so on a logarithmic scale).
+	moved.visibility = Math.exp(towards(Math.log(Math.max(on.visibility, 1)), Math.log(Math.max(real.visibility, 1)), Math.max(rain, windSea * 0.8)));
+	moved.windWaveHeight = Math.max(0, towards(on.windWaveHeight, real.windWaveHeight, windSea));
+	moved.windWavePeriod = towards(on.windWavePeriod, real.windWavePeriod, windSea);
+	moved.windWaveDirection = turned(on.windWaveDirection, real.windWaveDirection, windSea);
+	moved.swellHeight = Math.max(0, towards(on.swellHeight, real.swellHeight, swell));
+	moved.swellPeriod = towards(on.swellPeriod, real.swellPeriod, swell);
+	moved.swellDirection = turned(on.swellDirection, real.swellDirection, swell);
+	moved.secondSwellHeight = Math.max(0, towards(on.secondSwellHeight, real.secondSwellHeight, swell));
+	moved.secondSwellPeriod = towards(on.secondSwellPeriod, real.secondSwellPeriod, swell);
+	moved.secondSwellDirection = turned(on.secondSwellDirection, real.secondSwellDirection, swell);
+	moved.waveHeight = Math.hypot(moved.windWaveHeight, moved.swellHeight, moved.secondSwellHeight);
+	moved.wavePeriod = towards(on.wavePeriod, real.wavePeriod, swell);
+	moved.waveDirection = turned(on.waveDirection, real.waveDirection, swell);
+	// Thunder only while the towers still hold their heat; then rain, then the measured sky.
+	const thundery = on.weatherCode >= 95 && moved.cape > 900;
+	const raining = moved.precipitation - real.precipitation;
+	moved.weatherCode = thundery ? on.weatherCode : rain > 0.02 && raining > 2 ? 63 : rain > 0.02 && raining > 0.3 ? 61 : real.weatherCode;
+	// The trends are how fast things are moving: the barometer rises as they fill the low.
+	const rate = (left: (u: number) => number, from: number, to: number) => (((to - from) * (left(u) - left(u + 0.002))) / (0.002 * Math.max(hours, 0.05))) * 3;
+	// (Held to what a barometer can say: filling a hurricane's low in hours is beyond any scale.)
+	moved.pressureTrend = u < 1 ? heldTrend(towards(on.pressureTrend, real.pressureTrend, low) + rate((x) => leftOf(x, S.low), on.pressure, real.pressure)) : real.pressureTrend;
+	moved.windTrend = u < 1 ? towards(on.windTrend, real.windTrend, wind) + rate((x) => Math.sqrt(leftOf(x, S.low)), on.windSpeed, real.windSpeed) : real.windTrend;
+	moved.waveTrend = u < 1 ? towards(on.waveTrend, real.waveTrend, swell) + rate((x) => leftOf(x, S.swell), on.swellHeight, real.swellHeight) : real.waveTrend;
+	return moved;
+}
