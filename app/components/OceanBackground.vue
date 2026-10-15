@@ -53,7 +53,9 @@ const motionPaused = useState("motion-paused", () => false);
 // The navigation's drawer; while it is open the view holds still.
 const menuOpen = useState("menu-open", () => false);
 // The navigation can show the place, time and conditions itself, in which case the caption here is left out.
-const readout = useState<{ place?: string; time: string; waves?: string; wind?: string }>("scene-readout", () => ({ time: "" }));
+const readout = useState<{ place?: string; time: string; waves?: string; wind?: string; weather?: string }>("scene-readout", () => ({ time: "" }));
+// When the weather is not the measured weather (?pretend=), the menu says so.
+const channelled = ref(false);
 const captionInNavigation = useState("caption-in-navigation", () => false);
 let dispose: (() => void) | undefined;
 
@@ -151,7 +153,7 @@ const liveFigures = computed(() => {
 
 watchEffect(() => {
 	shownAt.value = dateAtBoatHour(hour.value, pretendDate.value ?? new Date()).getTime();
-	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value };
+	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: channelled.value ? "Channelled, honouring spirits met across Te Moana-nui-a-Kiwa" : undefined };
 });
 
 onMounted(() => {
@@ -483,6 +485,7 @@ onMounted(() => {
 	// For trying weather that is not there today: ?pretend=waveHeight:6,windSpeed:70,windGusts:95
 	// replaces those live figures (names as in SeaConditions).
 	const pretend = Object.fromEntries((query.get("pretend") ?? "").split(",").filter(Boolean).map((pair) => [pair.split(":")[0], Number(pair.split(":")[1])]));
+	channelled.value = Object.keys(pretend).length > 0;
 	// The conditions come from the site's own server, which keeps one fresh copy for everyone;
 	// failing that (no server, or a pretended day, which means a different place) straight from
 	// Open-Meteo. The last real figures are also kept in the visitor's browser for next time.
@@ -630,34 +633,57 @@ onMounted(() => {
 		sinceQualityChange = 0;
 	};
 
-	// Lightning: a double flash of the whole scene with a bolt. Strikes are at least two seconds
-	// apart even at the height of the storm, so it never strobes.
+	// Lightning, as a real storm has it: most flashes stay inside the cloud and only light it
+	// from within; one in two or three comes down to the sea as a bolt. They fall near and far,
+	// the far ones dimmer and half lost in the rain. The light over the whole scene rises and
+	// fades once per flash; the flicker of the strokes is only in the bolt itself, so the
+	// picture never strobes. Past hurricane force they come faster, never under about a second apart.
 	// Skipped, with the sway and the rain, for visitors who ask for reduced motion.
 	// While the picture follows the live conditions there is lightning only if there is thunder there.
 	const calmMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 	let strikeAt = 4;
 	let struck = 0;
-	const lightning = (time: number, sky: number, fury: number, thunder: number) => {
+	let inCloud = false;
+	let nearness = 1;
+	const lightning = (time: number, sky: number, fury: number, thunder: number, extreme: number, staged: boolean) => {
 		if (calmMotion || !showThunder.value || sky < 0.5 || thunder <= 0) return 0;
-		if (time > strikeAt + 1) strikeAt = time + lerp(lerp(14, 5, sky), 1.8, fury) * lerp(0.7, 1.4, Math.random());
+		if (time > strikeAt + 1) strikeAt = time + lerp(lerp(14, 5, sky), lerp(1.8, 1.1, extreme), fury) * lerp(0.75, 1.4, Math.random());
 		if (time < strikeAt) return 0;
 		if (struck !== strikeAt) {
 			struck = strikeAt;
-			// Down from the knot once it has formed. Until then the weave under the sea breaks out
-			// upward: the bolt rises from the water into the cloud.
-			if (knotReady) {
-				strikeFrom.copy(knotPosition);
-				strikeTo.set(knotPosition.x + spread(700), 0, knotPosition.z + spread(700) + 100);
+			if (staged) {
+				// The story's: down from the knot once it has formed. Until then the weave under the
+				// sea breaks out upward: the bolt rises from the water into the cloud.
+				inCloud = false;
+				nearness = 1;
+				if (knotReady) {
+					strikeFrom.copy(knotPosition);
+					strikeTo.set(knotPosition.x + spread(700), 0, knotPosition.z + spread(700) + 100);
+				} else {
+					strikeTo.set(spread(1200), 0, -700 + spread(900));
+					strikeFrom.set(strikeTo.x + spread(400), 800, strikeTo.z - 200 + spread(300));
+				}
+				bolts.strike(strikeFrom, strikeTo, time, !knotReady);
 			} else {
-				strikeTo.set(spread(1200), 0, -700 + spread(900));
-				strikeFrom.set(strikeTo.x + spread(400), 800, strikeTo.z - 200 + spread(300));
+				inCloud = Math.random() < 0.6;
+				// From 400 m to 4 km off, across the view ahead.
+				const distance = lerp(400, 4000, Math.random() ** 1.5);
+				nearness = lerp(1, 0.3, (distance - 400) / 3600);
+				if (!inCloud) {
+					const bearing = spread(1.0);
+					strikeTo.set(camera.position.x + Math.sin(bearing) * distance, 0, camera.position.z - Math.cos(bearing) * distance);
+					// From the cloud base, seldom straight above where it lands.
+					strikeFrom.set(strikeTo.x + spread(500), 700 + Math.random() * 400, strikeTo.z + spread(500));
+					bolts.strike(strikeFrom, strikeTo, time, false, nearness);
+				}
 			}
-			bolts.strike(strikeFrom, strikeTo, time, !knotReady);
 		}
-		// The sky lights when the leader has reached the sea and the return stroke fires.
-		const since = time - strikeAt - LIGHTNING_LEADER_TIME;
+		// The sky lights when the leader has reached the sea and the return stroke fires; a flash
+		// in the cloud swells and lingers a little longer, and is less bright.
+		const since = time - strikeAt - (inCloud ? 0 : LIGHTNING_LEADER_TIME);
 		if (since < 0) return 0;
-		return Math.exp(-since / 0.07) + (since > 0.2 ? 0.7 * Math.exp(-(since - 0.2) / 0.18) : 0);
+		if (inCloud) return 0.55 * nearness * (1 - Math.exp(-since / 0.04)) * Math.exp(-since / 0.22);
+		return nearness * (Math.exp(-since / 0.07) + (since > 0.2 ? 0.7 * Math.exp(-(since - 0.2) / 0.18) : 0));
 	};
 
 	// Colours as they should appear on screen.
@@ -763,7 +789,9 @@ onMounted(() => {
 		// At the height of the storm giant swells rise under the ordinary waves, which give up
 		// some steepness so the crests don't fold over themselves. They belong to the story: a
 		// measured sea already has its real height.
-		const surge = liveOnly ? 0 : 0.55 * fury;
+		// Past hurricane force (gusts over 120 km/h) they rise under the measured sea as well.
+		const extreme = liveOnly ? beyondHurricane(liveOnly) : 0;
+		const surge = liveOnly ? 0.35 * extreme : 0.55 * fury;
 		// The wind never holds steady: the whole sea swells and eases over a minute or two.
 		const lull = 0.5 * Math.sin(time * 0.11) + 0.5 * Math.sin(time * 0.047 + 1.3);
 		waveUniforms.surge.value = surge;
@@ -773,13 +801,13 @@ onMounted(() => {
 		waterUniforms.distortionScale.value *= lerp(0.15, 1, alive);
 
 		// In heavy seas the view heaves, pitches and rolls like a ship's deck, and rides the giant swells.
-		const sway = calmMotion ? 0 : THREE.MathUtils.smoothstep(sea, 0.3, 1) * (1 + 0.6 * fury) * alive;
+		const sway = calmMotion ? 0 : THREE.MathUtils.smoothstep(sea, 0.3, 1) * (1 + 0.6 * fury + 0.8 * extreme) * alive;
 		const heave = sway * (2 * Math.sin(time * 0.45) + Math.sin(time * 0.71 + 2));
 		const pitch = sway * 0.035 * Math.sin(time * 0.52 + 1);
 		if (liveOnly) {
 			// On a measured sea the viewer is on a small boat: eyes EYE_HEIGHT above the water, and
 			// carried up and down by the very waves that are drawn.
-			const surface = measuredSeaHeight(waveUniforms, camera.position.x, camera.position.z, time);
+			const surface = measuredSeaHeight(waveUniforms, camera.position.x, camera.position.z, time) + giantWaveHeight(camera.position.x, camera.position.z, time, surge);
 			seaAtBoat = surface;
 			camera.position.y += (EYE_HEIGHT + surface - camera.position.y) * follow(0.2);
 		} else {
@@ -801,7 +829,7 @@ onMounted(() => {
 		camera.rotation.y += (-lookAcross(aim.x) - camera.rotation.y) * 0.03;
 		camera.rotation.x += (-lookUp(aim.y) + pitch - camera.rotation.x) * 0.03;
 
-		const flash = alive > 0.5 ? lightning(time, sky, fury, liveOnly ? thunderAmount(liveOnly) : 1) : 0;
+		const flash = alive > 0.5 ? lightning(time, sky, fury, liveOnly ? thunderAmount(liveOnly) : 1, extreme, !liveOnly) : 0;
 		// The storm darkens the day. At night it is lifted instead, or the sea would be lost in black.
 		const steadyExposure = exposure * lerp(1, lerp(2.5, 0.6, daylight), fury);
 		renderer.toneMappingExposure = steadyExposure * (1 + 5 * flash) * (1 + 4 * moment.white * moment.veil);

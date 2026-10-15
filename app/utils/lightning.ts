@@ -1,8 +1,12 @@
 // Lightning as real bolts in the 3D scene, so they strike a place on the sea, pass behind wave
-// crests and are mirrored in the water. Each bolt is a jagged path made by midpoint displacement:
-// start with a straight line, push its middle sideways by a random amount, then do the same to
-// each half with half the push, and so on. Branches are shorter bolts that leave the main one
-// and die out in mid-air. Drawn with the same hard-edged ribbons as the weave.
+// crests and are mirrored in the water. A real channel is tortuous, not a wobbling line: short
+// straight runs with a sharp kink between them, each a few tens of degrees, wandering about its
+// way down. So each bolt is walked step by step, keeping its heading for a while and then
+// turning. Branches leave it mostly high up, heading down and outward, and die out in mid-air;
+// its top is lost in the cloud base. Each is drawn as a fine white-hot core inside a soft blue
+// glow, the light scattered by the rain and cloud round it. Where it leaves the cloud, the cloud
+// base is lit from inside in a broad, flattened glow, and where it meets the sea there is a small
+// fierce point of light, which the water mirrors.
 //
 // A flash unfolds the way a real one does, slowed only where the eye could not otherwise follow:
 //   1. a dim leader works its way down from the cloud in steps, branching as it goes;
@@ -20,7 +24,7 @@ export const LIGHTNING_LEADER_TIME = 0.14;
 
 const MAIN_SEGMENTS = 128;
 const BRANCH_SEGMENTS = 32;
-const BRANCHES = 6;
+const BRANCHES = 14;
 
 const vertexShader = /* glsl */ `
 attribute vec3 aNext;
@@ -51,21 +55,44 @@ void main() {
 }
 `;
 
-// A jagged path between two points, with 2^levels segments.
-function jaggedPath(from: THREE.Vector3, to: THREE.Vector3, levels: number, roughness: number) {
-	let path = [from.clone(), to.clone()];
-	let push = from.distanceTo(to) * roughness;
-	const offset = new THREE.Vector3();
-	for (let level = 0; level < levels; level++) {
-		const next: THREE.Vector3[] = [];
-		for (let i = 0; i < path.length - 1; i++) {
-			offset.randomDirection().multiplyScalar(push * Math.random());
-			next.push(path[i]!, path[i]!.clone().lerp(path[i + 1]!, 0.5).add(offset));
-		}
-		next.push(path[path.length - 1]!);
-		path = next;
-		push *= 0.5;
+// The core is a small part of the ribbon's width; the rest is glow.
+const GLOW_WIDTH = 3;
+const fragmentShader = /* glsl */ `
+uniform float uGain;
+uniform float uOpacity;
+uniform vec3 uBase;
+varying vec3 vTint;
+varying float vAlpha;
+varying float vEdge;
+
+void main() {
+	float across = abs( vEdge );
+	float core = 1.0 - smoothstep( 0.08, 0.2, across );
+	float glow = 0.12 * exp( - across * across * 10.0 ) * ( 1.0 - smoothstep( 0.7, 1.0, across ) );
+	gl_FragColor = vec4( mix( vTint, uBase, core ) * uGain, ( core + glow ) * vAlpha * uOpacity );
+	#include <tonemapping_fragment>
+	#include <colorspace_fragment>
+}
+`;
+
+// A tortuous path from one point to another with the given number of segments. It keeps its
+// heading for a step or two, then kinks; leaning only a little towards where it is going. The
+// end it reaches is then sheared gently onto the true end, spread along the whole length.
+function tortuousPath(from: THREE.Vector3, to: THREE.Vector3, segments: number, kink = 0.9) {
+	const path = [from.clone()];
+	const step = from.distanceTo(to) / segments;
+	const heading = to.clone().sub(from).normalize();
+	const toward = new THREE.Vector3();
+	const turn = new THREE.Vector3();
+	const at = from.clone();
+	for (let i = 1; i <= segments; i++) {
+		if (Math.random() < 0.4) heading.add(turn.randomDirection().multiplyScalar(kink * Math.random())).normalize();
+		heading.lerp(toward.copy(to).sub(at).normalize(), 0.035).normalize();
+		at.addScaledVector(heading, step * (0.5 + Math.random()));
+		path.push(at.clone());
 	}
+	const miss = to.clone().sub(at);
+	path.forEach((point, i) => point.addScaledVector(miss, i / segments));
 	return path;
 }
 
@@ -118,7 +145,7 @@ export function createLightning(scene: THREE.Scene) {
 		new THREE.ShaderMaterial({
 			uniforms,
 			vertexShader,
-			fragmentShader: threadFragmentShader,
+			fragmentShader,
 			transparent: true,
 			depthWrite: false,
 			side: THREE.DoubleSide,
@@ -130,9 +157,36 @@ export function createLightning(scene: THREE.Scene) {
 	mesh.visible = false;
 	scene.add(mesh);
 
+	// The glow in the cloud base and the point where the bolt meets the sea.
+	const glowTexture = (() => {
+		const canvas = document.createElement("canvas");
+		canvas.width = canvas.height = 64;
+		const context = canvas.getContext("2d")!;
+		const gradient = context.createRadialGradient(32, 32, 0, 32, 32, 32);
+		gradient.addColorStop(0, "rgba(255,255,255,1)");
+		gradient.addColorStop(0.35, "rgba(255,255,255,0.35)");
+		gradient.addColorStop(1, "rgba(255,255,255,0)");
+		context.fillStyle = gradient;
+		context.fillRect(0, 0, 64, 64);
+		return new THREE.CanvasTexture(canvas);
+	})();
+	const glow = (colour: number) => {
+		const sprite = new THREE.Sprite(
+			new THREE.SpriteMaterial({ map: glowTexture, color: colour, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }),
+		);
+		sprite.renderOrder = WEAVE_RENDER_ORDER;
+		sprite.visible = false;
+		scene.add(sprite);
+		return sprite;
+	};
+	// Cloud lit from inside goes violet-pink; the point at the sea is white-hot.
+	const cloudGlow = glow(0xd8b8f0);
+	const footGlow = glow(0xf4f6ff);
+	let glowStrength = 1;
+
 	// Writes one path into the buffers from point index `first`. reached(i) says when the leader
 	// gets to point i. A branch thins and dims towards its end.
-	const write = (path: THREE.Vector3[], first: number, thickness: number, fades: boolean, reached: (fraction: number) => number) => {
+	const write = (path: THREE.Vector3[], first: number, thickness: number, fades: boolean, strength: number, reached: (fraction: number) => number) => {
 		path.forEach((point, i) => {
 			const ahead = path[Math.min(i + 1, path.length - 1)]!;
 			const fraction = i / (path.length - 1);
@@ -141,8 +195,9 @@ export function createLightning(scene: THREE.Scene) {
 				const vertex = (first + i) * 2 + edge;
 				position.setXYZ(vertex, point.x, point.y, point.z);
 				next.setXYZ(vertex, ahead.x, ahead.y, ahead.z);
-				width.setX(vertex, thickness * (0.4 + 0.6 * remaining));
-				brightness.setX(vertex, fades ? 0.6 * remaining : 1);
+				width.setX(vertex, GLOW_WIDTH * thickness * (0.4 + 0.6 * remaining));
+				// (The main channel's top is lost in the cloud base.)
+				brightness.setX(vertex, strength * (fades ? 0.6 * remaining : Math.min(1, fraction / 0.08)));
 				along.setX(vertex, reached(fraction));
 			}
 		});
@@ -154,21 +209,32 @@ export function createLightning(scene: THREE.Scene) {
 	let strokes: { at: number; strength: number }[] = [];
 
 	// from is the upper end and to the lower. A rising bolt starts at the lower end: the weave
-	// under the sea breaking out upward. Otherwise the leader comes down from above.
-	const strike = (from: THREE.Vector3, to: THREE.Vector3, time: number, rising = false) => {
-		main = jaggedPath(from, to, 7, 0.16);
-		write(main, 0, 3.4, false, (fraction) => (rising ? 1 - fraction : fraction));
+	// under the sea breaking out upward. Otherwise the leader comes down from above. strength
+	// is less for a distant bolt, seen through more rain.
+	const strike = (from: THREE.Vector3, to: THREE.Vector3, time: number, rising = false, strength = 1) => {
+		main = tortuousPath(from, to, MAIN_SEGMENTS);
+		glowStrength = rising ? 0 : strength;
+		// Where it comes out of the cloud: a little below the top, which is lost in it.
+		cloudGlow.position.copy(main[Math.round(MAIN_SEGMENTS * 0.04)]!);
+		const distance = Math.max(300, from.length());
+		cloudGlow.scale.set(0.45 * distance, 0.1 * distance, 1);
+		// (Raised a little, or every crest between hides it.)
+		footGlow.position.copy(to).setY(15);
+		footGlow.scale.setScalar(Math.max(40, 0.06 * to.length()));
+		write(main, 0, 0.9 + 1.5 * strength, false, strength, (fraction) => (rising ? 1 - fraction : fraction));
 		// Branches fork the way the leader is travelling.
 		const down = to.clone().sub(from).multiplyScalar(rising ? -1 : 1);
 		for (let branch = 0; branch < BRANCHES; branch++) {
-			const rootIndex = 8 + Math.floor(Math.random() * (MAIN_SEGMENTS - 30));
+			// Mostly from the upper part, and shorter the lower down they leave.
+			const rootIndex = 6 + Math.floor(Math.random() ** 1.6 * (MAIN_SEGMENTS * 0.8));
 			const root = main[rootIndex]!;
-			// Leaves the main bolt at an angle, still heading roughly the same way.
-			const length = 0.15 + Math.random() * 0.3;
+			const rootFraction = rootIndex / MAIN_SEGMENTS;
+			// Leaves the main bolt at an angle, heading down and outward.
+			const length = (0.08 + Math.random() * 0.3) * (1 - 0.6 * rootFraction);
 			const reach = down.clone().multiplyScalar(length);
-			reach.add(new THREE.Vector3().randomDirection().multiplyScalar(reach.length() * 0.8));
-			const start = rising ? 1 - rootIndex / MAIN_SEGMENTS : rootIndex / MAIN_SEGMENTS;
-			write(jaggedPath(root, root.clone().add(reach), 5, 0.2), MAIN_SEGMENTS + 1 + branch * (BRANCH_SEGMENTS + 1), 1.6, true, (fraction) =>
+			reach.add(new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize().multiplyScalar(reach.length() * (0.5 + 0.6 * Math.random())));
+			const start = rising ? 1 - rootFraction : rootFraction;
+			write(tortuousPath(root, root.clone().add(reach), BRANCH_SEGMENTS, 1.1), MAIN_SEGMENTS + 1 + branch * (BRANCH_SEGMENTS + 1), 0.4 + 0.8 * strength * (1 - rootFraction), true, strength, (fraction) =>
 				Math.min(1, start + fraction * length),
 			);
 		}
@@ -176,7 +242,8 @@ export function createLightning(scene: THREE.Scene) {
 
 		struckAt = time;
 		strokes = [{ at: 0, strength: 1 }];
-		const further = 1 + Math.floor(Math.random() * 3);
+		// Three to five strokes in all is usual.
+		const further = 1 + Math.floor(Math.random() * 4);
 		for (let i = 0; i < further; i++) {
 			strokes.push({ at: strokes[i]!.at + 0.05 + Math.random() * 0.04, strength: 0.7 * 0.72 ** i });
 		}
@@ -194,7 +261,8 @@ export function createLightning(scene: THREE.Scene) {
 	const update = (time: number, gain: number, vapour: number, fog: number) => {
 		const sinceLeader = time - struckAt;
 		const sinceReturn = sinceLeader - LIGHTNING_LEADER_TIME;
-		mesh.visible = sinceLeader >= 0 && sinceReturn < 1;
+		mesh.visible = sinceLeader >= 0 && sinceReturn < 0.7;
+		cloudGlow.visible = footGlow.visible = mesh.visible && sinceReturn >= 0 && glowStrength > 0;
 		if (!mesh.visible) return 0;
 		uniforms.uGain.value = gain;
 		uniforms.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(uniforms.uPixelRatio.value);
@@ -216,12 +284,15 @@ export function createLightning(scene: THREE.Scene) {
 			sinceLast = sinceReturn - stroke.at;
 			current += stroke.strength * Math.exp(-sinceLast / 0.035);
 		}
-		const afterglow = 0.25 * Math.exp(-sinceReturn / 0.25);
+		const afterglow = 0.12 * Math.exp(-sinceReturn / 0.15);
 		uniforms.uLeader.value = 1;
 		uniforms.uMain.value = current + afterglow;
-		uniforms.uBranches.value = 0.7 * Math.exp(-sinceReturn / 0.03);
-		uniforms.uWidth.value = 0.7 + 0.9 * Math.min(1, current);
+		uniforms.uBranches.value = 0.7 * Math.exp(-sinceReturn / 0.06);
+		uniforms.uWidth.value = 0.7 + 0.5 * Math.min(1, current);
 		uniforms.uTint.value.copy(hot).lerp(cooled, Math.min(1, sinceLast / 0.12));
+		// The cloud stays lit a little after the channel has gone dim; the foot only while current flows.
+		cloudGlow.material.opacity = glowStrength * Math.min(1, 0.6 * current + 2.5 * afterglow);
+		footGlow.material.opacity = glowStrength * Math.min(1, current);
 		return Math.min(1, current + afterglow);
 	};
 

@@ -5,7 +5,8 @@
 // carried in that flow as two "dyes" and drawn over the scene.
 //
 // The grid covers the screen, not the world. What moves the air:
-//   the wind    a gusting drift along the horizon, with small restless eddies everywhere
+//   the wind    a steady drift the way the real wind blows, stronger aloft, rising and easing
+//               with the gusts, and the eddies it stirs, more the stronger it is
 //   the bond    a vortex about the knot of the weave, as strong as the channelling's hold
 //   the charge  a draught up the middle while the threads race for the knot
 //   the pointer whoever is visiting can stir it
@@ -15,7 +16,8 @@
 // 24,000-30,000 K, but it is back at ordinary pressure within about 40 millionths of a second, by
 // which time its shock wave has gone about 10 cm. So there is no blast to see at this scale. What a
 // stroke does leave behind is a thread of very hot, thin air, and its chemistry:
-//   - the heat boils off fog along the channel, and the heated thread drifts upward;
+//   - the heat boils off fog along the channel, and the heated thread drifts upward, though
+//     in any wind it is bent over and mixed away within a second, long before it can climb;
 //   - nitric oxide forms in the hot core;
 //   - hydroxyl forms in a sheath round the core, not in it, from water vapour broken up by the
 //     channel's ultraviolet light and its corona, so there is more of it in warm, humid air;
@@ -103,10 +105,14 @@ vec2 eddies( vec2 p, float t ) {
 void main() {
 	vec2 velocity = texture2D( uVelocity, vUv ).xy;
 
-	// Wind: eases the air near the horizon towards a drift that swings from side to side.
-	float nearHorizon = exp( - pow( ( vUv.y - uHorizon.y ) / 0.25, 2.0 ) );
-	vec2 drift = vec2( 0.07 * sin( uTime * 0.13 ) + 0.04 * sin( vUv.y * 9.0 + uTime * 0.4 ), 0.0 ) * uWind + vec2( 0.06 * uCross, 0.0 );
-	velocity += ( drift * nearHorizon - velocity ) * min( 1.0, 0.5 * uDelta );
+	// Wind: eases the air towards a drift the way the real wind blows across the view. It does
+	// not swing from side to side; it rises and eases with the gusts, and is stronger higher up
+	// (above the horizon on screen), as wind over the sea is. A wind blowing along the line of
+	// sight carries the air towards or away from the viewer, which shows only as its eddies.
+	float aloft = mix( 0.6, 1.3, smoothstep( uHorizon.y - 0.1, uHorizon.y + 0.35, vUv.y ) );
+	float gust = 1.0 + 0.3 * sin( uTime * 0.37 ) * sin( uTime * 0.13 + 1.3 );
+	vec2 drift = vec2( uCross * ( 0.06 + 0.18 * uWind ) * aloft * gust, 0.0 );
+	velocity += ( drift - velocity ) * min( 1.0, ( 0.3 + 1.2 * uWind ) * uDelta );
 	// A sea warmer than the air above it keeps that air turning over.
 	velocity += eddies( vUv, uTime ) * 0.02 * uWind * ( 1.0 + 2.0 * uInstability ) * uDelta;
 
@@ -242,6 +248,7 @@ uniform float uBond;
 uniform float uStrike;
 uniform float uVapour;
 uniform float uInstability;
+uniform float uWind;
 uniform vec2 uKnot;
 uniform vec2 uHorizon;
 varying vec2 vUv;
@@ -261,8 +268,9 @@ void main() {
 	float offSea = exp( - pow( ( vUv.y - uHorizon.y - 0.02 ) / 0.08, 2.0 ) ) * banks;
 	vec2 fromKnot = ( vUv - uKnot ) * vec2( uAspect, 1.0 );
 	float ring = exp( - pow( ( length( fromKnot ) - 0.2 ) / 0.06, 2.0 ) ) * uBond;
-	// A warm sea under cold air steams, which thickens the banks.
-	dye.r = min( 1.6, dye.r + uFog * ( offSea * ( 1.0 + uInstability ) + ring ) * 0.9 * uDelta );
+	// A warm sea under cold air steams, which thickens the banks: in light airs only, for a wind
+	// tears sea smoke away as fast as it forms.
+	dye.r = min( 1.6, dye.r + uFog * ( offSea * ( 1.0 + uInstability * ( 1.0 - uWind ) ) + ring ) * 0.9 * uDelta );
 
 	if ( uStrike > 0.001 ) {
 		float distance = boltDistance( vUv, uAspect );
@@ -270,11 +278,8 @@ void main() {
 		float sheath = max( 0.0, exp( - pow( distance / 0.022, 2.0 ) ) - core );
 		dye.b = max( dye.b, uStrike * core * 1.6 );
 		dye.a += uStrike * ( core * 3.0 - sheath * uVapour * 1.2 ) * 20.0 * uDelta;
-		// Where the bolt meets the sea, water flashes to steam.
-		vec2 fromFoot = ( vUv - uBolt[ ${BOLT_POINTS - 1} ] ) * vec2( uAspect, 1.0 );
-		float foot = dot( fromFoot, fromFoot );
-		dye.r = min( 1.6, dye.r + uStrike * exp( - foot / 0.0009 ) * 6.0 * uDelta );
-		dye.b = max( dye.b, uStrike * exp( - foot / 0.0005 ) );
+		// (No steam where it meets the sea: the current spreads out across the salt water's
+		// surface at once, and boils off too little to see.)
 	}
 	// Fog cannot stay as droplets in hot air.
 	dye.r *= exp( - dye.b * 8.0 * uDelta );
@@ -315,13 +320,15 @@ uniform vec3 uAirColour;
 uniform float uGain;
 varying vec2 vUv;
 // Faint, and true to the gases: nitrogen dioxide is brown, and the cold glow of the sheath is blue-violet.
+// Very faint: the heated thread and its gases are all but invisible once the channel has gone dark.
+// Drawn any brighter they read as a second, smooth bolt beside the real one.
 const vec3 nitricColour = vec3( 0.8, 0.55, 0.3 );
 const vec3 hydroxylColour = vec3( 0.55, 0.62, 1.0 );
 void main() {
 	vec4 dye = texture2D( uDye, vUv );
 	float fog = min( 0.85, 1.0 - exp( - dye.r * 1.3 ) );
 	vec3 light = uFogColour * fog + uAirColour * dye.g * 0.35;
-	light += vec3( 1.0, 0.96, 0.9 ) * dye.b * 0.25 + nitricColour * max( dye.a, 0.0 ) * 0.22 + hydroxylColour * max( - dye.a, 0.0 ) * 0.3;
+	light += vec3( 1.0, 0.96, 0.9 ) * dye.b * 0.04 + nitricColour * max( dye.a, 0.0 ) * 0.04 + hydroxylColour * max( - dye.a, 0.0 ) * 0.05;
 	gl_FragColor = vec4( light * uGain, fog );
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
@@ -391,6 +398,7 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 		uKnot: { value: new THREE.Vector2(0.5, 0.75) },
 		uHorizon: { value: new THREE.Vector2(0.5, 0.5) },
 		uInstability: { value: 0 },
+		uWind: { value: 0 },
 		uBolt: { value: Array.from({ length: BOLT_POINTS }, () => new THREE.Vector2()) },
 		uFlow: { value: Array.from({ length: FLOW_POINTS }, () => new THREE.Vector2()) },
 	};
@@ -400,7 +408,6 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 		uVelocity: { value: null },
 		uDye: { value: null },
 		uBuoyancy: { value: 1.2 },
-		uWind: { value: 0 },
 		uCross: { value: 0 },
 		uCharge: { value: 0 },
 		uFlowPull: { value: 0 },
@@ -515,8 +522,9 @@ export function createFluid(renderer: THREE.WebGLRenderer, scene: THREE.Scene, d
 
 		advect.uniforms.uVelocity!.value = velocity.read.texture;
 		advect.uniforms.uSource!.value = dye.read.texture;
-		// Fog lingers, streaks of air fade in a second or two, heat in about a second, nitric oxide slowly.
-		advect.uniforms.uDecay!.value.set(0.3, 1.4, 0.9, 0.35);
+		// Fog lingers, streaks of air fade in a second or two, heat in about a second, nitric oxide
+		// slowly; heat and gas are mixed away far faster in a strong wind.
+		advect.uniforms.uDecay!.value.set(0.3, 1.4, 0.9 + 3 * frame.wind, 0.35 + 1.5 * frame.wind);
 		run(advect, dye.write);
 		swap(dye);
 		source.uniforms.uDye!.value = dye.read.texture;

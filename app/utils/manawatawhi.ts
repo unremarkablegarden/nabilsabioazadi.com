@@ -650,6 +650,12 @@ export function stormFury(conditions: SeaConditions) {
 	);
 }
 
+// 0..1 how far past hurricane force: gusts from 120 km/h, where `stormFury` is already full, to
+// 250. Beyond the measured sea, giant swells rise under it and the lightning comes faster.
+export function beyondHurricane({ windGusts }: SeaConditions) {
+	return clamp01((windGusts - 120) / 130);
+}
+
 // 0..1 how hard the weather is building: the wind rising (15 km/h in three hours counts as
 // fully), the sea getting up (0.8 m), or the pressure falling (3 hPa). Steady or easing weather is 0.
 export function building({ windTrend, waveTrend, pressureTrend }: SeaConditions) {

@@ -46,7 +46,7 @@ const route = useRoute();
 // Shared with OceanBackground, which stops drawing while this is true.
 const paused = useState("motion-paused", () => false);
 // Filled in by OceanBackground. This slab shows it, so the floating caption is turned off.
-const readout = useState<{ place?: string; time: string; waves?: string; wind?: string }>("scene-readout", () => ({ time: "" }));
+const readout = useState<{ place?: string; time: string; waves?: string; wind?: string; weather?: string }>("scene-readout", () => ({ time: "" }));
 const captionInNavigation = useState("caption-in-navigation", () => false);
 captionInNavigation.value = true;
 onBeforeUnmount(() => (captionInNavigation.value = false));
@@ -336,6 +336,10 @@ const elsewhere = [
 					<div v-if="readout.wind" class="row rule">
 						<dt class="key">Wind</dt>
 						<dd class="reading">{{ readout.wind }}</dd>
+					</div>
+					<div v-if="readout.weather" class="row rule">
+						<dt class="key">Weather</dt>
+						<dd class="reading">{{ readout.weather }}</dd>
 					</div>
 				</dl>
 				<div class="row rule">
