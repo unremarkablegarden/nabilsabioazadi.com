@@ -491,6 +491,8 @@ export interface EmbroideryFrame {
 	bg: THREE.Color;
 	// 0..1 how far they have let go of it to the strongest, who stills the weather (stilling.ts).
 	letGo?: number;
+	// 0..1 how far they have stopped to watch Leane (rain-cut.ts): their flows hold still.
+	watching?: number;
 }
 
 export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE.Vector4[]) {
@@ -548,8 +550,9 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 
 	// The water's pressed places, to let go of when the work is gone.
 	let lastPressed: THREE.Vector4[] | undefined;
-	// Where they are in the stroke they are hauling (0..1).
+	// Where they are in the stroke they are hauling (0..1), and how long they have stood watching.
 	let stroke = 0;
+	let watched = 0;
 	// Each of the twelve's heat, and how long is left of her sigh (seconds; 0 when not sighing).
 	const heat = TEMPERS.map(() => 0.15 + 0.1 * Math.random());
 	const sighing = TEMPERS.map(() => 0);
@@ -581,7 +584,7 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 
 	const update = (frame: EmbroideryFrame | undefined) => {
 		// Done and faded, or not happening: nothing to draw.
-		const fade = frame ? (1 - THREE.MathUtils.smoothstep(frame.after, 0.5, 3)) * (1 - (frame.letGo ?? 0)) : 0;
+		const fade = frame ? (1 - THREE.MathUtils.smoothstep(frame.after, 0.5, 3)) * (1 - (frame.letGo ?? 0)) * (1 - 0.35 * (frame.watching ?? 0)) : 0;
 		for (const mesh of parts) mesh.visible = fade > 0.001;
 		if (!frame || fade <= 0.001) {
 			if (lastPressed) for (const place of lastPressed) place.w = 0;
@@ -591,7 +594,9 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 		const { smoothstep } = THREE.MathUtils;
 		const p = frame.progress;
 		const work = calmingWork(p);
-		shared.uTime.value = frame.time;
+		// (Watching Leane, their flows hold still: their own time all but stops.)
+		watched += frame.delta * (frame.watching ?? 0);
+		shared.uTime.value = frame.time - watched;
 		shared.uBoat.value.copy(frame.boat);
 		shared.uAhead.value.copy(frame.ahead);
 		shared.uWindDir.value.copy(frame.wind).setY(0);
@@ -613,7 +618,7 @@ export function createEmbroidery(scene: THREE.Scene, layer: number, giant: THREE
 		// The haul: a stroke to each slow breath, slower as they tire. Drawn in, held, eased.
 		const vigour = shared.uVigour.value;
 		const fatigue = 1 - (vigour.x + vigour.y + vigour.z) / 3;
-		stroke = (stroke + frame.delta / (7 + 6 * fatigue)) % 1;
+		stroke = (stroke + (frame.delta * (1 - (frame.watching ?? 0))) / (7 + 6 * fatigue)) % 1;
 		const pull = smoothstep(stroke, 0, 0.3) * (1 - smoothstep(stroke, 0.45, 0.7));
 		// A gust stronger than their hold pays the line back out.
 		const slip = Math.max(0, frame.gust - 0.45) * 1.6;

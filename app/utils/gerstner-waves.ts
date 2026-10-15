@@ -299,6 +299,8 @@ export interface GerstnerUniforms {
 	stillFront: THREE.IUniform<THREE.Vector4>;
 	stillAhead: THREE.IUniform<THREE.Vector2>;
 	stillSea: THREE.IUniform<THREE.Vector4>;
+	// Leane's moonlight on the water she is stilling, before tone mapping.
+	stillGlow: THREE.IUniform<number>;
 	pressGlow: THREE.IUniform<number>;
 	// The boat's electric lamps on the water round it, before tone mapping. 0 is unlit.
 	boatLamp: THREE.IUniform<number>;
@@ -597,6 +599,7 @@ uniform float channelBalm;
 uniform vec4 healed[ 4 ];
 uniform float channelBalmGlow;
 uniform float pressGlow;
+uniform float stillGlow;
 ${pressedChunk}
 ${stillChunk}
 uniform float boatLamp;
@@ -684,7 +687,8 @@ const fragmentFoam = /* glsl */ `
 	vec3 outgoingLight = albedo;
 	// (Beyond the strongest's stilled water the foam is the stilled weather's.)
 	float stillRim;
-	float foam = mix( foam, stillSea.z, stillOutside( worldPosition.xz, stillRim ) );
+	float stillBeyond = stillOutside( worldPosition.xz, stillRim );
+	float foam = mix( foam, stillSea.z, stillBeyond );
 	// In a storm the foam reaches further down the crests.
 	float foamMask = foam * smoothstep( mix( 0.35, 0.12, foam ), mix( 0.8, 0.5, foam ), vCrest + noise.x * 0.3 );
 	// Streaks of foam torn off by the gusts, stretched along the wind and drifting with it.
@@ -758,6 +762,9 @@ const fragmentFoam = /* glsl */ `
 	// and where each braid goes down into the sea its light is seen going down into the water.
 	outgoingLight *= mix( vec3( 1.0 ), vec3( 0.78, 0.95, 1.0 ), ( 1.0 - pressCalm ) * 0.6 * ( 1.0 - reflectance ) );
 	outgoingLight += vec3( 0.55, 0.7, 0.8 ) * pressGlow * pressCore * ( 1.0 - reflectance );
+	// Leane's moonlight lies on the water she is stilling: a silver sheen on the faces of its
+	// smoothed waves, brightest where the storm's sea breaks against its edge.
+	outgoingLight += vec3( 0.8, 0.86, 1.0 ) * stillGlow * ( ( 1.0 - stillBeyond ) * ( 0.25 + 0.75 * pow( max( surfaceNormal.y, 0.0 ), 8.0 ) ) + 1.5 * stillRim ) * ( 1.0 - smoothstep( 300.0, 2500.0, distance ) );
 
 	// Slowing the boat is the work of the weaker channellers (the owner's). They do not weave out
 	// towards Hawai'i but down: plaits laid in rings close round the boat, just under the level of
@@ -915,6 +922,7 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		stillFront: { value: new THREE.Vector4() },
 		stillAhead: { value: new THREE.Vector2(0, -1) },
 		stillSea: { value: new THREE.Vector4(1, 0, 0, 0) },
+		stillGlow: { value: 0 },
 		boatLamp: { value: 0 },
 		channelLight: { value: 0 },
 		foam: { value: 0 },

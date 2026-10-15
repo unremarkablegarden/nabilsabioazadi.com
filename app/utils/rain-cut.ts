@@ -23,12 +23,29 @@
 // no more (the storm's end, or the strongest's stilling emptying it) she lets go, the cut running
 // out along the ropes from her hands.
 //
+// It takes an extraordinary amount from her (the owner, the same morning: "Give her credit. Make
+// her weaves shine like the moon, make the other flows around the water stop because they impress
+// the other channellers so much. She first cuts the rain and then she begins to stop the waves.
+// She almost burns out from all of this over 9 minutes"). So it is one act of nine minutes:
+//   0 to 3 minutes   the rain cut off, as above
+//   3½ to 9          she turns to the sea as well and begins to press the waves out of it round the
+//                    boat: some of her canopy's threads come down and lie out over the water, and
+//                    under them the wind's sea and the swell sink (the wind still blows: she stops
+//                    the waves, not the weather), the stilled water spreading out from the boat to
+//                    a kilometre and more, the storm's sea breaking against its edge
+//   all through      her weave shines like the moon, silver, brighter the more she pours into it;
+//                    the twelve stop their own flows about the water and watch her
+//   to 9 minutes     her heat climbs towards burning out; in the last minute her light gutters
+//                    and her threads fray and hang; then she has to let go. The storm is still
+//                    there: the rain comes back down out of the cloud and the waves rise again,
+//                    and she rests.
 // Set in storm.json ("rainCut": { "from": ISO time }); ?raincut begins it as the page opens,
 // ?raincut=300 shows it five minutes in, ?raincut=off without it.
 import * as THREE from "three";
 import { lines } from "./embroidery";
-import { pixelRatio, ribbonShaderChunk, tameShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
 import stormSwitch from "~~/storm.json";
+import type { SeaConditions } from "./manawatawhi";
 
 const FILAMENTS = 520;
 
@@ -44,9 +61,46 @@ export function rainCutSince(now: Date, asked: string | null, opened: number, ow
 }
 
 const { smoothstep } = THREE.MathUtils;
-// 0..1 how much of the rain at the sea she has cut off, s seconds in: her ropes are out in
-// twenty seconds, and the canopy streams out over the boat in the next three minutes.
-export const rainCutCover = (seconds: number) => smoothstep(seconds, 20, 200);
+// How long she can hold it: nine minutes, and then she is all but burnt out.
+export const LEANE_HOLDS = 540;
+
+// Where she is in it, s seconds in.
+export function leaneAct(s: number) {
+	return {
+		// 0..1 how much of the rain at the sea is cut off: her ropes out in twenty seconds, the canopy
+		// over the boat in the next three minutes; once she lets go it comes back down in a minute.
+		rain: smoothstep(s, 20, 200) * (1 - smoothstep(s, LEANE_HOLDS + 5, LEANE_HOLDS + 75)),
+		// 0..1 how far the waves round the boat are pressed down, and how far out from it (m).
+		sea: smoothstep(s, 210, 470) * (1 - smoothstep(s, LEANE_HOLDS + 15, LEANE_HOLDS + 210)),
+		reach: 60 + 1700 * smoothstep(s, 210, 520) ** 1.2,
+		// 0..1 how far the twelve have stopped their own flows to watch her.
+		watching: smoothstep(s, 40, 120) * (1 - smoothstep(s, LEANE_HOLDS, LEANE_HOLDS + 120)),
+		// 0..1 her heat as the act goes on: nearly burnt out at the end.
+		strain: 0.2 + 0.77 * smoothstep(s, 15, LEANE_HOLDS) ** 1.3,
+		// 0..1 how spent: her light gutters in the last minute.
+		spent: smoothstep(s, LEANE_HOLDS - 60, LEANE_HOLDS),
+		// 0..1.05 how far the cut has run out from her hands, once she lets go.
+		letGo: THREE.MathUtils.clamp((s - LEANE_HOLDS) / 25, 0, 1.05),
+	};
+}
+
+// The weather under her: the rain at the sea cut off (thunder is still thunder; rain that no
+// longer reaches the sea is only cloud), and, pressing, the waves round the boat sinking, the
+// wind's sea first and most, the swell less (the wind still blows: she stops the waves).
+export function leaneConditions(c: SeaConditions, rain: number, sea: number): SeaConditions {
+	const windWaveHeight = c.windWaveHeight * (1 - 0.8 * sea);
+	const swellHeight = c.swellHeight * (1 - 0.6 * sea);
+	const secondSwellHeight = c.secondSwellHeight * (1 - 0.6 * sea);
+	return {
+		...c,
+		precipitation: c.precipitation * (1 - rain),
+		weatherCode: c.weatherCode < 95 && c.weatherCode >= 51 && rain > 0.5 ? 3 : c.weatherCode,
+		windWaveHeight,
+		swellHeight,
+		secondSwellHeight,
+		waveHeight: Math.hypot(windWaveHeight, swellHeight, secondSwellHeight),
+	};
+}
 
 const vertex = /* glsl */ `
 attribute float aT;
@@ -67,12 +121,16 @@ uniform float uHeat;
 uniform float uSigh;
 uniform float uFatigue;
 uniform float uFade;
+// 0..1 how far her threads have come down to the sea to press the waves, and how far out (m).
+uniform float uSea;
+uniform float uReach;
+uniform float uShine;
+uniform float uSpent;
 uniform vec3 uTint;
 varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
 ${ribbonShaderChunk}
-${tameShaderChunk}
 
 vec3 aheadDir() { return vec3( uAhead.x, 0.0, uAhead.y ); }
 vec3 acrossDir() { return vec3( - uAhead.y, 0.0, uAhead.x ); }
@@ -131,6 +189,19 @@ vec3 placeAt( float a, out float shown ) {
 	p -= U * sin( b * 6.0 + aSeed.y * 17.0 + uTime * 0.05 ) * 30.0 * b;
 	p.y = mix( start.y, uHeight + ( aSeed.z - 0.5 ) * 10.0, smoothstep( 0.0, 0.2, b ) ) - ( 6.0 + 10.0 * uFatigue ) * b * b + 8.0 * uSigh * sin( 3.14159 * b );
 	p.y += sin( uTime * ( 0.9 + 1.4 * uHeat ) + b * 14.0 + aSeed.x * 30.0 ) * ( 0.4 + 2.2 * uHeat ) * b + sin( b * 7.0 + aSeed.w * 13.0 + uTime * 0.1 ) * 5.0 * b;
+	// Pressing the waves: some come down off the canopy and lie out over the sea round the boat,
+	// each its own way, in a long curve down from where it left the rope to the edge of the water
+	// she is stilling, a little above the sea.
+	if ( aSeed.z > 0.7 && uSea > 0.0 ) {
+		float turned = ( aSeed.y - 0.5 ) * 2.8 + 0.25 * sin( b * 3.0 + aSeed.w * 9.0 + uTime * 0.05 );
+		vec3 way = - U * cos( turned ) + X * sin( turned );
+		float out_ = uReach * ( 0.55 + 0.45 * aSeed.x ) * b;
+		vec3 onSea = uBoat + way * out_ + X * sin( b * 5.0 + aSeed.w * 20.0 ) * 0.06 * out_;
+		onSea.y = mix( start.y, 0.8 + 0.6 * sin( b * 17.0 + aSeed.x * 40.0 + uTime * 0.4 ), smoothstep( 0.0, 0.35, b ) );
+		p = mix( p, onSea, smoothstep( 0.0, 1.0, uSea ) );
+	}
+	// Spent, her threads fray and hang.
+	p.y -= uSpent * ( 8.0 + 20.0 * aSeed.w ) * b * b * step( 0.5, fract( aSeed.x * 7.3 ) );
 	// (Its far end fades out, as warmth does into the air.)
 	shown = ( 1.0 - smoothstep( 0.7, 1.0, b ) ) * step( peel, uCast );
 	return p;
@@ -147,28 +218,36 @@ void main() {
 	// (Not right overhead, where any curve seen from beneath is a straight stroke across the sky;
 	// fading into the far air.)
 	shown *= smoothstep( 40.0, 160.0, far ) * exp( - far / 3500.0 );
-	vAlpha = shown * uFade * ( 0.6 + 0.6 * uHeat );
-	// Air's colour, warming towards ember as she heats, and tamed (13 to 26%), as the twelve's are.
-	vTint = tame( mix( uTint, vec3( 1.0, 0.72, 0.5 ), 0.55 * uHeat ), 0.13 + 0.13 * uHeat );
+	// Shining like the moon (the owner's): silver, brighter the more she pours into it, guttering
+	// unevenly along each thread as she nears burning out (slowly: never a flicker).
+	float gutter = 1.0 - uSpent * smoothstep( 0.3, 0.8, sin( aT * 9.0 + aSeed.y * 20.0 + uTime * 0.3 ) * 0.5 + 0.5 );
+	vAlpha = shown * uFade * uShine * gutter;
+	// Moonlight, a little warmer as she runs hot. (Not the twelve's tamed colour: hers is the
+	// light of the whole morning.)
+	vTint = mix( vec3( 0.84, 0.9, 1.0 ), vec3( 1.0, 0.9, 0.78 ), 0.3 * uHeat );
 	vEdge = aSide;
 	mat4 vp = projectionMatrix * viewMatrix;
-	gl_Position = ribbonPosition( vp * vec4( here, 1.0 ), vp * vec4( next, 1.0 ), aSide, 0.8 );
+	gl_Position = ribbonPosition( vp * vec4( here, 1.0 ), vp * vec4( next, 1.0 ), aSide, 1.6 );
 }
 `;
 
-// As the twelve's work is drawn: light by night, laid colour by day, deeper (never white on white).
+// Moonlight: by night a silver light with a soft glow about it; by day a silver thread in a sheath
+// of her air colour, deepened, so that it shows against the pale sky (never white on white).
 const fragment = /* glsl */ `
 uniform float uGain;
 uniform float uDay;
 uniform float uOpacity;
+uniform vec3 uSheath;
 varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
 void main() {
 	float across = abs( vEdge );
-	float body = exp( - across * across * 3.0 ) * ( 1.0 - smoothstep( 0.8, 1.0, across ) );
-	vec3 colour = mix( vTint, pow( vTint, vec3( 2.6 ) ) * 0.4, uDay );
-	gl_FragColor = vec4( colour * uGain, body * vAlpha * uOpacity * mix( 1.0, 3.5, uDay ) );
+	float core = 1.0 - smoothstep( 0.25, 0.55, across );
+	float glow = exp( - across * across * 4.0 );
+	vec3 night = vTint * uGain * ( 0.5 + 1.5 * core );
+	vec3 day = mix( pow( uSheath, vec3( 2.2 ) ) * 0.5, vTint * uGain * 1.6, core );
+	gl_FragColor = vec4( mix( night, day, uDay ), mix( glow, max( glow * 0.8, core ), uDay ) * vAlpha * uOpacity * mix( 1.0, 3.0, uDay ) );
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }
@@ -177,9 +256,8 @@ void main() {
 export interface RainCutFrame {
 	time: number;
 	delta: number;
-	// Seconds since she began, and 0..1 whether there is rain above to cut (she lets go without).
+	// Seconds since she began.
 	seconds: number;
-	held: number;
 	// How hard it is raining above her canopy, mm in 15 minutes (as SeaConditions.precipitation).
 	aloft: number;
 	boat: THREE.Vector3;
@@ -188,7 +266,6 @@ export interface RainCutFrame {
 	day: number;
 	gain: number;
 	tint: THREE.Color;
-	bg: THREE.Color;
 }
 
 // What the rain is to do below her canopy (rain.ts): the height under which it is gone, how deep
@@ -213,11 +290,15 @@ export function createRainCut(scene: THREE.Scene, layer: number) {
 		uSigh: { value: 0 },
 		uFatigue: { value: 0 },
 		uFade: { value: 0 },
+		uSea: { value: 0 },
+		uReach: { value: 0 },
+		uShine: { value: 1 },
+		uSpent: { value: 0 },
+		uSheath: { value: new THREE.Color() },
 		uTint: { value: new THREE.Color() },
 		uGain: { value: 1 },
 		uDay: { value: 0 },
 		uOpacity: { value: 0.06 },
-		uBg: { value: new THREE.Color() },
 		uResolution: { value: new THREE.Vector2(1, 1) },
 		uPixelRatio: pixelRatio,
 	};
@@ -232,40 +313,33 @@ export function createRainCut(scene: THREE.Scene, layer: number) {
 	mesh.visible = false;
 	scene.add(mesh);
 
-	let heat = 0.2;
+	let heat = -1;
 	let sighing = 0;
+	let sinceSigh = 0;
 	const SIGH = 7;
-	// Leane · Kite: eager, not the most stamina (AES_SEDAI in channellers.ts).
-	const EAGER = 0.8;
-	const STAMINA = 0.6;
-	let letGo = 0;
-	let started = false;
 	const layerNow: RainCutLayer = { height: 0, depth: 0, reach: 0 };
 
 	const update = (frame: RainCutFrame | undefined): RainCutLayer => {
 		if (!frame) {
 			mesh.visible = false;
-			started = false;
+			heat = -1;
 			layerNow.reach = 0;
 			return layerNow;
 		}
 		const dt = Math.min(frame.delta, 0.1);
-		const cover = rainCutCover(frame.seconds);
-		// Tired over the hours.
-		const fatigue = (1 - Math.exp(-frame.seconds / 3600 / 2.5)) * (1.3 - STAMINA);
-		// Her heat: the latent heat of all the rain she keeps from the sea, through her temperament,
-		// the more for being tired; given off slowly, and in a sigh when she can hold no more.
-		const strain = 0.05 * Math.min(1, frame.aloft / 14) * cover * (0.7 + 0.6 * EAGER) * (1 + 1.5 * fatigue);
-		if (sighing <= 0 && heat > 0.78) sighing = SIGH;
+		const act = leaneAct(frame.seconds);
+		// Her heat follows the strain of the act; and when she can hold no more she sighs, a breath
+		// let out, and for a moment it eases (a sigh is never sooner than forty seconds after the last).
+		if (heat < 0) heat = act.strain;
+		sinceSigh += dt;
+		if (sighing <= 0 && heat > 0.6 && sinceSigh > 40 && act.letGo <= 0) {
+			sighing = SIGH;
+			sinceSigh = 0;
+		}
 		const sigh = sighing > 0 ? Math.sin(Math.PI * (1 - sighing / SIGH)) : 0;
 		sighing = Math.max(0, sighing - dt);
-		heat = THREE.MathUtils.clamp(heat + dt * (strain - 0.025 * (heat - 0.15) - 0.12 * sigh), 0, 1);
-		// (Arriving after she has let go, there is nothing of it to see go.)
-		if (!started) letGo = frame.held > 0.5 ? 0 : 1.05;
-		started = true;
-		// She lets go once there is no rain above to cut, the cut running out from her hands.
-		letGo = frame.held > 0.5 ? Math.max(0, letGo - dt / 20) : Math.min(1.05, letGo + dt / 25);
-		const fade = 1 - smoothstep(letGo, 0.9, 1.05);
+		heat += (act.strain - 0.15 * sigh - heat) * Math.min(1, dt / 4);
+		const fade = 1 - smoothstep(act.letGo, 0.9, 1.05);
 		mesh.visible = fade > 0.001;
 		const u = uniforms;
 		u.uTime.value = frame.time;
@@ -274,26 +348,32 @@ export function createRainCut(scene: THREE.Scene, layer: number) {
 		u.uUpwind.value.copy(frame.wind).setY(0).negate();
 		if (u.uUpwind.value.lengthSq() > 1e-6) u.uUpwind.value.normalize();
 		else u.uUpwind.value.set(-frame.ahead.x, 0, -frame.ahead.y);
-		// Tired, the canopy sags lower.
-		u.uHeight.value = 48 - 12 * fatigue;
-		u.uSpread.value = cover;
+		// Tiring over the nine minutes, the canopy sags lower.
+		const fatigue = smoothstep(frame.seconds, 60, LEANE_HOLDS);
+		u.uHeight.value = 48 - 14 * fatigue;
+		u.uSpread.value = smoothstep(frame.seconds, 20, 200);
 		u.uCast.value = smoothstep(frame.seconds, 0, 20) * 1.05;
-		u.uLetGo.value = letGo;
+		u.uLetGo.value = act.letGo;
 		u.uHeat.value = heat;
 		u.uSigh.value = sigh;
 		u.uFatigue.value = fatigue;
 		u.uFade.value = fade;
+		u.uSea.value = smoothstep(frame.seconds, 200, 300);
+		u.uReach.value = act.reach;
+		// Brighter the more she pours into it; guttering as she is spent.
+		u.uShine.value = (0.6 + 1.1 * heat) * (1 - 0.45 * act.spent);
+		u.uSpent.value = act.spent;
 		u.uTint.value.copy(frame.tint);
+		u.uSheath.value.copy(frame.tint);
 		u.uGain.value = frame.gain;
 		u.uDay.value = frame.day;
-		u.uBg.value.copy(frame.bg);
 		u.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(pixelRatio.value);
 		(mesh.material as THREE.ShaderMaterial).blending = frame.day > 0.5 ? THREE.NormalBlending : THREE.AdditiveBlending;
-		// Under the canopy the rain is gone some way above the sea: lower as she tires, and for a
-		// moment lower still while she sighs and the layer cools.
-		layerNow.height = 40 - 12 * fatigue - 14 * sigh;
+		// Under the canopy the rain is gone some way above the sea: lower as she tires, for a moment
+		// lower still while she sighs and the layer cools; and once she lets go it comes back down.
+		layerNow.height = THREE.MathUtils.lerp(-80, 40 - 12 * fatigue - 14 * sigh, smoothstep(act.rain, 0, 0.6));
 		layerNow.depth = 12 + 8 * fatigue;
-		layerNow.reach = 450 * cover * (1 - smoothstep(letGo, 0, 0.6));
+		layerNow.reach = 450 * Math.min(1, act.rain * 3);
 		return layerNow;
 	};
 

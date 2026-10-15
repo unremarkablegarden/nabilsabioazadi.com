@@ -297,7 +297,31 @@ the page opening, `/?raincut=off` without.
   until the strongest has emptied the cloud (the rain above under about half a millimetre), then
   lets go, the cut running out along her ropes from her hands. At the storm's end likewise.
 
-Not yet right: her threads, seen from beneath, still run together into long strokes across the
-upper sky, so they are kept faint; by day the canopy is hardly there and the cut shows only as
-dry air; the rain above her reads as rows of short dashes near the horizon (the storm's own rain
-flying almost level); never watched in motion.
+**Her nine minutes** (the owner, next: "It should take an extraordinary amount from Leane to do
+this. Give her credit. Make her weaves shine like the moon, make the other flows around the water
+stop because they impress the other channellers so much. She first cuts the rain and then she
+begins to stop the waves. She almost burns out from all of this over 9 minutes"). It is now one
+act, `leaneAct` in `rain-cut.ts`, `LEANE_HOLDS` = 540 s:
+- 0 to 3 minutes the rain is cut off, as above; from 3½ minutes she turns to the sea as well:
+  some of her threads come down off the canopy and lie out over the water, and the wind's sea
+  (to a fifth) and the swell and the giant swells (to two fifths) sink round the boat, the calm
+  water spreading out to 1.7 km, the storm's sea breaking white at its edge (`leaneConditions`;
+  the stilling's `stillChunk` in the water, centred on the boat). The wind still blows: she stops
+  the waves, not the weather.
+- Her weave shines like the moon: silver light by night with a soft glow about each thread, a
+  silver thread in a deepened sheath of her air colour by day; brighter the more she pours into
+  it; a faint silver sheen on the water she has stilled (`stillGlow`).
+- The twelve stop their own flows about the water and watch: the calming's hawsers and stitches
+  hold still and dim by a third, their ordinary weaving rests, from the first minute to two
+  minutes after she lets go.
+- Her heat climbs all through towards burning out, eased a little by a sigh now and then; in the
+  last minute her light gutters (slowly, never a flicker) and her threads fray and hang. At nine
+  minutes she has to let go: the storm is still there, so the rain comes back down out of the
+  cloud within a minute and the waves rise again over three, and she rests. (If what she did
+  should hold instead, that is one line in `leaneAct`.)
+- `/?storm&raincut=150` (the rain cut), `=420` (pressing the waves), `=530` (nearly burnt out).
+
+Not yet right: her threads, seen from beneath, still run together into many long strokes across
+the upper sky, a net more than a moonlit canopy; the ones coming down to the sea hang like
+curtains; by day the sea under her is calmer but her light on it hardly shows; never watched in
+motion, so the guttering and the sighs are unseen.

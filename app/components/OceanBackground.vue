@@ -875,16 +875,11 @@ onMounted(() => {
 		// Under Leane's canopy the rain no longer reaches the sea, though the cloud still rains.
 		const cutSince = rainCutSince(new Date(), rainCutAsked, pageOpened, stormAsked !== null);
 		const rainAloft = uncut?.precipitation ?? 0;
-		const cutCover = cutSince !== undefined ? rainCutCover(cutSince) : 0;
-		const drawn =
-			uncut && cutCover > 0
-				? {
-						...uncut,
-						precipitation: rainAloft * (1 - cutCover),
-						// (Thunder is still thunder; rain that no longer reaches the sea is only cloud.)
-						weatherCode: uncut.weatherCode < 95 && uncut.weatherCode >= 51 && cutCover > 0.5 ? 3 : uncut.weatherCode,
-					}
-				: uncut;
+		const leane = cutSince !== undefined ? leaneAct(cutSince) : undefined;
+		const cutCover = leane?.rain ?? 0;
+		// And then she begins to stop the waves: the wind's sea and the swell sink round the boat.
+		const pressing = stillShare >= 0 && !stillDone ? 0 : (leane?.sea ?? 0);
+		const drawn = uncut && leane ? leaneConditions(uncut, cutCover, pressing) : uncut;
 		const air = ambientAir(drawn);
 		// By hand, the story stands still and its white-out and stillness are left out.
 		let moment: StormMoment;
@@ -932,7 +927,8 @@ onMounted(() => {
 		// measured sea already has its real height.
 		// Past hurricane force (gusts over 120 km/h) they rise under the measured sea as well.
 		const extreme = liveOnly ? beyondHurricane(liveOnly) : 0;
-		const surge = liveOnly ? 0.35 * extreme : 0.55 * fury;
+		// (Leane, pressing the waves, holds these down round the boat too.)
+		const surge = liveOnly ? 0.35 * extreme * (1 - 0.6 * pressing) : 0.55 * fury;
 		// The wind never holds steady: the whole sea swells and eases over a minute or two.
 		const lull = 0.5 * Math.sin(time * 0.11) + 0.5 * Math.sin(time * 0.047 + 1.3);
 		waveUniforms.surge.value = surge;
@@ -1087,7 +1083,7 @@ onMounted(() => {
 			// (All twelve are in the calming while it lasts, and rest for hours after it.)
 			// (And while the strongest stills the weather the twelve stand back, coming back over the
 			// half hour after it is done.)
-			strength: Math.max(darkness, controlLevel, gathering) * alive * (1 - (holding?.quiet ?? 0)) * (calming ? THREE.MathUtils.smoothstep(calming.after, 2, 10) : 1) * standBack,
+			strength: Math.max(darkness, controlLevel, gathering) * alive * (1 - (holding?.quiet ?? 0)) * (calming ? THREE.MathUtils.smoothstep(calming.after, 2, 10) : 1) * standBack * (1 - (leane?.watching ?? 0)),
 			// More light by day, when it has a bright sea to show against.
 			// (And more under a moon, whose light on the sea would otherwise drown it.)
 			gain: (0.3 + 0.6 * daylight + 0.6 * nightfall * (1 - darkness)) / steadyExposure,
@@ -1163,7 +1159,7 @@ onMounted(() => {
 		rainLight.copy(rainNight).lerp(rainDay, daylight).multiplyScalar(1 / steadyExposure);
 		const cutLayer = rainCut.update(
 			cutSince !== undefined && !calmMotion
-				? { time, delta, seconds: cutSince, held: THREE.MathUtils.smoothstep(rainAloft, 0.05, 0.4), aloft: rainAloft, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, tint: skySheath[0]!, bg: mist }
+				? { time, delta, seconds: cutSince, aloft: rainAloft, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, tint: skySheath[0]! }
 				: undefined,
 		);
 		rainfall.update({ cut: cutLayer, time, delta, rain, wind: rainWind, gust: gustNowRain, light: rainLight, flash, shelter: shelterAt, shelterRadius: 0.9, hold: shelterHold, canopy: skyCanopy, hang: together?.hang ?? breathing?.hang ?? 0, rise: together?.rise ?? 0, murmur: together?.murmur ?? 0, curtain: together && together.curtain > 0 ? -10 + 320 * together.curtain : (breathing?.curtain ?? -1000), breath: breathing?.breath ?? 0, front: breathing?.front ?? holding?.rainFront ?? -1 });
@@ -1209,6 +1205,8 @@ onMounted(() => {
 				pressed: waveUniforms.pressed.value,
 				pressGlow: waveUniforms.pressGlow,
 				// The twelve let go of it as the strongest takes the weather in hand.
+				// The twelve stop their flows about the water to watch Leane.
+				watching: leane?.watching ?? 0,
 				// (First, while the strongest reads it: the strongest goes in alone.)
 				letGo: stillShare >= 0 ? THREE.MathUtils.smoothstep(stillShare, 0, 0.035) : stillDone ? 1 : 0,
 			},
@@ -1237,10 +1235,21 @@ onMounted(() => {
 		const seaEdge = stillingSeen ? stilledSeaEdge(stillShare) : { reach: 0, width: 0 };
 		waveUniforms.stillFront.value.set(camera.position.x, camera.position.z, seaEdge.reach * stilling.breath(), seaEdge.width * stilling.breath());
 		waveUniforms.stillAhead.value.copy(skyAhead);
+		waveUniforms.stillGlow.value = 0;
 		if (seaEdge.reach > 0 && drawn) {
 			const lift = THREE.MathUtils.clamp(stillFrom.waveHeight / Math.max(drawn.waveHeight, 0.1), 0.3, 3);
 			const breaking = THREE.MathUtils.smoothstep(stillShare, 0.2, 0.26) * (1 - THREE.MathUtils.smoothstep(stillShare, 0.93, 0.99));
 			waveUniforms.stillSea.value.set(lift, 0.9 * Math.min(1, Math.abs(lift - 1) * 1.5) * breaking * alive, whitecaps(stillFrom.windSpeed / 3.6) * alive, stilling.edgePhase());
+		} else if (leane && pressing > 0.001 && uncut && drawn) {
+			// The water Leane is stilling: a broad lobe round the boat, the storm's sea breaking at
+			// its edge, and her moonlight lying on it.
+			// (Round the boat, not out from it: begun at the boat, the storm's whole sea stood up
+			// close on either side of it like a wall.)
+			waveUniforms.stillFront.value.set(camera.position.x - skyAhead.x * 0.5 * leane.reach, camera.position.z - skyAhead.y * 0.5 * leane.reach, 1.5 * leane.reach, 0.85 * leane.reach);
+			const lift = THREE.MathUtils.clamp(uncut.waveHeight / Math.max(drawn.waveHeight, 0.1), 0.3, 3);
+			waveUniforms.stillSea.value.set(lift, 0.9 * Math.min(1, Math.abs(lift - 1) * 1.5) * pressing * alive, whitecaps(uncut.windSpeed / 3.6) * alive, time * 0.004);
+			waveUniforms.foam.value *= 1 - 0.7 * pressing;
+			waveUniforms.stillGlow.value = ((0.006 + 0.012 * (1 - leane.spent)) * pressing * alive) / steadyExposure;
 		}
 		skyAll.update({ time, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, sheath: skySheath, at: together ?? skyAllAt(0) });
 		const strike = bolts.update(time, 4 / steadyExposure, air.vapour, stormFog);
