@@ -75,11 +75,15 @@ export interface Calming {
 
 export function calmingNow(now: Date, asked?: number): Calming | undefined {
 	if (asked !== undefined) return { progress: Math.min(1, Math.max(0, asked)), after: Math.max(0, asked - 1) * 7, hours: 7 };
-	const { calming } = stormSwitch as { calming?: { from: string; hours: number } };
+	const { calming } = stormSwitch as { calming?: { from: string; hours: number; ceased?: string } };
 	if (!calming?.from) return undefined;
 	const hours = (now.getTime() - new Date(calming.from).getTime()) / 3_600_000;
 	if (hours < 0) return undefined;
-	return { progress: Math.min(1, hours / calming.hours), after: Math.max(0, hours - calming.hours), hours: calming.hours };
+	// Ceased early ("ceased" in storm.json; the owner's, 16 October): all twelve let go at once.
+	// What they had done holds, and they rest from then.
+	const ceased = calming.ceased ? (new Date(calming.ceased).getTime() - new Date(calming.from).getTime()) / 3_600_000 : calming.hours;
+	const stop = Math.min(ceased, calming.hours);
+	return { progress: Math.min(1, Math.min(hours, stop) / calming.hours), after: Math.max(0, hours - stop), hours: calming.hours };
 }
 
 const ease = (x: number) => x * x * (3 - 2 * x);
