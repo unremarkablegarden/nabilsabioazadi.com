@@ -168,3 +168,48 @@ on one term of its potential intensity), drawn in `embroidery.ts`. The strongest
 not run and the twelve's ordinary weaving rests (it comes back between 2 and 10 hours after).
 Not yet right: by day, in the storm's haze, the embroidery is hard to see; after it is done the
 strongest's white weaving carries on (they are not tired), which may or may not be wanted.
+
+## 11. For the next weaver project (written at the end of the 16 October thread)
+
+What this thread learned about how the owner wants weaving made, in the order it was learned. Read
+with `HANDOFF.md`, `WEAVES.md` and §1–10 above.
+
+**Where the work is**
+- The great calming: `app/utils/embroidery.ts` (drawn), `calmedConditions` and `calmingNow` in
+  `app/utils/channelled-storm.ts` (the weather), `pressedCalm` in `app/utils/gerstner-waves.ts` (the
+  sea pressed to glass), `storm.json` (`"calming"`). See it at any point with `/?storm&calm=0.4`.
+- Also built, beside the live version: `/?storm&sky=breath` (`sky-breath.ts`, the rain going back
+  up and a real hole in the cloud onto the stars) and `/?sky=sacred` (`sacred.ts`, Woolf's
+  six-sided flower as a structure fed by the storm's energy, with held waves).
+- Shared shader pieces in `weave.ts`: `ribbonShaderChunk` (lines of a set pixel width) and
+  `tameShaderChunk` (colour taken only 13–26% of the way from the background towards its own).
+
+**How the owner directed it, and what it taught**
+1. *Ground the weave in real physics, then let feeling ride on it.* The calming works because the
+   weather follows the storm as a heat engine (Emanuel's potential intensity), each third of the
+   twelve on one term of it. Then: "make this look like people's emotion with thermodynamics":
+   each channeller's strain as heat (agitation, sighs as expansion, heat shared between
+   neighbours, equilibrium at the end). Literature welcome too: "familiarise yourself with
+   Virginia Woolf... a thermodynamic logic around her big weave".
+2. *Power is scale and mass, never brightness or colour.* Three thin lines for "the most
+   powerful channelling ever" earned "Shame on you". Every channeller her own great rope, work
+   filling sea and sky. "They can destroy a tower of stone with a single blasting braid... think
+   how they would work with the ocean": they move the ocean itself (the swell pressed out of it),
+   not decorate its surface.
+3. *Barely coloured.* "Tamed to 13–26% of the background colours." Hue from the sea and sky;
+   power from form, motion and mass. The strongest's white stays white.
+4. *Nothing angular, nothing geometric.* Straight taut lines, a single convergence point, rows of
+   evenly spaced braids, dashes lining up into a grid, V-shaped ties: each was called out ("too
+   angular", "oblong blobs have got to stop"). Every line one continuous curve; stagger anything
+   repeated; nothing in rows; edges uneven.
+5. *Effort must show.* "The most effortful weaves": hauling with the breath, gusts paying lines
+   back out, quiver under the real wind's load, fatigue (splaying, slack strands, slower hauls).
+6. *Words are typed fast and phonetically.* "xease" was *seize*, "@6%" was *26%*, "ponde" was
+   *blobs*. When a reading would change what goes live, ask once, plainly; otherwise act on the
+   likeliest and show a picture.
+7. *Show pictures; be plain about what is still wrong.* Night is always checked; day has
+   repeatedly been the weak view (white on white): check day every time.
+8. "Commit and push" for every push; never push before it. `main` is kept equal to `october`.
+
+**Seeing it**: `~/.local/node/bin/node scripts/shoot.mjs "http://localhost:3000/?storm&hour=4.6&calm=0.5" /tmp/x 12`
+(headless Brave; the app's browser pane stops drawing when hidden). `&hour=` sets the light.
