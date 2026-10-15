@@ -1020,7 +1020,10 @@ onMounted(() => {
 		horizonScreen.y = horizonAhead.y;
 		document.documentElement.style.setProperty("--horizon", `${(horizonAhead.y * 100).toFixed(2)}vh`);
 		document.documentElement.style.setProperty("--roll", `${camera.rotation.z.toFixed(4)}rad`);
-		overlay.draw(delta, rain, flash, camera.rotation.z * 0.5 + 0.5 * crosswind, bond, knotScreen);
+		// The rain is driven by the real wind: how much of it blows across the view, and how hard (150 km/h is full).
+		const gale = liveOnly ? Math.min(1, liveOnly.windSpeed / 150) : fury;
+		const across = liveOnly ? Math.sin(THREE.MathUtils.degToRad(liveOnly.windDirection + 180 - PLACE.bearing)) : 0.5 * crosswind;
+		overlay.draw(delta, rain, flash, camera.rotation.z, across * alive, gale * alive, bond, knotScreen);
 		const strike = bolts.update(time, 4 / steadyExposure, air.vapour, stormFog);
 		if (strike > 0) {
 			for (let i = 0; i < BOLT_POINTS; i++) {
