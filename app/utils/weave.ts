@@ -275,15 +275,33 @@ void main() {
 `;
 
 // One ribbon strip per polyline: two vertices per point, joined into triangles.
+// (Written straight into the array the graphics card is given: a list grown a number at a time
+// held millions of them at once, slowly, on loading.)
 export function stripIndices(strips: number, segments: number) {
-	const indices: number[] = [];
+	const vertices = strips * (segments + 1) * 2;
+	const indices = vertices > 65535 ? new Uint32Array(strips * segments * 6) : new Uint16Array(strips * segments * 6);
+	let n = 0;
 	for (let strip = 0; strip < strips; strip++) {
 		for (let i = 0; i < segments; i++) {
 			const a = (strip * (segments + 1) + i) * 2;
-			indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+			indices[n++] = a;
+			indices[n++] = a + 1;
+			indices[n++] = a + 2;
+			indices[n++] = a + 1;
+			indices[n++] = a + 3;
+			indices[n++] = a + 2;
 		}
 	}
-	return indices;
+	return new THREE.BufferAttribute(indices, 1);
+}
+
+// Ribbons whose shaders work out where every point is need no positions of their own, and are
+// given none: at millions of points the zeros only took room on the graphics card and time to
+// measure. three.js still asks where each one is, for sorting what is drawn over what: at the
+// middle, as the zeros put it.
+export function unplaced(geometry: THREE.BufferGeometry) {
+	geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 0);
+	return geometry;
 }
 
 // The palms, relative to the camera: a little below it, a little behind it, either side.

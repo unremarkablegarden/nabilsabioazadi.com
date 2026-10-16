@@ -6,6 +6,15 @@
 const route = useRoute();
 const kept = ["slab", "neptune", "4788", "4788a", "6500"];
 const typography = computed(() => (kept.includes(route.query.type as string) ? route.query.type : "swiss"));
+
+// The ocean (three.js and every weave, most of the site's code) is fetched alongside the page
+// but run apart from it, so that the words and the navigation are ready to use before it, not
+// after: on a slow machine that was seconds. The picture is the same.
+const OceanBackground = defineAsyncComponent(() => import("~/components/OceanBackground.vue"));
+// On the server it is loaded before the page is written, so that it still fills in the place,
+// time and conditions before the navigation shows them (otherwise the server's menu went out
+// without them and the browser's did not match it).
+if (import.meta.server) await OceanBackground.__asyncLoader?.();
 </script>
 
 <template>

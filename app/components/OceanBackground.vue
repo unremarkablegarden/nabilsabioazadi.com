@@ -155,7 +155,20 @@ watchEffect(() => {
 	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: channelled.value ? CHANNELLED_WORDS : undefined };
 });
 
-onMounted(() => {
+onMounted(async () => {
+	// Setting the picture up is long work (every weave is built), and it is done in pieces with
+	// the browser let in between, so that the page answers a click, a key or a scroll all through
+	// it: on a slow machine it was seconds in which the menu could not be opened. Nothing is drawn
+	// until it is all set up, so the picture is the same.
+	const breathe = () =>
+		new Promise<void>((resolve) => {
+			const scheduler = (window as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
+			if (scheduler?.yield) return void scheduler.yield().then(resolve);
+			// (A message, not a timer: a timer in a tab that is out of sight waits a second or more.)
+			const channel = new MessageChannel();
+			channel.port1.onmessage = () => resolve();
+			channel.port2.postMessage(null);
+		});
 	// Taken up here and no sooner. The server's answer reaches it only after it has drawn the menu,
 	// so its menu has no Waves or Wind rows; taken up any earlier in the browser, the browser's
 	// menu had them, and Vue complained on every load that the two did not match.
@@ -279,6 +292,7 @@ onMounted(() => {
 	skyUniforms.cloudElevation.value = 0.5;
 	const vortexUniforms = addSkyVortex(sky);
 	const twilightUniforms = addTwilightSky(sky);
+	await breathe();
 
 	// The moon's face, drawn for its phase with the lit edge to the right; the disc is then turned
 	// so that edge faces the sun. Redrawn only when the phase has moved on.
@@ -577,17 +591,22 @@ onMounted(() => {
 	const allAtOnce = query.get("sky") !== "column" && !byBreath && !bySacred;
 	const skyAll = createSkyAll(scene, SCREEN_LAYER);
 	const skyBreath = createSkyBreath(scene, sky, SCREEN_LAYER);
+	await breathe();
 	const sacred = createSacred(scene, SCREEN_LAYER);
 	// The great calming (channelled-storm.ts, embroidery.ts): set in storm.json; ?calm=0.4 shows it
 	// that far through.
+	await breathe();
 	const embroidery = createEmbroidery(scene, SCREEN_LAYER, GIANT_WAVES);
 	const calmAsked = query.get("calm") !== null && Number.isFinite(Number(query.get("calm"))) ? Number(query.get("calm")) : undefined;
 	// The twelve mourning into the waves (mourning.ts): "mourning" in storm.json, or ?mourn.
+	await breathe();
 	const mourning = createMourning(scene, SCREEN_LAYER);
 	const mournAsked = query.has("mourn");
 	const embroideryTints = [new THREE.Color(), new THREE.Color(), new THREE.Color()];
+	await breathe();
 	const stilling = createStilling(scene, SCREEN_LAYER);
 	// Leane cutting the rain off (rain-cut.ts): set in storm.json, or ?raincut for this visit.
+	await breathe();
 	const rainCut = createRainCut(scene, SCREEN_LAYER);
 	const rainCutAsked = query.get("raincut");
 	const stillSheath = new THREE.Color();
@@ -610,6 +629,7 @@ onMounted(() => {
 	const rainWind = new THREE.Vector3();
 	const rainNight = new THREE.Color(0.2, 0.22, 0.26);
 	const rainDay = new THREE.Color(0.9, 0.93, 0.96);
+	await breathe();
 	const fluid = createFluid(renderer, scene, SCREEN_LAYER);
 	const bolts = createLightning(scene);
 	const fogTint = new THREE.Color();
@@ -770,7 +790,9 @@ onMounted(() => {
 	const mist = new THREE.Color();
 	// The knot of the weave hangs over the sea straight ahead, about 15° above the horizon.
 	const knotPosition = new THREE.Vector3(0, 250, -800);
+	await breathe();
 	const weave = createWeave(scene, camera, knotPosition);
+	await breathe();
 	const channellers = createChannellers(scene, camera, waveUniforms);
 	applyColours = channellers.setColours;
 	channellers.setColours(colours);
@@ -791,6 +813,7 @@ onMounted(() => {
 		if (measured) conditions.value = { ...measured, ...pretend };
 	};
 	const stormInterval = setInterval(followSwitch, 30_000);
+	await breathe();
 	const stars = createStars(scene, camera, PLACE, planetPositions, skyBreath.hole);
 	waveUniforms.weaveCentre.value.set(knotPosition.x, knotPosition.z);
 	const projected = new THREE.Vector3();
@@ -824,14 +847,35 @@ onMounted(() => {
 	// The sea's shaders are built while the page goes on loading, where the browser can do that
 	// alongside (KHR_parallel_shader_compile), and nothing is drawn until they are ready. Drawing
 	// at once made the browser build them there and then, holding the whole page still for a
-	// second or more on loading.
+	// second or more on loading. Only what the first picture shows is waited for (about half of
+	// them). The rest, the story's weaves that are not out yet, are built one at a time afterwards
+	// while the browser has nothing else to do, so that none of them makes the picture catch when
+	// it first comes out.
 	let compiled = false;
-	renderer
-		.compileAsync(scene, camera)
-		.catch(() => {})
-		.finally(() => (compiled = true));
+	let compiling = false;
+	let warming = true;
+	let notYetShown: THREE.Object3D[] = [];
+	const whenIdle = (then: () => void) => ("requestIdleCallback" in window ? requestIdleCallback(then, { timeout: 2000 }) : setTimeout(then, 100));
+	const warmNext = () => {
+		const next = notYetShown.shift();
+		if (!next || !warming) return;
+		whenIdle(() => {
+			if (!warming) return;
+			renderer.compileAsync(next, camera, scene).catch(() => {}).finally(warmNext);
+		});
+	};
+	// (Called with the first picture set out, so that what it shows is known.)
+	const compileShown = () => {
+		compiling = true;
+		notYetShown = scene.children.filter((object) => !object.visible);
+		Promise.all(scene.children.filter((object) => object.visible).map((object) => renderer.compileAsync(object, camera, scene)))
+			.catch(() => {})
+			.finally(() => {
+				compiled = true;
+				warmNext();
+			});
+	};
 	renderer.setAnimationLoop(() => {
-		if (!compiled) return;
 		// The timer is still updated while paused, so that motion resumes without a jump in speed.
 		timer.update();
 		// One frame is always drawn first, so a visitor who starts paused sees a still sea, not a blank.
@@ -1337,6 +1381,12 @@ onMounted(() => {
 		workOutTrains(waveUniforms);
 		twilightUniforms.draw(renderer);
 		skyUniforms.time.value += delta * lerp(1, 4, sky) * (1 + 2 * fury);
+		if (!compiled) {
+			if (!compiling) compileShown();
+			// (Not drawn yet, so a visitor who starts paused is still owed their one still frame.)
+			drawnOnce = false;
+			return;
+		}
 		renderer.render(scene, camera);
 		// Shown once it has been drawn a few times in the form it will keep.
 		if (!revealed && ++framesDrawn > 2) reveal();
@@ -1350,6 +1400,7 @@ onMounted(() => {
 	window.addEventListener("resize", onResize);
 
 	dispose = () => {
+		warming = false;
 		window.removeEventListener("resize", onResize);
 		window.removeEventListener("pointermove", onPointerMove);
 		clearInterval(clockInterval);
@@ -1371,9 +1422,15 @@ onMounted(() => {
 		renderer.dispose();
 		renderer.domElement.remove();
 	};
+	if (unmounted) dispose();
 });
 
-onBeforeUnmount(() => dispose?.());
+// (Left part-way through setting up, it finishes and then puts everything away at once.)
+let unmounted = false;
+onBeforeUnmount(() => {
+	unmounted = true;
+	dispose?.();
+});
 </script>
 
 <template>

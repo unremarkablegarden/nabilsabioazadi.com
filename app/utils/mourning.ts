@@ -22,7 +22,7 @@
 // others mourn. Nothing in rows, every line one curve; colour tamed to the background's.
 import * as THREE from "three";
 import { GIANT_WAVES } from "./gerstner-waves";
-import { pixelRatio, ribbonShaderChunk, tameShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RENDER_ORDER } from "./weave";
 
 const TRAINS = 32;
 const FIBRES = 40;
@@ -253,7 +253,6 @@ export function createMourning(scene: THREE.Scene, layer: number) {
 	const side = new Float32Array(vertices);
 	const who = new Float32Array(vertices);
 	const seeds = new Float32Array(vertices * 4);
-	const index: number[] = [];
 	for (let line = 0; line < count; line++) {
 		const own = [Math.random(), Math.random(), Math.random(), Math.random()];
 		for (let i = 0; i <= SEGMENTS; i++) {
@@ -264,19 +263,14 @@ export function createMourning(scene: THREE.Scene, layer: number) {
 				who[v] = line % SLOTS.length;
 				seeds.set(own, v * 4);
 			}
-			if (i < SEGMENTS) {
-				const v = (line * (SEGMENTS + 1) + i) * 2;
-				index.push(v, v + 1, v + 2, v + 1, v + 3, v + 2);
-			}
 		}
 	}
-	const geometry = new THREE.BufferGeometry();
-	geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(vertices * 3), 3));
+	const geometry = unplaced(new THREE.BufferGeometry());
 	geometry.setAttribute("aT", new THREE.BufferAttribute(along, 1));
 	geometry.setAttribute("aSide", new THREE.BufferAttribute(side, 1));
 	geometry.setAttribute("aWho", new THREE.BufferAttribute(who, 1));
 	geometry.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 4));
-	geometry.setIndex(index);
+	geometry.setIndex(stripIndices(count, SEGMENTS));
 	const uniforms = {
 		uTime: { value: 0 },
 		uBoat: { value: new THREE.Vector3() },

@@ -19,7 +19,7 @@
 // Nothing in it is hard or bright: fine, soft threads, fading as they climb, never a light hung
 // in the sky (the owner's standing rule), and the strongest's threads alone are white.
 import * as THREE from "three";
-import { pixelRatio, ribbonShaderChunk, stripIndices, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RENDER_ORDER } from "./weave";
 
 const GATHERING = 48;
 const LIFTING = 120;
@@ -302,8 +302,7 @@ export function createSkyOpening(scene: THREE.Scene, layer: number) {
 			}
 		}
 	}
-	const geometry = new THREE.BufferGeometry();
-	geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(vertices * 3), 3));
+	const geometry = unplaced(new THREE.BufferGeometry());
 	geometry.setAttribute("aT", new THREE.BufferAttribute(along, 1));
 	geometry.setAttribute("aSide", new THREE.BufferAttribute(side, 1));
 	geometry.setAttribute("aThread", new THREE.BufferAttribute(thread, 4));

@@ -48,7 +48,7 @@
 //     towards the sea.
 import * as THREE from "three";
 import { calmingWork } from "./channelled-storm";
-import { pixelRatio, ribbonShaderChunk, tameShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RENDER_ORDER } from "./weave";
 
 const SEA_ROWS = 70;
 const SEA_SLOTS = 90;
@@ -435,7 +435,6 @@ export function lines(count: number, segments: number, cell: (i: number) => [num
 	const side = new Float32Array(vertices);
 	const cells = new Float32Array(vertices * 2);
 	const seeds = new Float32Array(vertices * 4);
-	const index: number[] = [];
 	for (let line = 0; line < count; line++) {
 		const own = [Math.random(), Math.random(), Math.random(), Math.random()];
 		const [a, b] = cell(line);
@@ -448,19 +447,14 @@ export function lines(count: number, segments: number, cell: (i: number) => [num
 				cells[v * 2 + 1] = b;
 				seeds.set(own, v * 4);
 			}
-			if (i < segments) {
-				const v = (line * (segments + 1) + i) * 2;
-				index.push(v, v + 1, v + 2, v + 1, v + 3, v + 2);
-			}
 		}
 	}
-	const geometry = new THREE.BufferGeometry();
-	geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(vertices * 3), 3));
+	const geometry = unplaced(new THREE.BufferGeometry());
 	geometry.setAttribute("aT", new THREE.BufferAttribute(along, 1));
 	geometry.setAttribute("aSide", new THREE.BufferAttribute(side, 1));
 	geometry.setAttribute("aCell", new THREE.BufferAttribute(cells, 2));
 	geometry.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 4));
-	geometry.setIndex(index);
+	geometry.setIndex(stripIndices(count, segments));
 	return geometry;
 }
 

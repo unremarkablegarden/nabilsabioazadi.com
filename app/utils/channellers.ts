@@ -35,7 +35,7 @@
 import * as THREE from "three";
 import { CHANNELLERS, channelPathChunk } from "./channel-path";
 import type { GerstnerUniforms } from "./gerstner-waves";
-import { pixelRatio, ribbonShaderChunk, stripIndices, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RENDER_ORDER } from "./weave";
 
 // What the weaving looks like follows the owner's reference (the women channelling together in
 // The Wheel of Time): not a few drawn lines but a great many hair-fine filaments streaming
@@ -1428,9 +1428,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			}
 		}
 	}
-	const geometry = new THREE.BufferGeometry();
-	// The shader works out the real positions; three.js only needs the count.
-	geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+	// The shader works out the real positions.
+	const geometry = unplaced(new THREE.BufferGeometry());
 	geometry.setAttribute("aT", new THREE.BufferAttribute(along, 1));
 	geometry.setAttribute("aSide", new THREE.BufferAttribute(side, 1));
 	geometry.setAttribute("aThread", new THREE.BufferAttribute(thread, 4));
@@ -1549,8 +1548,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			}
 		}
 	}
-	const scoutGeometry = new THREE.BufferGeometry();
-	scoutGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(scoutCount * 3), 3));
+	const scoutGeometry = unplaced(new THREE.BufferGeometry());
 	scoutGeometry.setAttribute("aT", new THREE.BufferAttribute(scoutAlong, 1));
 	scoutGeometry.setAttribute("aSide", new THREE.BufferAttribute(scoutSide, 1));
 	scoutGeometry.setAttribute("aSeed", new THREE.BufferAttribute(scoutSeed, 4));
@@ -1710,8 +1708,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			}
 		}
 	}
-	const soundingGeometry = new THREE.BufferGeometry();
-	soundingGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(soundingCount * 3), 3));
+	const soundingGeometry = unplaced(new THREE.BufferGeometry());
 	soundingGeometry.setAttribute("aT", new THREE.BufferAttribute(soundingAlong, 1));
 	soundingGeometry.setAttribute("aSide", new THREE.BufferAttribute(soundingSide, 1));
 	soundingGeometry.setAttribute("aBraid", new THREE.BufferAttribute(soundingBraid, 4));

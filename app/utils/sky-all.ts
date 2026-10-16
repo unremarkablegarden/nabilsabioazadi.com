@@ -14,7 +14,7 @@
 //                                                                  (lanterns, here)
 // and all of it let go together, the rain closing back in.
 import * as THREE from "three";
-import { pixelRatio, ribbonShaderChunk, stripIndices, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RENDER_ORDER } from "./weave";
 
 export const SKY_ALL_CYCLE = 160;
 const CLOUD = 230;
@@ -224,8 +224,7 @@ function strips(count: number, segments: number, seeded: boolean) {
 			}
 		}
 	}
-	const geometry = new THREE.BufferGeometry();
-	geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(vertices * 3), 3));
+	const geometry = unplaced(new THREE.BufferGeometry());
 	geometry.setAttribute("aT", new THREE.BufferAttribute(along, 1));
 	geometry.setAttribute("aSide", new THREE.BufferAttribute(side, 1));
 	if (seeded) geometry.setAttribute("aThread", new THREE.BufferAttribute(thread, 4));

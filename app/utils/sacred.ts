@@ -66,7 +66,7 @@
 //     farewell dinner.
 import * as THREE from "three";
 import type { SeaConditions } from "./manawatawhi";
-import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RENDER_ORDER } from "./weave";
 
 // The weather once the storm's energy has been drawn in: a light air, a smooth sea, no rain, a
 // clear sky with a little high cloud, the pressure steady. (The periods and directions are left
@@ -547,8 +547,7 @@ function filaments(count: number, segments: number, who: (i: number) => number) 
 			}
 		}
 	}
-	const geometry = new THREE.BufferGeometry();
-	geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(vertices * 3), 3));
+	const geometry = unplaced(new THREE.BufferGeometry());
 	geometry.setAttribute("aT", new THREE.BufferAttribute(along, 1));
 	geometry.setAttribute("aSide", new THREE.BufferAttribute(side, 1));
 	geometry.setAttribute("aSeed", new THREE.BufferAttribute(seed, 4));
