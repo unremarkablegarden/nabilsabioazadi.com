@@ -38,6 +38,21 @@ export const CHANNELLED_STORM: Partial<SeaConditions> = {
 // What the menu says while it lasts (the owner's words).
 export const CHANNELLED_WORDS = "Channelled, honouring spirits met across Te Moana-nui-a-Kiwa";
 
+// Whether the storm is to have no rain at all: "rain": false in storm.json (the owner, 16
+// October: "cut the rain entirely"). Wind, sea, cloud and thunder stay.
+export function stormRainCut() {
+	return (stormSwitch as { rain?: boolean }).rain === false;
+}
+
+// Whether the twelve mourn into the waves (mourning.ts): "mourning": { "from": ISO time } in
+// storm.json, while the storm is on. Gives the seconds since it began, or undefined.
+export function mourningSince(now: Date) {
+	const { mourning } = stormSwitch as { mourning?: { from: string | null } };
+	if (!mourning?.from) return undefined;
+	const seconds = (now.getTime() - new Date(mourning.from).getTime()) / 1000;
+	return seconds >= 0 ? seconds : undefined;
+}
+
 // Whether the twelve stay Aes Sedai (Siuan's, Leane's and Moiraine's four each, with the storm's
 // graded colours) when no storm is on: "weavers": "aes-sedai" in storm.json (the owner, 16
 // October: "release the storm but keep these weavers").

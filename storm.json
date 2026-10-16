@@ -1,8 +1,10 @@
 {
-	"from": null,
-	"until": "2026-10-16T08:35:00+13:00",
+	"from": "2026-10-16T22:00:00+13:00",
+	"until": "2026-10-17T22:00:00+13:00",
 	"weavers": "aes-sedai",
-	"calming": { "from": "2026-10-16T04:30:00+13:00", "hours": 7 },
-	"rainCut": { "from": "2026-10-16T07:19:00+13:00" },
+	"rain": false,
+	"mourning": { "from": "2026-10-16T22:10:00+13:00" },
+	"calming": { "from": null, "hours": 7 },
+	"rainCut": { "from": null },
 	"stilling": { "from": null }
 }

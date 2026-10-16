@@ -495,7 +495,9 @@ onMounted(() => {
 	let stillDone = false;
 	const stormNow = () => (stillDone || stormAsked === "off" ? false : stormAsked !== null ? true : channelledStormOn(new Date()));
 	let stormOn = stormNow();
-	const pretendNow = () => (stillDone ? {} : stormOn ? { ...CHANNELLED_STORM, ...asPretended } : asPretended);
+	// (With the rain cut, the storm's figures say no rain: storm.json "rain": false.)
+	const noRain = stormRainCut();
+	const pretendNow = () => (stillDone ? {} : stormOn ? { ...CHANNELLED_STORM, ...(noRain ? { precipitation: 0 } : {}), ...asPretended } : asPretended);
 	let pretend = pretendNow();
 	channelled.value = Object.keys(pretend).length > 0;
 	// Its colours, unless the address gives colours of its own.
@@ -577,6 +579,9 @@ onMounted(() => {
 	// that far through.
 	const embroidery = createEmbroidery(scene, SCREEN_LAYER, GIANT_WAVES);
 	const calmAsked = query.get("calm") !== null && Number.isFinite(Number(query.get("calm"))) ? Number(query.get("calm")) : undefined;
+	// The twelve mourning into the waves (mourning.ts): "mourning" in storm.json, or ?mourn.
+	const mourning = createMourning(scene, SCREEN_LAYER);
+	const mournAsked = query.has("mourn");
 	const embroideryTints = [new THREE.Color(), new THREE.Color(), new THREE.Color()];
 	const stilling = createStilling(scene, SCREEN_LAYER);
 	// Leane cutting the rain off (rain-cut.ts): set in storm.json, or ?raincut for this visit.
@@ -828,13 +833,14 @@ onMounted(() => {
 		if (stormSince < 0) stormSince = time;
 		const skySeconds = time - stormSince + (query.get("show") === "sky" ? 33 : 0);
 		const calming = stormOn && !calmMotion ? calmingNow(new Date(), calmAsked) : undefined;
+		const mourningOn = stormOn && !calmMotion && (mournAsked || mourningSince(new Date()) !== undefined);
 		// (Nor is the sky opened while the strongest is stilling it.)
 		const stillingAny = stillingBegun(new Date(), stillAsked, pageOpened, stormAsked !== null) !== undefined;
 		// (While the twelve are linked, and resting after, the sky is not opened.)
-		const together = stormOn && !calmMotion && allAtOnce && !calming && !stillingAny ? skyAllAt(skySeconds) : undefined;
+		const together = stormOn && !calmMotion && allAtOnce && !calming && !stillingAny && !mourningOn ? skyAllAt(skySeconds) : undefined;
 		const breathing = stormOn && !calmMotion && byBreath ? skyBreathAt(skySeconds) : undefined;
 		const holding = !calmMotion && bySacred ? sacredAt(skySeconds, drawnFrom) : undefined;
-		const opening = together ?? (breathing ? { ...NO_SKY, canopy: breathing.canopy } : holding ? { ...NO_SKY, canopy: holding.command } : stormOn && !calmMotion && !calming && !stillingAny ? skyOpeningAt(skySeconds) : NO_SKY);
+		const opening = together ?? (breathing ? { ...NO_SKY, canopy: breathing.canopy } : holding ? { ...NO_SKY, canopy: holding.command } : stormOn && !calmMotion && !calming && !stillingAny && !mourningOn ? skyOpeningAt(skySeconds) : NO_SKY);
 		// The figures the picture is drawn from move towards the latest real ones, or towards the
 		// usual sea while there are none yet. (At once for a single still frame.)
 		drawnFrom = towardsConditions(drawnFrom, conditions.value ?? drawnFrom, motionPaused.value ? 1 : 1 - Math.exp(-delta / 1.5));
@@ -996,7 +1002,7 @@ onMounted(() => {
 		// (The rain drawn is the rain falling out of the cloud: under Leane's canopy it is cut off on
 		// its way down, in rain.ts.)
 		const liveRain = liveOnly ? rainAmount(cutSince !== undefined ? { ...liveOnly, precipitation: rainAloft } : liveOnly) : 0;
-		const rain = calmMotion ? 0 : Math.max(THREE.MathUtils.smoothstep(fury, 0.15, 0.6), liveRain) * alive;
+		const rain = calmMotion || (stormOn && noRain) ? 0 : Math.max(THREE.MathUtils.smoothstep(fury, 0.15, 0.6), liveRain) * alive;
 		// The weave, and what its knot does to the sea and the clouds around it.
 		const oldWeave = stagedLight.value || followStory.value || weaveByHand.value ? moment.weave * (1 - Math.max(darkness, controlLevel, gathering)) : 0;
 		const formed = knotFormed(oldWeave);
@@ -1085,7 +1091,7 @@ onMounted(() => {
 			// (All twelve are in the calming while it lasts, and rest for hours after it.)
 			// (And while the strongest stills the weather the twelve stand back, coming back over the
 			// half hour after it is done.)
-			strength: Math.max(darkness, controlLevel, gathering) * alive * (1 - (holding?.quiet ?? 0)) * (calming ? THREE.MathUtils.smoothstep(calming.after, 2, 10) : 1) * standBack * (1 - (leane?.watching ?? 0)),
+			strength: Math.max(darkness, controlLevel, gathering) * alive * (1 - (holding?.quiet ?? 0)) * (calming ? THREE.MathUtils.smoothstep(calming.after, 2, 10) : 1) * standBack * (1 - (leane?.watching ?? 0)) * (mourningOn ? 0 : 1),
 			// More light by day, when it has a bright sea to show against.
 			// (And more under a moon, whose light on the sea would otherwise drown it.)
 			gain: (0.3 + 0.6 * daylight + 0.6 * nightfall * (1 - darkness)) / steadyExposure,
@@ -1186,6 +1192,28 @@ onMounted(() => {
 		embroideryTints[0]!.copy(skySheath[1]!);
 		embroideryTints[1]!.copy(skySheath[0]!);
 		embroideryTints[2]!.copy(skySheath[2]!);
+		mourning.update(
+			mourningOn && liveOnly
+				? {
+						time,
+						delta,
+						boat: camera.position,
+						ahead: skyAhead,
+						trains: waveUniforms.waves.value,
+						steepness: waveUniforms.waveSteepness.value,
+						surge: waveUniforms.surge.value,
+						force: Math.min(1, (rainWind.length() / 40) * (1 + 0.4 * gustNowRain)),
+						aloft: windsOverhead(liveOnly),
+						deficit: THREE.MathUtils.clamp((1013 - liveOnly.pressure) / 100, 0, 1),
+						free: THREE.MathUtils.clamp((2 - slowToRise(liveOnly).reduce((sum, one) => sum + one, 0) / 4) / 1.5, 0, 1),
+						swellFrom: THREE.MathUtils.degToRad(((liveOnly.swellDirection - PLACE.bearing + 540) % 360) - 180),
+						day: daylight,
+						gain: 1.5 / steadyExposure,
+						tints: embroideryTints,
+						bg: mist,
+					}
+				: undefined,
+		);
 		embroidery.update(
 			calming && {
 				time,
@@ -1321,6 +1349,7 @@ onMounted(() => {
 		skyBreath.dispose();
 		sacred.dispose();
 		embroidery.dispose();
+		mourning.dispose();
 		stilling.dispose();
 		rainCut.dispose();
 		stopWatching();
