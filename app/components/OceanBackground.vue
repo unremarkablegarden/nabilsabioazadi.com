@@ -185,6 +185,9 @@ onMounted(() => {
 	const lerp = THREE.MathUtils.lerp;
 
 	const renderer = new THREE.WebGLRenderer({ outputBufferType: THREE.HalfFloatType });
+	// Checking each shader for mistakes makes the browser wait for it to be built. That is for
+	// while developing; on the live site the shaders are known to be sound.
+	renderer.debug.checkShaderErrors = import.meta.dev;
 	// Beyond 2 the extra pixels cost a great deal and show very little. And on a machine that
 	// cannot keep the picture moving smoothly at that, it is drawn with fewer (see watchFrameRate):
 	// these are the steps down, never below one pixel of the picture to one of the page.
@@ -818,7 +821,17 @@ onMounted(() => {
 	// How quickly the eye follows the height it should be at. Before the picture is shown, and for
 	// a single still frame, it is simply put there.
 	const follow = (rate: number) => (revealed && !motionPaused.value ? rate : 1);
+	// The sea's shaders are built while the page goes on loading, where the browser can do that
+	// alongside (KHR_parallel_shader_compile), and nothing is drawn until they are ready. Drawing
+	// at once made the browser build them there and then, holding the whole page still for a
+	// second or more on loading.
+	let compiled = false;
+	renderer
+		.compileAsync(scene, camera)
+		.catch(() => {})
+		.finally(() => (compiled = true));
 	renderer.setAnimationLoop(() => {
+		if (!compiled) return;
 		// The timer is still updated while paused, so that motion resumes without a jump in speed.
 		timer.update();
 		// One frame is always drawn first, so a visitor who starts paused sees a still sea, not a blank.

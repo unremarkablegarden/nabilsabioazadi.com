@@ -20,6 +20,23 @@ export default defineNuxtConfig({
       ],
     },
   },
+  // Prismic's toolbar is a script from Prismic's servers that every visitor loaded. It is
+  // needed only to preview unpublished writing, so it is left out of the live site.
+  prismic: {
+    toolbar: process.env.NODE_ENV !== 'production',
+  },
+  // The files in public/ keep their names when they change, so browsers were told to ask again
+  // on every visit whether each was still current. These hardly ever change: browsers keep them
+  // for a week and, for a month after that, use the copy they have while they check behind it.
+  // (A file that must reach everyone at once should be given a new name.)
+  routeRules: {
+    ...Object.fromEntries(
+      ['/fonts/**', '/textures/**', '/brand/**', '/about/**', '/stars.json', '/milky-way.jpg'].map((path) => [
+        path,
+        { headers: { 'cache-control': 'public, max-age=604800, stale-while-revalidate=2592000' } },
+      ]),
+    ),
+  },
   devtools: { enabled: true },
   css: ['~/assets/css/main.css'],
   vite: {
