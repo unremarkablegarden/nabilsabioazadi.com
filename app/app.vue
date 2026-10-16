@@ -2,7 +2,8 @@
 // Six navigations are kept. The Swiss top bar is shown unless the address ends in ?type=slab
 // (the Swiss slab the bar grew out of), ?type=neptune,
 // ?type=4788 (the Uranus slab), ?type=4788a (the first Uranus slab) or ?type=6500 (hairlines
-// on the horizon).
+// on the horizon). The other five, and the typefaces only they use, are fetched only when asked
+// for, so every visitor is not sent them.
 const route = useRoute();
 const kept = ["slab", "neptune", "4788", "4788a", "6500"];
 const typography = computed(() => (kept.includes(route.query.type as string) ? route.query.type : "swiss"));
@@ -19,11 +20,11 @@ if (import.meta.server) await OceanBackground.__asyncLoader?.();
 
 <template>
 	<OceanBackground />
-	<SiteNav6500 v-if="typography === '6500'" />
-	<SiteNav4788First v-else-if="typography === '4788a'" />
-	<SiteNav4788 v-else-if="typography === '4788'" />
-	<SiteNavNeptune v-else-if="typography === 'neptune'" />
-	<SiteNavSwissSlab v-else-if="typography === 'slab'" />
+	<LazySiteNav6500 v-if="typography === '6500'" />
+	<LazySiteNav4788First v-else-if="typography === '4788a'" />
+	<LazySiteNav4788 v-else-if="typography === '4788'" />
+	<LazySiteNavNeptune v-else-if="typography === 'neptune'" />
+	<LazySiteNavSwissSlab v-else-if="typography === 'slab'" />
 	<SiteNavSwiss v-else />
 	<NuxtPage />
 </template>

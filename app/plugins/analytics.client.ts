@@ -23,10 +23,23 @@ export default defineNuxtPlugin(() => {
 	gtag("consent", "default", { analytics_storage: storage, ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
 	gtag("js", new Date());
 	gtag("config", MEASUREMENT_ID);
-	const script = document.createElement("script");
-	script.async = true;
-	script.src = `https://www.googletagmanager.com/gtag/js?id=${MEASUREMENT_ID}`;
-	document.head.appendChild(script);
+	// Google's script is fetched and run only once the sea is up (or after ten seconds, for a
+	// browser that cannot draw it): run while the picture was being set up, it took the same
+	// seconds from a slow machine. Nothing is lost: what is counted before it arrives waits in
+	// dataLayer and is sent when it does.
+	let loaded = false;
+	const load = () => {
+		if (loaded) return;
+		loaded = true;
+		const script = document.createElement("script");
+		script.async = true;
+		script.src = `https://www.googletagmanager.com/gtag/js?id=${MEASUREMENT_ID}`;
+		document.head.appendChild(script);
+	};
+	const seaShown = useState("sea-shown", () => false);
+	const whenIdle = (then: () => void) => ("requestIdleCallback" in window ? requestIdleCallback(then, { timeout: 3000 }) : setTimeout(then, 500));
+	watch(seaShown, (shown) => shown && whenIdle(load), { immediate: true });
+	setTimeout(load, 10_000);
 	// The site changes page without reloading; each change is counted as a page seen.
 	useRouter().afterEach((to) => gtag("event", "page_view", { page_path: to.fullPath, page_location: window.location.origin + to.fullPath }));
 });

@@ -49,6 +49,8 @@ const pickColour = () => {
 };
 // Set by the navigation's pause button (WCAG 2.2.2): while true nothing is redrawn.
 const motionPaused = useState("motion-paused", () => false);
+// Set once the sea has come up; the analytics wait for it (plugins/analytics.client.ts).
+const seaShown = useState("sea-shown", () => false);
 // The navigation's drawer; while it is open the view holds still.
 const menuOpen = useState("menu-open", () => false);
 // The navigation can show the place, time and conditions itself, in which case the caption here is left out.
@@ -569,6 +571,7 @@ onMounted(async () => {
 		revealed = true;
 		el.style.transition = "opacity 0.5s ease";
 		el.style.opacity = "1";
+		seaShown.value = true;
 	};
 	const revealAnyway = setTimeout(reveal, 1500);
 
