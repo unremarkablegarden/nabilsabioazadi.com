@@ -68,6 +68,10 @@ const HALOS = 28;
 // Filaments to each channeller, and how many of them are gold.
 const FILAMENTS = 64;
 const GOLDEN = 14;
+// The mighty have more than one measure of filaments (see MIGHT in update): each further measure
+// is another 64, gold among them as in the first, alight only while one so strong holds the seat.
+// The strongest's seat has room for five measures, the others for three.
+const MEASURES = [3, 3, 5, 3];
 const SEGMENTS = 300;
 
 // The height of the sea at a place (x), and beside it (y) the height of the long swell alone,
@@ -101,7 +105,12 @@ attribute vec4 aSeed;
 attribute vec4 aKind;
 // 1 for a veil, 0 for a filament.
 attribute float aSoft;
+// Which measure of its tress's filaments it is (0 for the first 64, and every veil and halo).
+attribute float aMeasure;
 uniform float uStrength;
+// For each seat, how many measures of filaments its occupant's tress carries: 1 for the eight,
+// about 2.5 for the four mighty, about 4.9 for the strongest (see MIGHT in update).
+uniform vec4 uMight;
 // 0..1 how light the sky is. Against a light sky a fine bright line reads as a wire, so there
 // each filament is drawn broad and soft and fainter: a breath of light, not a line.
 // Only there: where the sea is behind it, it is drawn fine and sharp whatever the hour (the
@@ -493,7 +502,9 @@ vec3 threadPoint( float t, bool onlyPlace ) {
 		// (Each for themselves by day, a tress lies open and loose on the sea, not drawn tight.)
 		* ( 1.0 + 0.5 * ( 1.0 - channelLink ) )
 		// (Each as open or as close as they hold it: see uOpen.)
-		* mix( channelOf( uOpen, who ), 1.0, channelLink );
+		* mix( channelOf( uOpen, who ), 1.0, channelLink )
+		// (The mighty's tress is a rope, broader for all it carries: see uMight.)
+		* sqrt( channelOf( uMight, who ) );
 	// Its three strands pass over and under each other: a plait, loosely kept.
 	float phase = q * 6.0 - channelTime * 0.4 + aThread.y * 2.0944 + who * 0.7;
 	vec2 across = vec2( sin( phase ), 0.5 * sin( 2.0 * phase ) ) * 0.42;
@@ -574,6 +585,7 @@ void main() {
 	float head_ = channelOf( channelHead, aThread.x );
 	float tail_ = channelOf( channelTail, aThread.x );
 	bool unseen = channelOf( channelGate, aThread.x ) <= 0.0
+		|| aMeasure >= channelOf( uMight, aThread.x )
 		|| ( uToReading > 0.5 && uFront >= 1.6 && aT > 0.71 )
 		|| ( aSoft < 0.9 && aT - 0.01 >= head_ && ( tail_ >= 1.09 || aT + 0.01 <= tail_ - 0.16 ) );
 	if ( unseen ) {
@@ -694,7 +706,7 @@ void main() {
 	// edge on, made a small bright knot just over the horizon at dawn and dusk.)
 	// (Driven hard there are more filaments alight at once, so each is drawn a little fainter,
 	// or their colours would burn out to white where they lie thickest.)
-	vAlpha = uStrength * aKind.x * ( 1.0 - 0.4 * channelSurge ) * lit * ( 0.55 + 1.1 * channelPulse( aThread.x, ahead ) ) * smoothstep( 0.0, 0.05, aT )
+	vAlpha = uStrength * aKind.x * clamp( channelOf( uMight, aThread.x ) - aMeasure, 0.0, 1.0 ) * ( 1.0 - 0.4 * channelSurge ) * lit * ( 0.55 + 1.1 * channelPulse( aThread.x, ahead ) ) * smoothstep( 0.0, 0.05, aT )
 		* ( 1.0 - smoothstep( 0.5, 0.88, channelWay( ahead ) ) * ( 1.0 - 0.8 * lingering ) ) / ( 1.0 + ahead / 1500.0 ) / ( 1.0 + 2.0 * lingering ) / ( 1.0 + 1.6 * soften );
 	vEdge = aSide;
 	vSoft = max( aSoft, max( lingering, max( 0.9 * soften, 0.85 * nightReading ) ) );
@@ -1380,7 +1392,7 @@ export interface ChannellerState {
 }
 
 export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea: GerstnerUniforms) {
-	const strips = CHANNELLERS * (FILAMENTS + VEILS + HALOS);
+	const strips = MEASURES.reduce((sum, measures) => sum + measures * FILAMENTS + VEILS + HALOS, 0);
 	const count = strips * (SEGMENTS + 1) * 2;
 	const along = new Float32Array(count);
 	const side = new Float32Array(count);
@@ -1388,14 +1400,18 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	const seed = new Float32Array(count * 4);
 	const kind = new Float32Array(count * 4);
 	const soft = new Float32Array(count);
+	const measure = new Float32Array(count);
 	let vertex = 0;
 	for (let who = 0; who < CHANNELLERS; who++) {
 		// The filaments' own values, kept so that a halo can double one of them.
+		// (Only the first measure's: a halo of a filament not alight would be a blur of nothing.)
 		const made: number[][][] = [];
-		for (let filament = 0; filament < FILAMENTS + VEILS + HALOS; filament++) {
-			const veil = filament >= FILAMENTS && filament < FILAMENTS + VEILS;
-			const halo = filament >= FILAMENTS + VEILS;
-			const gold = filament < GOLDEN;
+		const filaments = MEASURES[who]! * FILAMENTS;
+		for (let filament = 0; filament < filaments + VEILS + HALOS; filament++) {
+			const veil = filament >= filaments && filament < filaments + VEILS;
+			const halo = filament >= filaments + VEILS;
+			const ofMeasure = veil || halo ? 0 : Math.floor(filament / FILAMENTS);
+			const gold = !veil && !halo && filament % FILAMENTS < GOLDEN;
 			// One blue-white filament in ten is a bright one, the glint on the tress.
 			const bright = !gold && Math.random() < 0.1;
 			const threadValues = [who, filament % 3, gold ? GOLD : veil || Math.random() >= 0.35 ? BLUE : WHITE, veil ? 9 + 9 * Math.random() : gold ? 0.8 : bright ? 1 : 0.6];
@@ -1406,7 +1422,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			const kindValues = gold
 				? [0.9, 9 + 8 * Math.random(), 1.6 + 1.4 * Math.random(), element]
 				: [veil ? 0.05 : bright ? 0.95 : 0.22 + 0.3 * Math.random(), 1.6 + 3 * Math.random(), 0.5 + 0.8 * Math.random(), element];
-			if (!veil && !halo) made.push([threadValues, seedValues, kindValues]);
+			if (!veil && !halo && ofMeasure === 0) made.push([threadValues, seedValues, kindValues]);
 			// A halo takes a filament's values and shifts them a hair: nearly the same line, a
 			// little behind it, several pixels wide, soft and faint.
 			if (halo) {
@@ -1423,6 +1439,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 					seed.set(seedValues, vertex * 4);
 					kind.set(kindValues, vertex * 4);
 					soft[vertex] = veil ? 1 : halo ? 0.75 : 0;
+					measure[vertex] = ofMeasure;
 					vertex++;
 				}
 			}
@@ -1436,9 +1453,11 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	geometry.setAttribute("aSeed", new THREE.BufferAttribute(seed, 4));
 	geometry.setAttribute("aKind", new THREE.BufferAttribute(kind, 4));
 	geometry.setAttribute("aSoft", new THREE.BufferAttribute(soft, 1));
+	geometry.setAttribute("aMeasure", new THREE.BufferAttribute(measure, 1));
 	geometry.setIndex(stripIndices(strips, SEGMENTS));
 	const uniforms = {
 		uStrength: { value: 0 },
+		uMight: { value: new THREE.Vector4(1, 1, 1, 1) },
 		uSoften: { value: 0 },
 		uWhite: { value: 1 },
 		uDay: { value: 0 },
@@ -1803,7 +1822,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 				one.back = between(4, 7);
 				u.uHead.value.setComponent(who, 0);
 				u.uTail.value.setComponent(who, 2);
-				u.uReach.value.setComponent(who, 28 + 34 * (CREW[member]! / CREW[1]!) * (0.6 + 0.4 * temper.water));
+				u.uReach.value.setComponent(who, 28 + 34 * Math.min(1.6, CREW[member]! / ORDINARY_MOST) * (0.6 + 0.4 * temper.water));
 				soundingSociable += temper.sociable / (rests < 0 ? 4 : 3);
 			});
 			// Whether they begin together is a matter of how sociable those sounding are.
@@ -2159,11 +2178,32 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	// the strongest is the first to look into anything out of the ordinary and the first to work
 	// with it, begins the story alone, and what the strongest gives below is taken from the whole
 	// flow ahead. (The strongest is the owner: no "she" or "he" here.)
+	//
+	// (17 October, the owner: four of the twelve made 64 times stronger. They are Keel, Kite,
+	// Fathom and Listener: the rudder, the air, the deep water and the pressure, so that whatever
+	// the weather there is one of them it calls; in a storm, two of Siuan's, one of Leane's and
+	// one of Moiraine's. The strongest is still 1.8 times all twelve together, the four counted at
+	// their new strength, and so some thirty times what they were. Drawn as they are, in scale and
+	// mass and not in colour (the owner's): a mighty one's tress carries more filaments, each as
+	// faint and as coloured as any, in a broader rope; by the cube root of their true strength, as
+	// a rope's girth goes, against what the four were before. The eight are drawn as before.)
 	const STRONGEST_TO_THE_REST = 1.8;
+	const MIGHTY = [1, 2, 3, 6];
+	const MIGHTIER = 64;
 	const REST = [0.95, 0.9, 0.82, 0.78, 0.7, 0.64, 0.58, 0.52, 0.47, 0.42, 0.38, 0.34];
-	const TRUE_STRENGTH = [STRONGEST_TO_THE_REST * REST.reduce((sum, one) => sum + one, 0), ...REST];
-	// As drawn, 0..1.
-	const CREW = TRUE_STRENGTH.map((strength, member) => (member === 0 ? 1 : 0.62 * strength));
+	const OF_THE_REST = REST.map((strength, i) => (MIGHTY.includes(i + 1) ? MIGHTIER * strength : strength));
+	const TRUE_STRENGTH = [STRONGEST_TO_THE_REST * OF_THE_REST.reduce((sum, one) => sum + one, 0), ...OF_THE_REST];
+	// As drawn, 0..1: how much of their tress is alight. (The four nearly all of it, as none of the
+	// eight; less than the strongest, whose tress is the darkest for what it wastes least.)
+	const CREW = TRUE_STRENGTH.map((strength, member) => (member === 0 ? 1 : MIGHTY.includes(member) ? 0.9 : 0.62 * strength));
+	// How many measures of filaments their tress carries (see MEASURES): the four's drawn mass is
+	// what it was times the cube root of 64, and the strongest's is the four's times the cube root
+	// of how much stronger the strongest is than they. (About 2.5 for the four, 4.9 for the strongest.)
+	const MIGHT = TRUE_STRENGTH.map((strength, member) =>
+		member === 0 || MIGHTY.includes(member) ? (0.62 * REST[0]! * Math.cbrt(MIGHTIER) * Math.cbrt(strength / (MIGHTIER * REST[0]!))) / 0.9 : 1,
+	);
+	// The farthest any of the eight would sound (see uReach): as far as the strongest of them went before.
+	const ORDINARY_MOST = 0.62 * REST[0]!;
 	// Temperaments (the owner asked for them: the twelve are people, and their powers will only
 	// look natural if they do not all behave alike). In CREW's order, strongest first. Each figure
 	// is 0..1 and is used by a rule further down; none is decoration.
@@ -2259,8 +2299,9 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	// strongest of the four always sits second from the right; the rest sit by strength.
 	// (Who of the twelve is beside the strongest as the page opens is different every time: there
 	// are thirteen of them, and the owner saw the same opening on every visit.)
-	let atFront = [0, ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].sort(() => Math.random() - 0.5).slice(0, 3).sort((a, b) => a - b)];
+	let atFront = [0, ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].sort(() => Math.random() - 0.5).slice(0, 3).sort((a, b) => CREW[b]! - CREW[a]!)];
 	const seatStrength = [CREW[atFront[2]!]!, CREW[atFront[1]!]!, 1, CREW[atFront[3]!]!];
+	const seatMight = [MIGHT[atFront[2]!]!, MIGHT[atFront[1]!]!, MIGHT[0]!, MIGHT[atFront[3]!]!];
 	const SEATS_BY_STRENGTH = [STRONGEST, 1, 0, 3];
 	const memberAt = (seat: number) => atFront[SEATS_BY_STRENGTH.indexOf(seat)]!;
 	// While someone is changing places, their seat's weave is let go; the newcomer begins afresh.
@@ -2290,6 +2331,9 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			// All thirteen linked, their strength is pooled: no tress is the weaker one.
 			const strength = linkedAll ? 1 : CREW[member]!;
 			seatStrength[seat] = seatStrength[seat]! + (strength - seatStrength[seat]!) * Math.min(1, delta / (linkedAll ? 6 : 3));
+			// (Linked, as much as each seat can carry: what the mighty and the strongest pour in is shared.)
+			const might = Math.min(MEASURES[seat]!, linkedAll ? Math.max(...atFront.map((one) => MIGHT[one]!)) : MIGHT[member]!);
+			seatMight[seat] = seatMight[seat]! + (might - seatMight[seat]!) * Math.min(1, delta / (linkedAll ? 6 : 3));
 		});
 	};
 
@@ -2512,6 +2556,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		mesh.visible = any;
 		sea.channelGate.value.fromArray(gate);
 		sea.channelOwn.value.fromArray(seatStrength);
+		uniforms.uMight.value.fromArray(seatMight);
 		sea.channelHead.value.fromArray(head);
 		sea.channelTail.value.fromArray(tail);
 		sea.channelLinger.value.fromArray(linger);
