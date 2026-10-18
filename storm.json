@@ -1,9 +1,10 @@
 {
-	"from": "2026-10-16T22:00:00+13:00",
-	"until": "2026-10-17T22:00:00+13:00",
+	"from": "2026-10-18T19:20:00+13:00",
+	"until": "2026-10-19T19:20:00+13:00",
 	"weavers": "aes-sedai",
-	"rain": false,
-	"mourning": { "from": "2026-10-16T22:10:00+13:00" },
+	"rain": true,
+	"wrath": { "from": "2026-10-18T19:20:00+13:00" },
+	"mourning": { "from": null },
 	"calming": { "from": null, "hours": 7 },
 	"rainCut": { "from": null },
 	"stilling": { "from": null }

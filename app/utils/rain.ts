@@ -63,6 +63,9 @@ uniform vec4 uCanopy;
 // in which they evaporate, and how far out from the boat (0: not cut).
 uniform vec3 uCut;
 uniform float uFar;
+// The longest a streak is drawn, in metres (the owner, 18 October: the rain "less visually
+// intrusive"; in a storm's wind the near streaks ran right across the view).
+uniform float uStreak;
 varying float vAlpha;
 varying float vEdge;
 
@@ -153,7 +156,8 @@ void main() {
 	// The streak: where the drop is, and where it was a moment ago, both bent by the shelter.
 	vec3 head = at;
 	// (Evaporating, it is smaller and shows a shorter streak.)
-	vec3 tail = at - velocity * uExposure * ( 1.0 - 0.7 * evaporating );
+	vec3 smear = velocity * uExposure * ( 1.0 - 0.7 * evaporating );
+	vec3 tail = at - smear * min( 1.0, uStreak / max( length( smear ), 1e-4 ) );
 	// (Going up, it is seen as a soft upward smudge.)
 	if ( risen > 0.0 ) tail = mix( tail, at - vec3( 0.0, 0.4 + 0.15 * risen, 0.0 ), smoothstep( 0.0, 2.0, risen ) );
 	float hold = uHold * ( 1.0 - 0.35 * step( 0.82, fract( aSeed.z * 13.1 + floor( uTime * 0.7 ) * 0.37 ) ) );
@@ -216,7 +220,7 @@ void main() {
 // distance over which they are lost in the rain.
 // order: the near rain is in front of the fog the storm drawn over the scene (fluid.ts, drawn at
 // 5), the far rain inside it.
-function rainVolume(count: number, box: THREE.Vector3, ahead: number, far: number, layer: number, order: number) {
+function rainVolume(count: number, box: THREE.Vector3, ahead: number, far: number, layer: number, order: number, streak: number, faint: number) {
 	const geometry = new THREE.InstancedBufferGeometry();
 	geometry.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(12), 3));
 	geometry.setAttribute("aCorner", new THREE.Float32BufferAttribute([0, -1, 0, 1, 1, -1, 1, 1], 2));
@@ -251,6 +255,7 @@ function rainVolume(count: number, box: THREE.Vector3, ahead: number, far: numbe
 		uCanopy: { value: new THREE.Vector4(0, 0, 0, 0) },
 		uCut: { value: new THREE.Vector3(0, 0, 0) },
 		uFar: { value: far },
+		uStreak: { value: streak },
 		uColour: { value: new THREE.Color() },
 		uOpacity: { value: 0 },
 	};
@@ -262,7 +267,7 @@ function rainVolume(count: number, box: THREE.Vector3, ahead: number, far: numbe
 	mesh.renderOrder = order;
 	// Seen by the eye only, not the water's mirror (rain is not seen reflected at this scale).
 	mesh.layers.set(layer);
-	return { mesh, uniforms, ahead };
+	return { mesh, uniforms, ahead, faint };
 }
 
 export interface RainFrame {
@@ -301,9 +306,11 @@ export interface RainFrame {
 
 export function createRain(scene: THREE.Scene, camera: THREE.PerspectiveCamera, layer: number) {
 	const volumes = [
-		rainVolume(2500, new THREE.Vector3(14, 10, 14), 6, 30, layer, 6),
-		rainVolume(7000, new THREE.Vector3(60, 36, 70), 30, 90, layer, 6),
-		rainVolume(9000, new THREE.Vector3(260, 120, 320), 150, 300, layer, 4),
+		// (Kept quiet: the near drops, which cross the whole view, faintest and shortest; the far
+		// ones, which read as the weather's own texture, least changed.)
+		rainVolume(2500, new THREE.Vector3(14, 10, 14), 6, 30, layer, 6, 0.35, 0.3),
+		rainVolume(7000, new THREE.Vector3(60, 36, 70), 30, 90, layer, 6, 1.2, 0.5),
+		rainVolume(9000, new THREE.Vector3(260, 120, 320), 150, 300, layer, 4, 4, 0.75),
 	];
 	for (const volume of volumes) scene.add(volume.mesh);
 	const forward = new THREE.Vector3();
@@ -357,7 +364,7 @@ export function createRain(scene: THREE.Scene, camera: THREE.PerspectiveCamera, 
 			u.uCanopy.value.copy(frame.canopy);
 			u.uCut.value.set(frame.cut?.height ?? 0, frame.cut?.depth ?? 0, frame.cut?.reach ?? 0);
 			u.uColour.value.copy(frame.light).lerp(new THREE.Color(1, 1, 1), 0.6 * frame.flash);
-			u.uOpacity.value = 0.6 + 0.4 * frame.flash;
+			u.uOpacity.value = (0.6 + 0.4 * frame.flash) * volume.faint;
 		}
 	};
 

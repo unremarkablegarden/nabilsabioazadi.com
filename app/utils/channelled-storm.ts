@@ -38,6 +38,97 @@ export const CHANNELLED_STORM: Partial<SeaConditions> = {
 // What the menu says while it lasts (the owner's words).
 export const CHANNELLED_WORDS = "Channelled, honouring spirits met across Te Moana-nui-a-Kiwa";
 
+// Peta's storm (the owner, 18 October: the channellers, angry at a death, honour it "by creating
+// the most extreme storm possible"; wrath.ts). The thirteen, each linked to three ancestors, drive
+// the storm's engine as hard as it goes, past anything measured: sustained winds of 300 km/h
+// gusting 410 (the strongest gust ever measured was 408), a central pressure of 870 hPa (Typhoon
+// Tip's, the lowest at sea level) still falling 40 hPa in three hours, a 30 m sea, towers holding
+// 7,000 J/kg, and 60 mm of rain an hour.
+export const WRATH_STORM: Partial<SeaConditions> = {
+	...CHANNELLED_STORM,
+	windSpeed: 300,
+	windGusts: 410,
+	windTrend: 90,
+	pressure: 870,
+	pressureTrend: -40,
+	waveHeight: 30,
+	swellHeight: 26,
+	swellPeriod: 22,
+	// (Moiraine's four hold this one turned across the first: see wrath.ts.)
+	secondSwellHeight: 18,
+	secondSwellPeriod: 16,
+	windWaveHeight: 16,
+	windWavePeriod: 15,
+	waveTrend: 9,
+	cape: 7000,
+	precipitation: 60,
+	visibility: 300,
+};
+
+// What the menu says while it lasts.
+export const WRATH_WORDS = "Channelled, in honour of Peta";
+
+// Whether Peta's storm is raised (wrath.ts): "wrath": { "from": ISO time } in storm.json, while the
+// storm is on. Gives the seconds since it began, or undefined.
+export function wrathSince(now: Date) {
+	const { wrath } = stormSwitch as { wrath?: { from: string | null } };
+	if (!wrath?.from) return undefined;
+	const seconds = (now.getTime() - new Date(wrath.from).getTime()) / 1000;
+	return seconds >= 0 ? seconds : undefined;
+}
+
+// The swell is a dying God's breathing (the owner, 18 October: the swells "should themselves feel
+// like they are the dying breaths of the God"). The breath of the dying has its own shape, which
+// medicine knows as Cheyne-Stokes: a run of breaths, each deeper than the last and then each
+// shallower, and then none at all, a pause, before it begins again. Here each breath is one swell
+// (its period), a run is five to eight of them, and the pause lies the sea down to under a third of
+// its height, the wind still blowing over it. And the God is dying: the pauses grow longer through
+// the hours, and the deepest breath a little less deep. The same for every visitor, by the seconds
+// since the wrath began.
+export interface GodsBreath {
+	// What the sea's height is multiplied by; how far through this breath (0..1); how deep the run
+	// is just now (0..1); whether the run is waning; and 0..1 how far into a pause.
+	sea: number;
+	phase: number;
+	depth: number;
+	waning: boolean;
+	held: number;
+	// Which run of breaths this is, when it began (seconds since the wrath began), and how long
+	// its breathing lasts (seconds, without the pause).
+	run: number;
+	runStart: number;
+	breathing: number;
+}
+const hashed = (n: number) => {
+	const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+	return x - Math.floor(x);
+};
+export function godsBreath(seconds: number, period: number): GodsBreath {
+	const at = Math.max(0, seconds);
+	let start = 0;
+	for (let n = 0; ; n++) {
+		const hours = start / 3600;
+		const breathing = (5 + Math.floor(hashed(n) * 4)) * period;
+		const pause = (20 + 25 * hashed(n + 0.5)) * (1 + hours / 12);
+		if (at < start + breathing + pause) {
+			const into = at - start;
+			const peak = 1.15 - 0.15 * Math.min(1, hours / 24);
+			if (into < breathing) {
+				const depth = Math.sin((Math.PI * into) / breathing);
+				return { sea: 0.3 + (peak - 0.3) * depth, phase: (into / period) % 1, depth, waning: into > breathing / 2, held: 0, run: n, runStart: start, breathing };
+			}
+			const p = (into - breathing) / pause;
+			return { sea: 0.3, phase: 0, depth: 0, waning: true, held: ease(clamp01(p / 0.15)) * (1 - ease(clamp01((p - 0.85) / 0.15))), run: n, runStart: start, breathing };
+		}
+		start += breathing + pause;
+	}
+}
+
+// Whether storm.json raises Peta's storm at all (its figures are the storm's while it does).
+export function wrathSet() {
+	return !!(stormSwitch as { wrath?: { from: string | null } }).wrath?.from;
+}
+
 // Whether the storm is to have no rain at all: "rain": false in storm.json (the owner, 16
 // October: "cut the rain entirely"). Wind, sea, cloud and thunder stay.
 export function stormRainCut() {

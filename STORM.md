@@ -327,3 +327,47 @@ Not yet right: her threads, seen from beneath, still run together into many long
 the upper sky, a net more than a moonlit canopy; the ones coming down to the sea hang like
 curtains; by day the sea under her is calmer but her light on it hardly shows; never watched in
 motion, so the guttering and the sighs are unseen.
+
+## 14. Peta's storm (18 October)
+
+The owner: the channellers, "extremely angry because they have encountered a death", honour it "by
+creating the most extreme storm possible. This death is Peta's"; then: "They are all so distressed
+that there are three strongest ancestor channellers for each of them that they are linked to".
+`storm.json` `"wrath": { "from": ISO }` (with the storm on from 19:20 on 18 October for a day, rain
+back on); `/?storm&wrath=300` shows it five minutes in, `/?wrath` from the page opening,
+`/?wrath=off` without. Menu: "Channelled, in honour of Peta" (`WRATH_WORDS`).
+
+- **The figures** (`WRATH_STORM`): 300 km/h gusting 410, 870 hPa falling 40 hPa in 3 h, a 30 m sea
+  (swell 26 m at 22 s), cape 7,000, 60 mm/h of rain, 300 m visibility.
+- **Drawn** (`wrath.ts`): the strongest first, alone, a white rope out to a point 1.1 km ahead and up
+  it a broad turning column into the cloud (the core); then Siuan's four heave the sea up in turning
+  spouts leaning in to it, Leane's four spiral their ropes in round it at their own heights, lashing,
+  and Moiraine's four climb to the cloud top and fan out (the outflow). Three ancestors to each of
+  the thirteen (39) come in low from far over the ocean and pour into their hands. Anger is in the
+  hauls (short hard in-breath, heavy release, faster the angrier), the smooth thrash, mass, and
+  colour running towards ember while tamed. The ordinary weaving and the sky openings stand aside.
+- Not yet right: stills only, never in motion or on a phone (about 3,000 lines of 120 segments);
+  the column's top is above the view; the column's foot burns a little white at night.
+- **Later the same day**: the rain made less intrusive everywhere (`rain.ts`: each streak capped in
+  length, the near drops faintest). Then the owner: the swells "should themselves feel like they are
+  the dying breaths of the God", and the weaves should work with them in "Virginia Woolf's style of
+  literary conjunctions". The swell breathes as the dying do (Cheyne-Stokes, `godsBreath`): each
+  swell a breath, five to eight in a run that deepens and fades, then a pause in which the sea lies
+  down to under a third of its height; the pauses lengthen through the day. The weaves are Woolf's
+  sentences: on each breath the strongest hauls first and the twelve after round the ring, each
+  beginning before the last has let go ("and"); the chain runs back the other way as the breaths
+  wane ("but"); through a pause they hold, drawn in, taut, lit and still (the semicolon). The sway
+  and thrash are integrated (`uFlow`) so they slow without a jump. `/?storm&wrath=460` is near the
+  height of a run, `/?storm&wrath=550` in a pause.
+- **Peta's wave and Manulani** (the owner chose the lens, the current and the crossing sea, and
+  added Manulani, "112% power", who casts "a bright light across the ocean at night time as though
+  it is almost noon", conical or spherical). At the deepest breath of each run twelve trains laid by
+  the twelve meet at the core 650 m ahead (dispersive focusing; `lensWaves`, `layPetasWave`), some
+  40 m above the storm's sea, then go apart under the boat; Leane's four drive a current against the
+  swell there (`lensCurrent`); Moiraine's four hold the second swell (18 m) 40 degrees across the
+  first. Manulani (1.12 times the strongest, confirmed by the owner; `MANULANI` in `wrath.ts`) stands
+  at the bow with a gold-white rope up to a sphere of light 5.2 km up and 2.5 km ahead: a point
+  source, so the sea is lit by facing and inverse square (`manuLight`), near noon about the boat and
+  night at the horizon; an aureole in the haze; raised as each run begins, a glow in the pauses,
+  night only. The fresh-water stream is off in Peta's storm (its edge foam lined up under her light).
+  Not yet right: one or two soft white blots near the boat under her light; never seen in motion.

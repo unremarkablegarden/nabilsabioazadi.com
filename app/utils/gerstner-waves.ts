@@ -207,6 +207,21 @@ export function measuredSeaHeight(uniforms: GerstnerUniforms, x: number, z: numb
 	return height;
 }
 
+// Peta's wave: how many trains the twelve lay (one each), and their height at a point, for carrying
+// the viewer on them (without the small sideways shift, as measuredSeaHeight).
+export const LENS_TRAINS = 12;
+export function lensWaveHeight(uniforms: GerstnerUniforms, x: number, z: number, time: number) {
+	const amount = uniforms.lensAmount.value;
+	if (amount <= 0) return 0;
+	let height = 0;
+	for (const w of uniforms.lensWaves.value) {
+		const k = (2 * Math.PI) / w.w;
+		const along = Math.sin(w.x) * x - Math.cos(w.x) * z;
+		height += w.z * amount * Math.sin(k * (along - Math.sqrt(9.8 / k) * time) + w.y);
+	}
+	return height;
+}
+
 // 0..1 for the foam uniform from the wind speed in m/s. The share of the sea covered by
 // whitecaps is about 3.84e-6 × speed^3.41 (Monahan and O'Muircheartaigh, 1980): none to speak
 // of below 4 m/s, a few percent in a near gale, a fifth of the sea in a storm.
@@ -325,6 +340,15 @@ export interface GerstnerUniforms {
 	// smooth water that internal waves leave on the surface.
 	freshFlow: THREE.IUniform<number>;
 	internalWaves: THREE.IUniform<number>;
+	// Peta's wave (wrath.ts, petasWave): twelve trains laid by the twelve so that they arrive
+	// together at one place at one moment (each: heading, phase, height in metres, length), and
+	// 0..1 how fully they are laid; and the current Leane's four drive against the swell there
+	// (world x, z, reach in metres, 0..1 how hard).
+	lensWaves: THREE.IUniform<THREE.Vector4[]>;
+	lensAmount: THREE.IUniform<number>;
+	lensCurrent: THREE.IUniform<THREE.Vector4>;
+	// Manulani's light (wrath.ts): where her sphere is (world), and how bright, before tone mapping.
+	manuLight: THREE.IUniform<THREE.Vector4>;
 }
 
 const pressedChunk = /* glsl */ `
@@ -386,6 +410,9 @@ float stillOutside( vec2 p, out float rim ) {
 `;
 
 const vertexPars = /* glsl */ `
+uniform vec4 lensWaves[ 12 ];
+uniform float lensAmount;
+uniform vec4 lensCurrent;
 uniform float waveTime;
 uniform float waveSteepness;
 uniform float waveScale;
@@ -518,6 +545,37 @@ vec3 gerstner( vec3 p, out vec3 normal, out float crest, out float gust ) {
 		// Counted lightly, or the whole upper half of every giant swell turns to foam.
 		crest += 0.4 * steepness * sin( f );
 	}
+	// Peta's wave. Each of the twelve lays a train so that its crest reaches one place at one
+	// moment, each from a little another way and each of another length; so they come in as long,
+	// low, scattered waves, run together into one wall at that place and moment, and go apart again
+	// as they roll on under the boat (focusing, as the sea itself makes its rogue waves). Their
+	// sideways sway is halved, so the wall stands up rather than folding over itself.
+	if ( lensAmount > 0.0 ) {
+		for ( int i = 0; i < 12; i ++ ) {
+			vec4 w = lensWaves[ i ];
+			vec2 d = vec2( sin( w.x ), - cos( w.x ) );
+			float k = 2.0 * PI / w.w;
+			float f = k * ( dot( d, p.xz ) - sqrt( 9.8 / k ) * waveTime ) + w.y;
+			float a = w.z * lensAmount;
+			float s = a * k;
+			offset += vec3( 0.5 * d.x * a * cos( f ), a * sin( f ), 0.5 * d.y * a * cos( f ) );
+			tangent += vec3( - 0.5 * d.x * d.x * s * sin( f ), d.x * s * cos( f ), - 0.5 * d.x * d.y * s * sin( f ) );
+			binormal += vec3( - 0.5 * d.x * d.y * s * sin( f ), d.y * s * cos( f ), - 0.5 * d.y * d.y * s * sin( f ) );
+			crest += 0.2 * s * sin( f );
+		}
+	}
+	// And Leane's four drive a current against the swell there: waves meeting a current shorten
+	// and stand up (as off the Agulhas), so the sea about the place grows taller and sheerer, and
+	// breaks. (Never at the boat.)
+	if ( lensCurrent.w > 0.0 ) {
+		vec2 rel = p.xz - lensCurrent.xy;
+		float against = lensCurrent.w * exp( - dot( rel, rel ) / ( lensCurrent.z * lensCurrent.z ) ) * smoothstep( 80.0, 220.0, distanceToEye );
+		offset.y *= 1.0 + 0.7 * against;
+		offset.xz *= 1.0 + 0.5 * against;
+		tangent.y *= 1.0 + 0.7 * against;
+		binormal.y *= 1.0 + 0.7 * against;
+		crest *= 1.0 + 1.4 * against;
+	}
 	if ( weavePull > 0.0 ) {
 		vec2 rel = p.xz - weaveCentre;
 		float r = max( length( rel ), 1.0 );
@@ -603,6 +661,7 @@ uniform float stillGlow;
 ${pressedChunk}
 ${stillChunk}
 uniform float boatLamp;
+uniform vec4 manuLight;
 uniform float deepWeave;
 uniform float deepMaster;
 ${channelPathChunk}
@@ -870,6 +929,27 @@ const fragmentFoam = /* glsl */ `
 		// Light from below comes through where the surface is not acting as a mirror, and not through foam.
 		outgoingLight += vec3( 0.78, 0.95, 1.0 ) * threads * weaveGlow * ( 1.0 - reflectance ) * ( 1.0 - foamMask );
 	}
+
+	// Manulani's light: a sphere of light she has raised high over the sea, a small sun at night.
+	// It lights the sea as any one bright point does: each place by how squarely it faces the
+	// sphere, and by the inverse square of how far it is, here given as a share of the light
+	// straight beneath it. So within some kilometres of beneath it it is near noon, the sea's own
+	// blue-green coming up out of it, the foam white, the thin tops of the waves lit through,
+	// facets turned to it flashing; and further out it falls away, until at the horizon it is night.
+	if ( manuLight.w > 0.0 ) {
+		vec3 toLight = manuLight.xyz - worldPosition.xyz;
+		float r2 = dot( toLight, toLight );
+		vec3 toward = toLight * inversesqrt( r2 );
+		float overhead = manuLight.y - worldPosition.y;
+		float fall = overhead * overhead / r2;
+		float facing = max( dot( surfaceNormal, toward ), 0.0 );
+		float lit = manuLight.w * fall * facing;
+		vec3 noon = vec3( 1.0, 0.97, 0.9 );
+		outgoingLight += noon * lit * ( vec3( 0.03, 0.13, 0.17 ) * ( 1.0 - reflectance ) + 0.55 * foamMask );
+		outgoingLight += vec3( 0.12, 0.95, 0.78 ) * 0.12 * lit * thinWater * ( 1.0 - reflectance );
+		vec3 bounce = reflect( - eyeDirection, surfaceNormal );
+		outgoingLight += noon * manuLight.w * fall * ( 1.5 * pow( max( dot( bounce, toward ), 0.0 ), 600.0 ) ) * reflectance * ( 1.0 - foamMask );
+	}
 `;
 
 export function replaceOrThrow(source: string, search: string, replacement: string) {
@@ -934,6 +1014,10 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		weaveGlow: { value: 0 },
 		freshFlow: { value: 1 },
 		internalWaves: { value: 0.6 },
+		lensWaves: { value: Array.from({ length: LENS_TRAINS }, () => new THREE.Vector4(0, 0, 0, 200)) },
+		lensAmount: { value: 0 },
+		lensCurrent: { value: new THREE.Vector4() },
+		manuLight: { value: new THREE.Vector4() },
 	};
 	useDialSea(uniforms);
 	Object.assign(material.uniforms, uniforms, { giantWaves: { value: GIANT_WAVES } });

@@ -57,6 +57,8 @@ const menuOpen = useState("menu-open", () => false);
 const readout = useState<{ place?: string; time: string; waves?: string; wind?: string; weather?: string }>("scene-readout", () => ({ time: "" }));
 // When the weather is not the measured weather (a channelled storm, or ?pretend=), the menu says so.
 const channelled = ref(false);
+// Peta's storm (wrath.ts), whose words the menu gives in place of the storm's.
+const wrathRaised = ref(false);
 const captionInNavigation = useState("caption-in-navigation", () => false);
 let dispose: (() => void) | undefined;
 
@@ -154,7 +156,7 @@ const liveFigures = computed(() => {
 
 watchEffect(() => {
 	shownAt.value = dateAtBoatHour(hour.value, pretendDate.value ?? new Date()).getTime();
-	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: channelled.value ? CHANNELLED_WORDS : undefined };
+	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: channelled.value ? (wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined };
 });
 
 onMounted(async () => {
@@ -516,9 +518,14 @@ onMounted(async () => {
 	let stormOn = stormNow();
 	// (With the rain cut, the storm's figures say no rain: storm.json "rain": false.)
 	const noRain = stormRainCut();
-	const pretendNow = () => (stillDone ? {} : stormOn ? { ...CHANNELLED_STORM, ...(noRain ? { precipitation: 0 } : {}), ...asPretended } : asPretended);
+	// Peta's storm (wrath.ts): "wrath" in storm.json, or ?wrath for this visit from now, ?wrath=40
+	// forty seconds in, ?wrath=off without it. While it is raised its figures are the storm's.
+	const wrathAsked = query.get("wrath");
+	const wrathFigures = wrathAsked !== "off" && (wrathAsked !== null || wrathSet());
+	const pretendNow = () => (stillDone ? {} : stormOn ? { ...(wrathFigures ? WRATH_STORM : CHANNELLED_STORM), ...(noRain ? { precipitation: 0 } : {}), ...asPretended } : asPretended);
 	let pretend = pretendNow();
 	channelled.value = Object.keys(pretend).length > 0;
+	wrathRaised.value = wrathFigures;
 	// Its colours, unless the address gives colours of its own.
 	const coloursGiven = COLOUR_NAMES.some((name) => query.has(name));
 	// The Aes Sedai may stay on after the storm is released (aesSedaiKept).
@@ -605,6 +612,8 @@ onMounted(async () => {
 	await breathe();
 	const mourning = createMourning(scene, SCREEN_LAYER);
 	const mournAsked = query.has("mourn");
+	const wrath = createWrath(scene, SCREEN_LAYER);
+	const wrathFrom = Date.now() - (wrathAsked !== null && wrathAsked !== "" && Number.isFinite(Number(wrathAsked)) ? Number(wrathAsked) * 1000 : 0);
 	const embroideryTints = [new THREE.Color(), new THREE.Color(), new THREE.Color()];
 	await breathe();
 	const stilling = createStilling(scene, SCREEN_LAYER);
@@ -788,6 +797,10 @@ onMounted(async () => {
 	// Colours as they should appear on screen.
 	const nightMist = new THREE.Color(0x10161d);
 	const dayFog = new THREE.Color(0x2b3844);
+	// The air lit by Manulani's sphere, and where the sphere is; how bright its light on the sea.
+	const litAir = new THREE.Color(0x5a6f80);
+	const manuAt = new THREE.Vector3();
+	const MANU_BRIGHT = 0.9;
 	const dayVoid = new THREE.Color(0xc4c8cc);
 	const white = new THREE.Color(0xffffff);
 	const mist = new THREE.Color();
@@ -894,13 +907,15 @@ onMounted(async () => {
 		const skySeconds = time - stormSince + (query.get("show") === "sky" ? 33 : 0);
 		const calming = stormOn && !calmMotion ? calmingNow(new Date(), calmAsked) : undefined;
 		const mourningOn = stormOn && !calmMotion && (mournAsked || mourningSince(new Date()) !== undefined);
+		const wrathSeconds = !wrathFigures ? undefined : wrathAsked !== null ? (Date.now() - wrathFrom) / 1000 : wrathSince(new Date());
+		const wrathOn = stormOn && !calmMotion && wrathSeconds !== undefined;
 		// (Nor is the sky opened while the strongest is stilling it.)
 		const stillingAny = stillingBegun(new Date(), stillAsked, pageOpened, stormAsked !== null) !== undefined;
 		// (While the twelve are linked, and resting after, the sky is not opened.)
-		const together = stormOn && !calmMotion && allAtOnce && !calming && !stillingAny && !mourningOn ? skyAllAt(skySeconds) : undefined;
+		const together = stormOn && !calmMotion && allAtOnce && !calming && !stillingAny && !mourningOn && !wrathOn ? skyAllAt(skySeconds) : undefined;
 		const breathing = stormOn && !calmMotion && byBreath ? skyBreathAt(skySeconds) : undefined;
 		const holding = !calmMotion && bySacred ? sacredAt(skySeconds, drawnFrom) : undefined;
-		const opening = together ?? (breathing ? { ...NO_SKY, canopy: breathing.canopy } : holding ? { ...NO_SKY, canopy: holding.command } : stormOn && !calmMotion && !calming && !stillingAny && !mourningOn ? skyOpeningAt(skySeconds) : NO_SKY);
+		const opening = together ?? (breathing ? { ...NO_SKY, canopy: breathing.canopy } : holding ? { ...NO_SKY, canopy: holding.command } : stormOn && !calmMotion && !calming && !stillingAny && !mourningOn && !wrathOn ? skyOpeningAt(skySeconds) : NO_SKY);
 		// The figures the picture is drawn from move towards the latest real ones, or towards the
 		// usual sea while there are none yet. (At once for a single still frame.)
 		drawnFrom = towardsConditions(drawnFrom, conditions.value ?? drawnFrom, motionPaused.value ? 1 : 1 - Math.exp(-delta / 1.5));
@@ -978,7 +993,9 @@ onMounted(async () => {
 			const windSpeed = liveOnly.windSpeed / 3.6;
 			useMeasuredSea(waveUniforms, {
 				swell: { height: liveOnly.swellHeight, period: liveOnly.swellPeriod, from: liveOnly.swellDirection },
-				secondSwell: { height: liveOnly.secondSwellHeight, period: liveOnly.secondSwellPeriod, from: liveOnly.secondSwellDirection },
+				// (In Peta's storm Moiraine's four hold the second swell turned 40 degrees across the
+				// first: a crossing sea, whose meeting crests heap into peaks.)
+				secondSwell: { height: liveOnly.secondSwellHeight, period: liveOnly.secondSwellPeriod, from: wrathOn ? (liveOnly.swellDirection + 40) % 360 : liveOnly.secondSwellDirection },
 				windSea: { height: liveOnly.windWaveHeight, period: liveOnly.windWavePeriod, from: liveOnly.windWaveDirection },
 				wind: { speed: windSpeed, from: liveOnly.windDirection },
 				facing: PLACE.bearing,
@@ -996,13 +1013,19 @@ onMounted(async () => {
 		// Past hurricane force (gusts over 120 km/h) they rise under the measured sea as well.
 		const extreme = liveOnly ? beyondHurricane(liveOnly) : 0;
 		// (Leane, pressing the waves, holds these down round the boat too.)
-		const surge = liveOnly ? 0.35 * extreme * (1 - 0.6 * pressing) : 0.55 * fury;
+		// In Peta's storm the swell is a dying God's breathing (godsBreath): each swell a breath, the
+		// runs of them deepening and fading, and between them the sea lies down.
+		const godBreath = wrathOn && liveOnly ? godsBreath(wrathSeconds!, liveOnly.swellPeriod) : undefined;
+		const breathed = godBreath?.sea ?? 1;
+		const surge = (liveOnly ? 0.35 * extreme * (1 - 0.6 * pressing) : 0.55 * fury) * breathed;
 		// The wind never holds steady: the whole sea swells and eases over a minute or two.
 		const lull = 0.5 * Math.sin(time * 0.11) + 0.5 * Math.sin(time * 0.047 + 1.3);
 		waveUniforms.surge.value = surge;
-		waveUniforms.waveSteepness.value = liveOnly ? alive : steepness * (1 + 0.2 * lull) * (1 - 0.3 * fury) * alive;
+		waveUniforms.waveSteepness.value = liveOnly ? alive * breathed : steepness * (1 + 0.2 * lull) * (1 - 0.3 * fury) * alive;
 		waveUniforms.gustiness.value = 0.8 * alive;
-		waveUniforms.foam.value *= alive;
+		waveUniforms.foam.value *= alive * (godBreath ? 0.45 + 0.55 * godBreath.depth : 1);
+		// Peta's wave, raised at the deepest breath of each run (wrath.ts).
+		layPetasWave(waveUniforms, godBreath, wrathSeconds ?? 0, time, camera.position, skyAhead);
 		waterUniforms.distortionScale.value *= lerp(0.15, 1, alive);
 
 		// In heavy seas the view heaves, pitches and rolls like a ship's deck, and rides the giant swells.
@@ -1012,7 +1035,7 @@ onMounted(async () => {
 		if (liveOnly) {
 			// On a measured sea the viewer is on a small boat: eyes EYE_HEIGHT above the water, and
 			// carried up and down by the very waves that are drawn.
-			const surface = measuredSeaHeight(waveUniforms, camera.position.x, camera.position.z, time) + giantWaveHeight(camera.position.x, camera.position.z, time, surge);
+			const surface = measuredSeaHeight(waveUniforms, camera.position.x, camera.position.z, time) + giantWaveHeight(camera.position.x, camera.position.z, time, surge) + lensWaveHeight(waveUniforms, camera.position.x, camera.position.z, time);
 			seaAtBoat = surface;
 			camera.position.y += (EYE_HEIGHT + surface - camera.position.y) * follow(0.2);
 		} else {
@@ -1051,6 +1074,11 @@ onMounted(async () => {
 		const stormFog = showFog.value ? 0.8 * Math.max(THREE.MathUtils.smoothstep(fury, 0.2, 1) * air.fogginess, liveMist) * (1 - 0.6 * opening.canopy) : 0;
 		const fogAmount = Math.max(stormFog, moment.stillness);
 		mist.lerpColors(nightMist, dayFog, daylight);
+		// Manulani's light (wrath.ts) lights the air about the boat, and the sea.
+		const manu = godBreath ? manulaniLevel(godBreath, wrathSeconds!, 1 - THREE.MathUtils.smoothstep(daylight, 0.15, 0.5)) : 0;
+		mist.lerp(litAir, 0.3 * manu);
+		manulaniSphere(camera.position, skyAhead, manuAt);
+		waveUniforms.manuLight.value.set(manuAt.x, manuAt.y, manuAt.z, (MANU_BRIGHT * manu) / steadyExposure);
 		fog.density = 0.0025 * fogAmount;
 		fog.color.copy(mist).multiplyScalar(1 / steadyExposure);
 		fogTint.copy(mist);
@@ -1151,7 +1179,7 @@ onMounted(async () => {
 			// (All twelve are in the calming while it lasts, and rest for hours after it.)
 			// (And while the strongest stills the weather the twelve stand back, coming back over the
 			// half hour after it is done.)
-			strength: Math.max(darkness, controlLevel, gathering) * alive * (1 - (holding?.quiet ?? 0)) * (calming ? THREE.MathUtils.smoothstep(calming.after, 2, 10) : 1) * standBack * (1 - (leane?.watching ?? 0)) * (mourningOn ? 0 : 1),
+			strength: Math.max(darkness, controlLevel, gathering) * alive * (1 - (holding?.quiet ?? 0)) * (calming ? THREE.MathUtils.smoothstep(calming.after, 2, 10) : 1) * standBack * (1 - (leane?.watching ?? 0)) * (mourningOn || wrathOn ? 0 : 1),
 			// More light by day, when it has a bright sea to show against.
 			// (And more under a moon, whose light on the sea would otherwise drown it.)
 			gain: (0.3 + 0.6 * daylight + 0.6 * nightfall * (1 - darkness)) / steadyExposure,
@@ -1192,7 +1220,9 @@ onMounted(async () => {
 		// The weave under the sea is always there, breathing slowly, and brightens as the weave is worked.
 		waveUniforms.weaveGlow.value = ((0.3 + 0.9 * moment.weave) * (0.75 + 0.25 * Math.sin(time * 0.9)) * alive * 1.3) / steadyExposure;
 
-		waveUniforms.freshFlow.value = alive;
+		// (Peta's storm mixes the fresh water into the salt: no stream lies apart in such a sea, and
+		// under Manulani's light the foam along its edges showed as rows of blots.)
+		waveUniforms.freshFlow.value = alive * (wrathOn ? 0 : 1);
 		waveUniforms.internalWaves.value = (0.5 + 0.5 * moment.weave) * alive;
 		vortexUniforms.vortexSpin.value = time * 0.8;
 		vortexUniforms.vortexGlow.value.copy(knotGlow).multiplyScalar((0.06 * formed) / steadyExposure);
@@ -1269,6 +1299,32 @@ onMounted(async () => {
 						swellFrom: THREE.MathUtils.degToRad(((liveOnly.swellDirection - PLACE.bearing + 540) % 360) - 180),
 						day: daylight,
 						gain: 1.5 / steadyExposure,
+						tints: embroideryTints,
+						bg: mist,
+					}
+				: undefined,
+		);
+		// Peta's storm: the thirteen, each linked to three ancestors, raising it.
+		wrath.update(
+			wrathOn && liveOnly
+				? {
+						time,
+						delta,
+						since: wrathSeconds!,
+						breath: godBreath!,
+						camera,
+						manu,
+						glowGain: 1.2 / steadyExposure,
+						boat: camera.position,
+						ahead: skyAhead,
+						wind: rainWind,
+						force: Math.min(1, (rainWind.length() / 40) * (1 + 0.4 * gustNowRain)),
+						gust: gustNowRain,
+						seaAt: (x, z) => measuredSeaHeight(waveUniforms, x, z, time) + giantWaveHeight(x, z, time, waveUniforms.surge.value) + lensWaveHeight(waveUniforms, x, z, time),
+						day: daylight,
+						gain: 1.5 / steadyExposure,
+						white: lerp(0.5, 3.5, daylight) / steadyExposure,
+						sheath: stillSheath.set(colours.strongest),
 						tints: embroideryTints,
 						bg: mist,
 					}
@@ -1417,6 +1473,7 @@ onMounted(async () => {
 		sacred.dispose();
 		embroidery.dispose();
 		mourning.dispose();
+		wrath.dispose();
 		stilling.dispose();
 		rainCut.dispose();
 		stopWatching();
