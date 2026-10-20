@@ -204,6 +204,8 @@ onMounted(async () => {
 	}
 	const el = container.value!;
 	const lerp = THREE.MathUtils.lerp;
+	// From one bearing towards another the short way round, `left` of the way still to go (1: at `from`).
+	const turnedTowards = (to: number, from: number, left: number) => (to + (((((from - to) % 360) + 540) % 360) - 180) * left + 360) % 360;
 
 	const renderer = new THREE.WebGLRenderer({ outputBufferType: THREE.HalfFloatType });
 	// Checking each shader for mistakes makes the browser wait for it to be built. That is for
@@ -655,7 +657,10 @@ onMounted(async () => {
 	const fiveFrom = Date.now() - (fiveAsked !== null && fiveAsked !== "" && Number.isFinite(Number(fiveAsked)) ? Number(fiveAsked) * 1000 : 0);
 	const embroideryTints = [new THREE.Color(), new THREE.Color(), new THREE.Color()];
 	await breathe();
-	const stilling = createStilling(scene, SCREEN_LAYER);
+	// (Who stills it: the strongest alone, or linked with Manulani and the four mighty, Siuan telling them.)
+	const stillBy = stillingBy(query.get("by"));
+	const stillStrength = STILLING_STRENGTH[stillBy];
+	const stilling = createStilling(scene, SCREEN_LAYER, stillStrength);
 	// Leane cutting the rain off (rain-cut.ts): set in storm.json, or ?raincut for this visit.
 	await breathe();
 	const rainCut = createRainCut(scene, SCREEN_LAYER);
@@ -954,7 +959,12 @@ onMounted(async () => {
 		// (Either act: the twelve's own weaving and the sky openings stand aside for it.)
 		const actOn = wrathOn || fiveOn;
 		// (Nor is the sky opened while the strongest is stilling it.)
-		const stillingAny = stillingBegun(new Date(), stillAsked, pageOpened, stormAsked !== null) !== undefined;
+		const stillingNow = stillingBegun(new Date(), stillAsked, pageOpened, stormAsked !== null);
+		const stillingAny = stillingNow !== undefined;
+		// The storm is ceased (the owner, 21 October): as the stilling begins, the thirteen let go of
+		// raising it, Peta's weaves and the five's giving way over forty seconds, and the God's
+		// breathing and the five's surges going out of the sea with them; the stilling does the rest.
+		const ceased = !stillingNow ? 0 : stillingNow.share !== undefined ? 1 : THREE.MathUtils.smoothstep(stillingNow.hours! * 3600, 0, 40);
 		// (While the twelve are linked, and resting after, the sky is not opened.)
 		const together = stormOn && !calmMotion && allAtOnce && !calming && !stillingAny && !mourningOn && !actOn ? skyAllAt(skySeconds) : undefined;
 		const breathing = stormOn && !calmMotion && byBreath ? skyBreathAt(skySeconds) : undefined;
@@ -973,17 +983,17 @@ onMounted(async () => {
 		const stillBegun = stillingBegun(new Date(), stillAsked, pageOpened, stormAsked !== null);
 		const measuredNow = measured ?? drawnMeasured ?? drawnFrom;
 		drawnMeasured = drawnMeasured ? towardsConditions(drawnMeasured, measuredNow, motionPaused.value ? 1 : 1 - Math.exp(-delta / 1.5)) : measuredNow;
-		let stillShare = -1;
+		let stillShare = stillDone ? 1 : -1;
 		// What they still: the weather on screen as they began (the twelve let go of the calming then).
 		let stillFrom = onScreen;
-		if (stillBegun) {
+		if (stillBegun && !stillDone) {
 			// How far it has to go is measured from the weather as it was when they began (the
 			// calming as far as it had got then), so that every visitor sees the same moment.
 			const begunAt = stillBegun.hours !== undefined ? new Date(Date.now() - stillBegun.hours * 3_600_000) : new Date();
 			const calmThen = stormOn ? calmingNow(begunAt, calmAsked) : undefined;
 			if (calmThen && !calmMotion && !(holding && holding.command > 0)) stillFrom = { ...drawnFrom, ...calmedConditions(drawnFrom, calmThen.progress) };
 			stillGap = stillingGap(stillFrom, drawnMeasured);
-			stillHours = stillingHours(stillGap);
+			stillHours = stillingHours(stillGap, stillStrength);
 			stillShare = stillBegun.share ?? Math.min(1, stillBegun.hours! / stillHours);
 			// Done: they let go, and the site follows the measured weather again.
 			if (stillShare >= 1 && stillBegun.share === undefined && !stillDone) {
@@ -1039,7 +1049,8 @@ onMounted(async () => {
 				swell: { height: liveOnly.swellHeight, period: liveOnly.swellPeriod, from: liveOnly.swellDirection },
 				// (In Peta's storm Moiraine's four hold the second swell turned 40 degrees across the
 				// first: a crossing sea, whose meeting crests heap into peaks.)
-				secondSwell: { height: liveOnly.secondSwellHeight, period: liveOnly.secondSwellPeriod, from: wrathOn ? (liveOnly.swellDirection + 40) % 360 : liveOnly.secondSwellDirection },
+				// (Stilled, it turns back to the measured second swell with the rest of the swell.)
+				secondSwell: { height: liveOnly.secondSwellHeight, period: liveOnly.secondSwellPeriod, from: wrathOn ? turnedTowards(liveOnly.secondSwellDirection, (liveOnly.swellDirection + 40) % 360, stillShare >= 0 ? leftOf(stillShare, STILLING_STAGES.swell) : 1) : liveOnly.secondSwellDirection },
 				windSea: { height: liveOnly.windWaveHeight, period: liveOnly.windWavePeriod, from: liveOnly.windWaveDirection },
 				wind: { speed: windSpeed, from: liveOnly.windDirection },
 				facing: PLACE.bearing,
@@ -1063,16 +1074,18 @@ onMounted(async () => {
 		const bothNow = fiveOn && wrathOn && liveOnly ? bothSea(fiveSeconds!, liveOnly.swellPeriod) : undefined;
 		const namesNow = bothNow ?? (fiveOn && liveOnly ? namesSea(fiveSeconds!, liveOnly.swellPeriod) : undefined);
 		const godBreath = bothNow ?? (wrathOn && liveOnly ? godsBreath(wrathSeconds!, liveOnly.swellPeriod) : namesNow);
-		const breathed = godBreath?.sea ?? 1;
+		const breathed = lerp(godBreath?.sea ?? 1, 1, ceased);
 		const surge = (liveOnly ? 0.35 * extreme * (1 - 0.6 * pressing) : 0.55 * fury) * breathed;
 		// The wind never holds steady: the whole sea swells and eases over a minute or two.
 		const lull = 0.5 * Math.sin(time * 0.11) + 0.5 * Math.sin(time * 0.047 + 1.3);
 		waveUniforms.surge.value = surge;
 		waveUniforms.waveSteepness.value = liveOnly ? alive * breathed : steepness * (1 + 0.2 * lull) * (1 - 0.3 * fury) * alive;
 		waveUniforms.gustiness.value = 0.8 * alive;
-		waveUniforms.foam.value *= alive * (godBreath ? 0.45 + 0.55 * godBreath.depth : 1);
+		waveUniforms.foam.value *= alive * (godBreath ? lerp(0.45 + 0.55 * godBreath.depth, 1, ceased) : 1);
 		// Peta's wave, raised at the deepest breath of each run (wrath.ts).
-		layPetasWave(waveUniforms, godBreath, (fiveOn ? fiveSeconds : wrathSeconds) ?? 0, time, camera.position, skyAhead, seaWorsened(WRATH_STORM, worse));
+		layPetasWave(waveUniforms, ceased < 1 ? godBreath : undefined, (fiveOn ? fiveSeconds : wrathSeconds) ?? 0, time, camera.position, skyAhead, seaWorsened(WRATH_STORM, worse));
+		waveUniforms.lensAmount.value *= 1 - ceased;
+		waveUniforms.lensCurrent.value.w *= 1 - ceased;
 		waterUniforms.distortionScale.value *= lerp(0.15, 1, alive);
 
 		// In heavy seas the view heaves, pitches and rolls like a ship's deck, and rides the giant swells.
@@ -1128,7 +1141,7 @@ onMounted(async () => {
 		// Manulani's light (wrath.ts) lights the air about the boat, and the sea.
 		// (For the five she holds it steady over the place, lowered a little in the silence.)
 		const night = 1 - THREE.MathUtils.smoothstep(daylight, 0.15, 0.5);
-		const manu = namesNow ? night * THREE.MathUtils.smoothstep(fiveSeconds!, 6, 30) * (0.85 - 0.25 * (namesNow.silent ? namesNow.held : 0)) : godBreath ? manulaniLevel(godBreath, wrathSeconds!, night) : 0;
+		const manu = (1 - ceased) * (namesNow ? night * THREE.MathUtils.smoothstep(fiveSeconds!, 6, 30) * (0.85 - 0.25 * (namesNow.silent ? namesNow.held : 0)) : godBreath ? manulaniLevel(godBreath, wrathSeconds!, night) : 0);
 		mist.lerp(litAir, 0.3 * manu);
 		manulaniSphere(camera.position, skyAhead, manuAt);
 		waveUniforms.manuLight.value.set(manuAt.x, manuAt.y, manuAt.z, (MANU_BRIGHT * manu) / steadyExposure);
@@ -1361,13 +1374,13 @@ onMounted(async () => {
 		if ((wrathOn || fiveOn) && liveOnly) psyche.update({ delta, weather: liveOnly, grief: 1 });
 		// Peta's storm: the thirteen, each linked to three ancestors, raising it.
 		wrath.update(
-			wrathOn && liveOnly
+			wrathOn && liveOnly && ceased < 1
 				? {
 						time,
 						delta,
 						since: wrathSeconds!,
 						breath: godBreath!,
-						presence: bothNow ? 1 - bothNow.five : undefined,
+						presence: (bothNow ? 1 - bothNow.five : 1) * (1 - ceased),
 						minds: psyche,
 						camera,
 						manu,
@@ -1389,14 +1402,14 @@ onMounted(async () => {
 		);
 		// The storm for the five: the fourteen holding it, and the sea speaking their names.
 		five.update(
-			fiveOn && liveOnly && namesNow
+			fiveOn && liveOnly && namesNow && ceased < 1
 				? {
 						time,
 						delta,
 						since: fiveSeconds!,
 						breath: namesNow,
 						silent: namesNow.silent,
-						presence: bothNow?.five,
+						presence: (bothNow?.five ?? 1) * (1 - ceased),
 						minds: psyche,
 						camera,
 						boat: camera.position,
@@ -1459,9 +1472,13 @@ onMounted(async () => {
 						gain: 1.5 / steadyExposure,
 						white: lerp(0.5, 3.5, daylight) / steadyExposure,
 						sheath: stillSheath.set(colours.strongest),
+						siuan: stillBy === "mighty" && liveOnly ? { tint: skySheath[1]!, heave: seaAtBoat, swellHeight: liveOnly.swellHeight, swellPeriod: liveOnly.swellPeriod } : undefined,
 					}
 				: undefined,
 		);
+		// The ocean they have healed, as far as the eye goes, when the mighty still it.
+		const healedOcean = stillBy === "mighty" && stillShare >= 0 && !calmMotion ? oceanHealed(stillShare, (stillBegun?.hours ?? 0) - stillHours) : 0;
+		waveUniforms.seaHealed.value.set(healedOcean * alive, (lerp(0.02, 0.06, daylight) * healedOcean * alive) / steadyExposure);
 		const seaEdge = stillingSeen ? stilledSeaEdge(stillShare) : { reach: 0, width: 0 };
 		waveUniforms.stillFront.value.set(camera.position.x, camera.position.z, seaEdge.reach * stilling.breath(), seaEdge.width * stilling.breath());
 		waveUniforms.stillAhead.value.copy(skyAhead);

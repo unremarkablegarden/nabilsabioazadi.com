@@ -455,3 +455,31 @@ raindrops seen end-on, whose streaks had no length: a drop is now never drawn sh
 wide (`rain.ts`). The ropes now fade in from 180 m to 50 m before the eye (they showed as white
 blots on the water close by). By day the ropes fade in from further off (`nearFade`; the five's
 low ropes from up to 850 m), so the foreground stays clear in troughs and on crests.
+
+## 18. The storm ceased; the mighty heal the ocean, Siuan commanding (21 October)
+
+The owner: "Cease the storm. I want the strongest channelers to heal the ocean with their full
+strength", then "I need Siuan to tell the channelers how to command the ocean just like she would"
+and "Siuan, command the channellers". `storm.json` `"stilling": { "from": "2026-10-21T06:33:00+13:00",
+"by": "mighty" }`; `?still=0.5` to look half-way, `&by=one` for the strongest alone as before.
+
+- **Ceased**: as the stilling begins the thirteen let go of raising the storm: Peta's and the five's
+  weaves give way over forty seconds, and the God's breathing, the five's surges, Peta's wave and
+  Manulani's light go out of the sea with them (`ceased` in `OceanBackground.vue`). The crossing
+  second swell turns back to the measured with the rest of the swell.
+- **The mighty, at full strength** (`STILLING_STRENGTH`, `stillingBy` in `channelled-storm.ts`): the
+  strongest, Manulani and the four mighty linked, the strongest leading, so it is still their white
+  weave. Together about 2.66 times the strongest alone, so the full stilling takes about 2.2 hours
+  instead of 5.8, and the weave carries the cube root of that many more filaments (`createStilling`'s
+  `strength`). The twelve's other eight stand back as before.
+- **Healed** (`oceanHealed`, `seaHealed` in `gerstner-waves.ts`): the water within their stilled
+  edge, and all of it once the weather is the measured again, clearer and bluer from within, never
+  the foam; held two hours after, then back to the sea as it is over six.
+- **Siuan commands** (`stilling.ts`): she is the fisher's daughter, so her way is never against the
+  swell: they haul against the water's own going under the boat, pressing as it rises and holding as
+  it falls, hardest where it moves fastest (force against velocity, as a damper takes a wave's
+  energy): twice to every real swell, not on a breath's clock. Her own strands, Siuan · Fathom's, in
+  her four's tamed sea glass, are wound through the roller along all its length.
+- Not yet right: her strands are faint (tamed colour), hard to find at night; a cast line of hers out
+  to the edge stood up as a pillar end-on and was dropped; the hump at the leaf's tip and the brown
+  band across the night sky are older; stills only, never in motion.

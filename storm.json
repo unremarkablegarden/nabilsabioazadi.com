@@ -9,5 +9,5 @@
 	"mourning": { "from": null },
 	"calming": { "from": null, "hours": 7 },
 	"rainCut": { "from": null },
-	"stilling": { "from": null }
+	"stilling": { "from": "2026-10-21T06:33:00+13:00", "by": "mighty" }
 }

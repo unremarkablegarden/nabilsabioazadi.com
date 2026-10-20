@@ -518,8 +518,31 @@ export function stillingGap(on: SeaConditions, real: SeaConditions) {
 	);
 }
 
-// Hours the strongest takes over a gap.
-export const stillingHours = (gap: number) => Math.max(0.25, (7 / 1.8) * Math.min(gap, 1.5));
+// Who stills it (the owner, 21 October: "Cease the storm. I want the strongest channelers to heal
+// the ocean with their full strength"): the strongest alone ("one"), or the strongest of the boat
+// linked, all at full strength ("mighty"): the strongest, Manulani and the four mighty. The
+// strongest leads the link, so it is still their white weave, carrying all six. storm.json
+// "stilling": { "by": ... }, or ?by= for one visit.
+// (Their strength: the twelve are eight at one and four at 64 (MIGHT in channellers.ts), the
+// strongest 1.8 times all twelve, Manulani 1.12 times the strongest (MANULANI in wrath.ts).)
+const TWELVE = 8 + 4 * 64;
+export const STILLING_STRENGTH = { one: 1, mighty: 1 + 1.12 + (4 * 64) / (1.8 * TWELVE) } as const;
+export function stillingBy(asked: string | null): keyof typeof STILLING_STRENGTH {
+	const by = asked ?? (stormSwitch as { stilling?: { by?: string } }).stilling?.by;
+	return by === "mighty" ? "mighty" : "one";
+}
+
+// Hours the strongest takes over a gap (and those linked with them, by how much stronger they are together).
+export const stillingHours = (gap: number, strength = 1) => Math.max(0.25, ((7 / 1.8) * Math.min(gap, 1.5)) / strength);
+
+// The ocean they have healed (the mighty's stilling): within the stilled water as it opens, all of
+// it once the weather is the measured again; a little clearer and bluer, as the twelve's healed
+// water is, but as far as the eye goes. It stays so for two hours after, and over the six after
+// that goes back to the sea as it is.
+export function oceanHealed(share: number, hoursAfter: number) {
+	if (share < 1) return ease(clamp01((share - 0.2) / 0.2));
+	return 1 - ease(clamp01((hoursAfter - 2) / 6));
+}
 
 // When in the stilling (0..1 of it) each lever is worked: [begins, done].
 export const STILLING_STAGES = {

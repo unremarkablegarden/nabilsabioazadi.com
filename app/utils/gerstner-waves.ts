@@ -369,6 +369,9 @@ export interface GerstnerUniforms {
 	stillSea: THREE.IUniform<THREE.Vector4>;
 	// Leane's moonlight on the water she is stilling, before tone mapping.
 	stillGlow: THREE.IUniform<number>;
+	// The ocean the mighty have healed (oceanHealed): 0..1 how far, and its glow from within before
+	// tone mapping.
+	seaHealed: THREE.IUniform<THREE.Vector2>;
 	pressGlow: THREE.IUniform<number>;
 	// The boat's electric lamps on the water round it, before tone mapping. 0 is unlit.
 	boatLamp: THREE.IUniform<number>;
@@ -724,6 +727,7 @@ uniform vec4 healed[ 4 ];
 uniform float channelBalmGlow;
 uniform float pressGlow;
 uniform float stillGlow;
+uniform vec2 seaHealed;
 ${pressedChunk}
 ${stillChunk}
 uniform float boatLamp;
@@ -890,6 +894,15 @@ const fragmentFoam = /* glsl */ `
 	// Leane's moonlight lies on the water she is stilling: a silver sheen on the faces of its
 	// smoothed waves, brightest where the storm's sea breaks against its edge.
 	outgoingLight += vec3( 0.8, 0.86, 1.0 ) * stillGlow * ( ( 1.0 - stillBeyond ) * ( 0.25 + 0.75 * pow( max( surfaceNormal.y, 0.0 ), 8.0 ) ) + 1.5 * stillRim ) * ( 1.0 - smoothstep( 300.0, 2500.0, distance ) );
+	// The ocean the strongest, Manulani and the four mighty have healed: the water within their
+	// stilled edge, and all of it once the weather is the measured again. Clearer and bluer from
+	// within, as the twelve's healed water is, and glowing faintly; never the foam, nor the old sea
+	// still breaking against their weave.
+	if ( seaHealed.x > 0.0 ) {
+		float whole = seaHealed.x * ( 1.0 - stillBeyond ) * ( 1.0 - foamMask ) * ( 1.0 - min( stillRim, 1.0 ) );
+		outgoingLight *= mix( vec3( 1.0 ), vec3( 0.46, 0.94, 1.34 ), 0.7 * whole * ( 1.0 - 0.4 * reflectance ) );
+		outgoingLight += vec3( 0.03, 0.2, 0.75 ) * seaHealed.y * whole * ( 1.0 - reflectance );
+	}
 
 	// Slowing the boat is the work of the weaker channellers (the owner's). They do not weave out
 	// towards Hawai'i but down: plaits laid in rings close round the boat, just under the level of
@@ -1069,6 +1082,7 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		stillAhead: { value: new THREE.Vector2(0, -1) },
 		stillSea: { value: new THREE.Vector4(1, 0, 0, 0) },
 		stillGlow: { value: 0 },
+		seaHealed: { value: new THREE.Vector2() },
 		boatLamp: { value: 0 },
 		channelLight: { value: 0 },
 		foam: { value: 0 },

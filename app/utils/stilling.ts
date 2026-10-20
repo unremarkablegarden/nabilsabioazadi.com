@@ -30,6 +30,8 @@ import { pixelRatio, ribbonShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
 const SEA_FILAMENTS = 1400;
 const SKY_FILAMENTS = 900;
 const READING_FILAMENTS = 360;
+// Siuan's telling: Siuan · Fathom's strands, at the mighty's 2.5 measures.
+const TELLING_FILAMENTS = 300;
 
 const vertex = /* glsl */ `
 attribute float aT;
@@ -158,6 +160,9 @@ vec3 readingPoint( float s ) {
 	return c + ( side * cos( phi ) + up * sin( phi ) ) * rr;
 }
 
+// Siuan's telling: her own strands, in the tamed water of her four, wound through the linked
+// roller along all its length, so that her way with the sea runs through all of their work.
+// (Cast out alone to the sea's edge, seen end-on it stood up as a pillar.)
 vec3 placeAt( float t ) { return uKind < 0.5 ? readingPoint( t ) : rollerPoint( t ); }
 
 void main() {
@@ -195,6 +200,9 @@ uniform float uWhite;
 uniform vec3 uSheath;
 uniform float uOpacity;
 uniform float uSheathPass;
+// Siuan's own colour, the tamed water of her four, for her telling (1); the strongest's white (0).
+uniform vec3 uTint;
+uniform float uTinted;
 varying float vAlpha;
 varying float vEdge;
 void main() {
@@ -206,8 +214,8 @@ void main() {
 		gl_FragColor = vec4( uSheath, exp( - across * across * 2.5 ) * min( 1.0, vAlpha * 1.6 ) );
 	} else {
 		float body = 1.0 - smoothstep( 0.7, 1.0, across );
-		vec3 night = vec3( 0.93, 0.96, 1.0 ) * uGain;
-		gl_FragColor = vec4( mix( night, vec3( uWhite ), uDay ), body * vAlpha * uOpacity * mix( 1.0, 3.0, uDay ) );
+		vec3 night = mix( vec3( 0.93, 0.96, 1.0 ), uTint, uTinted ) * uGain;
+		gl_FragColor = vec4( mix( night, mix( vec3( uWhite ), uTint, uTinted ), uDay ), body * vAlpha * uOpacity * mix( 1.0, 3.0, uDay ) );
 	}
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
@@ -230,6 +238,9 @@ export interface StillingFrame {
 	gain: number;
 	white: number;
 	sheath: THREE.Color;
+	// Siuan's telling (the owner, 21 October: "Siuan, command the channellers"), when the mighty
+	// still it: her colour, and the sea under the boat (m) and its swell, which she works by.
+	siuan?: { tint: THREE.Color; heave: number; swellHeight: number; swellPeriod: number };
 }
 
 const { smoothstep } = THREE.MathUtils;
@@ -250,7 +261,11 @@ export function stilledSeaEdge(u: number) {
 	return { reach, width: reach * (0.35 + 0.45 * out) + 6000 * smoothstep(out, 0.8, 1) };
 }
 
-export function createStilling(scene: THREE.Scene, layer: number) {
+// (`strength`: how much stronger than the strongest alone those who still it are together: linked
+// with the mighty and Manulani the weave carries the cube root of that many more filaments, each
+// as faint and as white, as the mighty's tresses do.)
+export function createStilling(scene: THREE.Scene, layer: number, strength = 1) {
+	const mass = (filaments: number) => Math.round(filaments * Math.cbrt(strength));
 	const shared = {
 		uTime: { value: 0 },
 		uBoat: { value: new THREE.Vector3() },
@@ -269,9 +284,10 @@ export function createStilling(scene: THREE.Scene, layer: number) {
 		uPixelRatio: pixelRatio,
 	};
 	const parts = [
-		{ geometry: lines(READING_FILAMENTS, 200, (i) => [i, 0]), opacity: 0.03 },
-		{ geometry: lines(SKY_FILAMENTS, 260, (i) => [i, 0]), opacity: 0.018 },
-		{ geometry: lines(SEA_FILAMENTS, 300, (i) => [i, 0]), opacity: 0.018 },
+		{ geometry: lines(mass(READING_FILAMENTS), 200, (i) => [i, 0]), opacity: 0.03 },
+		{ geometry: lines(mass(SKY_FILAMENTS), 260, (i) => [i, 0]), opacity: 0.018 },
+		{ geometry: lines(mass(SEA_FILAMENTS), 300, (i) => [i, 0]), opacity: 0.018 },
+		{ geometry: lines(TELLING_FILAMENTS, 220, (i) => [i, 0]), opacity: 0.03 },
 	].map(({ geometry, opacity }, kind) => {
 		const own = {
 			uKind: { value: kind },
@@ -280,6 +296,8 @@ export function createStilling(scene: THREE.Scene, layer: number) {
 			uCast: { value: 0 },
 			uLetGo: { value: 0 },
 			uFade: { value: 0 },
+			uTint: { value: new THREE.Color() },
+			uTinted: { value: kind === 3 ? 1 : 0 },
 		};
 		// (Two of each: the white threads, and by day the sheath laid under them.)
 		const meshes = [1, 0].map((sheath) => {
@@ -297,6 +315,9 @@ export function createStilling(scene: THREE.Scene, layer: number) {
 	// Where they are in the slow stroke of their breath (0..1).
 	let stroke = 0;
 	let roll = 0;
+	// Siuan's way with the sea: how fast the water under the boat is rising or falling (m/s).
+	let lastHeave: number | undefined;
+	let lift = 0;
 	const update = (frame: StillingFrame | undefined) => {
 		if (!frame || frame.presence <= 0.001) {
 			for (const { meshes } of parts) for (const mesh of meshes) mesh.visible = false;
@@ -304,7 +325,24 @@ export function createStilling(scene: THREE.Scene, layer: number) {
 		}
 		const u = frame.share;
 		stroke = (stroke + frame.delta / 10) % 1;
-		const haul = smoothstep(stroke, 0, 0.3) * (1 - smoothstep(stroke, 0.5, 0.85));
+		const breathed = smoothstep(stroke, 0, 0.3) * (1 - smoothstep(stroke, 0.5, 0.85));
+		// Siuan tells them how she would command the sea, as a fisher's daughter who has known it
+		// all her life: never against the swell, always with it. Each wave is drained of what it
+		// carries by a hold that goes against the water's own going, so they haul as the water
+		// under them rises (pressing it down) and again as it falls (holding it up), hardest where
+		// it moves fastest and slack at crest and trough: twice to every swell, the sea's own
+		// time and not a breath's. (Force against velocity: as a damper takes a wave's energy.)
+		const siuan = frame.siuan;
+		let haul = breathed;
+		if (siuan && frame.delta > 0) {
+			const moving = lastHeave === undefined ? 0 : (siuan.heave - lastHeave) / frame.delta;
+			lastHeave = siuan.heave;
+			lift += (moving - lift) * Math.min(1, frame.delta / 0.6);
+			// (Against the fastest a swell of that height and period can move the water.)
+			const fastest = (Math.PI * Math.max(siuan.swellHeight, 0.1)) / Math.max(siuan.swellPeriod, 2);
+			const withSea = Math.min(1, Math.abs(lift) / fastest) ** 0.7;
+			haul = THREE.MathUtils.lerp(breathed, withSea, smoothstep(siuan.swellHeight, 0.3, 1.2));
+		} else lastHeave = undefined;
 		// Rolled outward, faster as they haul.
 		roll += frame.delta * (0.06 + 0.3 * haul);
 		shared.uTime.value = frame.time;
@@ -324,7 +362,7 @@ export function createStilling(scene: THREE.Scene, layer: number) {
 		shared.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(pixelRatio.value);
 		// Each edge goes out a little further with each haul.
 		const breath = 1 + 0.012 * haul;
-		const [reading, sky, sea] = parts as [(typeof parts)[0], (typeof parts)[0], (typeof parts)[0]];
+		const [reading, sky, sea, telling] = parts as [(typeof parts)[0], (typeof parts)[0], (typeof parts)[0], (typeof parts)[0]];
 		reading.own.uCast.value = smoothstep(u, 0, 0.025) * 1.05;
 		reading.own.uLetGo.value = smoothstep(u, 0.045, 0.07) * 1.05;
 		reading.own.uFade.value = u < 0.075 ? frame.presence : 0;
@@ -339,6 +377,12 @@ export function createStilling(scene: THREE.Scene, layer: number) {
 		sea.own.uCast.value = smoothstep(u, 0.2, 0.25) * 1.05;
 		sea.own.uLetGo.value = smoothstep(u, 0.955, 0.995) * 1.05;
 		sea.own.uFade.value = edge.reach > 0 ? frame.presence : 0;
+		// She tells them as they turn to the sea, and holds it in their roller until they let go.
+		telling.own.uFront.value.copy(sea.own.uFront.value);
+		telling.own.uCast.value = smoothstep(u, 0.19, 0.24) * 1.05;
+		telling.own.uLetGo.value = smoothstep(u, 0.955, 0.995) * 1.05;
+		telling.own.uFade.value = siuan && edge.reach > 0 ? frame.presence : 0;
+		if (siuan) telling.own.uTint.value.copy(siuan.tint);
 		const blending = frame.day > 0.5 ? THREE.NormalBlending : THREE.AdditiveBlending;
 		for (const { mesh, sheath, own } of parts) {
 			mesh.visible = own.uFade.value > 0.001;
