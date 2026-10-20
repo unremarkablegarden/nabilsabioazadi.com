@@ -662,10 +662,10 @@ onMounted(async () => {
 	const fiveFrom = Date.now() - (fiveAsked !== null && fiveAsked !== "" && Number.isFinite(Number(fiveAsked)) ? Number(fiveAsked) * 1000 : 0);
 	const embroideryTints = [new THREE.Color(), new THREE.Color(), new THREE.Color()];
 	await breathe();
-	// (Who stills it: the strongest alone, or linked with Manulani and the four mighty, Siuan telling them.)
+	// (Who stills it: the strongest alone, or linked with Manulani and the four mighty, Siuan leading the link.)
 	const stillBy = stillingBy(query.get("by"));
 	const stillStrength = STILLING_STRENGTH[stillBy];
-	const stilling = createStilling(scene, SCREEN_LAYER, stillStrength);
+	const stilling = createStilling(scene, SCREEN_LAYER, stillStrength, stillBy === "mighty");
 	// The six's contest of strength (contest.ts), once they have healed the ocean; ?contest=60 to
 	// look a minute into it at any time. In the console __contest() tells the bouts.
 	const contest = createContest(scene, SCREEN_LAYER);

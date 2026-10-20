@@ -550,3 +550,15 @@ it: the strongest's and Manulani's ropes in both storms (`wrath.ts`, `five.ts`),
 healing (`stilling.ts`) and the contest (`contest.ts`). By day the ropes are their threads alone;
 pale ones are fainter against a pale sky. (Leane's rain-cut keeps the deepened sheath of her own
 air colour, which is not the bar's blue.)
+
+## 22. Siuan leads the link (21 October)
+
+The owner: "let Siuan create the body for the linking on the boat"; asked, she leads the link
+instead of the strongest. In the mighty's stilling and healing (`stilling.ts`, `siuanLeads`) the
+sky's and the sea's rollers are cast from Siuan's hands (Siuan · Fathom's seat, 2.25 m right of
+the eye, `SIUAN_HANDS`) and are her colour, the tamed sea glass of her four; the strongest's white,
+the greatest strength in the link flowing through her, is wound through her roller along all its
+length (588 filaments, for their 4.9 measures against the old telling's 300 at 2.5). The reading,
+before the link is made, stays the strongest's own. With `&by=one` the strongest alone, white, as
+before. Checked by its uniforms (her colour, her hands) and in stills only; in the worsened storm
+the roller is hard to catch on screen between the seas.

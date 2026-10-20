@@ -23,6 +23,14 @@
 // real gust bows it back downwind; under the real wind's load it quivers, slowly. Every line is one
 // curve: the roller's filaments wind loosely round it, each at its own pace, so none line up; the
 // edge runs in and out; both ends come back to the boat, to the strongest's two hands.
+//
+// Linked (the mighty's stilling), Siuan leads the link (the owner, 21 October: "let Siuan create
+// the body for the linking on the boat"): as in the books one sister holds a circle and all the
+// others' strength flows into her hands, so the sky's and the sea's rollers are cast from Siuan's
+// hands (Siuan · Fathom's, at the rail right of the strongest) and are her colour, the tamed sea
+// glass of her four. The strongest, the greatest strength in the link, flows through her: their
+// white is wound through her roller along all its length, as many filaments as their 4.9 measures
+// carry. The reading is still the strongest's own, alone, before the link is made.
 import * as THREE from "three";
 import { lines } from "./embroidery";
 import { pixelRatio, ribbonShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
@@ -32,6 +40,9 @@ const SKY_FILAMENTS = 900;
 const READING_FILAMENTS = 360;
 // Siuan's telling: Siuan · Fathom's strands, at the mighty's 2.5 measures.
 const TELLING_FILAMENTS = 300;
+// Where the hands are that cast the rollers, across from the eye (m): the strongest's, Siuan's.
+const STRONGEST_HANDS = 0.75;
+const SIUAN_HANDS = 2.25;
 
 const vertex = /* glsl */ `
 attribute float aT;
@@ -39,6 +50,8 @@ attribute float aSide;
 attribute vec2 aCell;
 attribute vec4 aSeed;
 uniform float uKind;
+// Whose hands cast it: how far right of the eye they sit (m).
+uniform float uHandsAt;
 uniform float uTime;
 uniform vec3 uBoat;
 uniform vec2 uAhead;
@@ -63,8 +76,9 @@ vec3 aheadDir() { return vec3( uAhead.x, 0.0, uAhead.y ); }
 vec3 acrossDir() { return vec3( - uAhead.y, 0.0, uAhead.x ); }
 vec3 bearing( float a ) { return aheadDir() * cos( a ) + acrossDir() * sin( a ); }
 
-// The strongest's hands: their seat is the third at the rail, just right of the viewer.
-vec3 hand( float side ) { return uBoat + acrossDir() * ( 0.75 + 0.35 * side ) + vec3( 0.0, - 1.2, 0.0 ) + aheadDir() * 0.5; }
+// The hands it is cast from: the strongest's (the third seat at the rail, just right of the
+// viewer), or Siuan's when she leads the link (the fourth).
+vec3 hand( float side ) { return uBoat + acrossDir() * ( uHandsAt + 0.35 * side ) + vec3( 0.0, - 1.2, 0.0 ) + aheadDir() * 0.5; }
 
 // The same edge as the water's (stillHalfWidth in gerstner-waves.ts): how far it reaches across
 // at x ahead, on one side.
@@ -158,8 +172,8 @@ vec3 readingPoint( float s ) {
 	return c + ( side * cos( phi ) + up * sin( phi ) ) * rr;
 }
 
-// Siuan's telling: her own strands, in the tamed water of her four, wound through the linked
-// roller along all its length, so that her way with the sea runs through all of their work.
+// Wound through the linked roller along all its length: the strongest's white through Siuan's
+// roller, the strongest flowing through her.
 // (Cast out alone to the sea's edge, seen end-on it stood up as a pillar.)
 vec3 placeAt( float t ) { return uKind < 0.5 ? readingPoint( t ) : rollerPoint( t ); }
 
@@ -196,7 +210,7 @@ uniform float uGain;
 uniform float uDay;
 uniform float uWhite;
 uniform float uOpacity;
-// Siuan's own colour, the tamed water of her four, for her telling (1); the strongest's white (0).
+// Siuan's own colour, the tamed water of her four, when it is hers (1); the strongest's white (0).
 uniform vec3 uTint;
 uniform float uTinted;
 varying float vAlpha;
@@ -253,7 +267,8 @@ export function stilledSeaEdge(u: number) {
 // (`strength`: how much stronger than the strongest alone those who still it are together: linked
 // with the mighty and Manulani the weave carries the cube root of that many more filaments, each
 // as faint and as white, as the mighty's tresses do.)
-export function createStilling(scene: THREE.Scene, layer: number, strength = 1) {
+// (`siuanLeads`: linked, Siuan holds the link, and the strongest's white is wound through hers.)
+export function createStilling(scene: THREE.Scene, layer: number, strength = 1, siuanLeads = false) {
 	const mass = (filaments: number) => Math.round(filaments * Math.cbrt(strength));
 	const shared = {
 		uTime: { value: 0 },
@@ -275,7 +290,7 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1) 
 		{ geometry: lines(mass(READING_FILAMENTS), 200, (i) => [i, 0]), opacity: 0.03 },
 		{ geometry: lines(mass(SKY_FILAMENTS), 260, (i) => [i, 0]), opacity: 0.018 },
 		{ geometry: lines(mass(SEA_FILAMENTS), 300, (i) => [i, 0]), opacity: 0.018 },
-		{ geometry: lines(TELLING_FILAMENTS, 220, (i) => [i, 0]), opacity: 0.03 },
+		{ geometry: lines(siuanLeads ? Math.round((TELLING_FILAMENTS * 4.9) / 2.5) : TELLING_FILAMENTS, 220, (i) => [i, 0]), opacity: 0.03 },
 	].map(({ geometry, opacity }, kind) => {
 		const own = {
 			uKind: { value: kind },
@@ -285,7 +300,8 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1) 
 			uLetGo: { value: 0 },
 			uFade: { value: 0 },
 			uTint: { value: new THREE.Color() },
-			uTinted: { value: kind === 3 ? 1 : 0 },
+			uTinted: { value: 0 },
+			uHandsAt: { value: STRONGEST_HANDS },
 		};
 		const mesh = new THREE.Mesh(geometry, new THREE.ShaderMaterial({ uniforms: { ...shared, ...own }, vertexShader: vertex, fragmentShader: fragment, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
 		mesh.frustumCulled = false;
@@ -365,7 +381,13 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1) 
 		telling.own.uCast.value = smoothstep(u, 0.19, 0.24) * 1.05;
 		telling.own.uLetGo.value = smoothstep(u, 0.955, 0.995) * 1.05;
 		telling.own.uFade.value = siuan && edge.reach > 0 ? frame.presence : 0;
-		if (siuan) telling.own.uTint.value.copy(siuan.tint);
+		// Siuan holds the link: the rollers from her hands in her colour, the strongest's white wound
+		// through. (Without her, the strongest's own, as before.)
+		const leads = !!siuan && siuanLeads;
+		for (const part of [sky, sea, telling]) part.own.uHandsAt.value = leads ? SIUAN_HANDS : STRONGEST_HANDS;
+		for (const part of [sky, sea]) part.own.uTinted.value = leads ? 1 : 0;
+		telling.own.uTinted.value = leads ? 0 : 1;
+		if (siuan) for (const part of [sky, sea, telling]) part.own.uTint.value.copy(siuan.tint);
 		const blending = frame.day > 0.5 ? THREE.NormalBlending : THREE.AdditiveBlending;
 		for (const { mesh, own } of parts) {
 			mesh.visible = own.uFade.value > 0.001;

@@ -521,8 +521,9 @@ export function stillingGap(on: SeaConditions, real: SeaConditions) {
 
 // Who stills it (the owner, 21 October: "Cease the storm. I want the strongest channelers to heal
 // the ocean with their full strength"): the strongest alone ("one"), or the strongest of the boat
-// linked, all at full strength ("mighty"): the strongest, Manulani and the four mighty. The
-// strongest leads the link, so it is still their white weave, carrying all six. storm.json
+// linked, all at full strength ("mighty"): the strongest, Manulani and the four mighty. Siuan
+// (Siuan · Fathom) leads the link (stilling.ts), so the weave is hers, the strongest's white
+// wound through it. storm.json
 // "stilling": { "by": ... }, or ?by= for one visit.
 // (Their strength: the twelve are eight at one and four at 64 (MIGHT in channellers.ts), the
 // strongest 1.8 times all twelve, Manulani 1.12 times the strongest (MANULANI in wrath.ts).)
