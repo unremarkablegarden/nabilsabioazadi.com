@@ -562,3 +562,22 @@ length (588 filaments, for their 4.9 measures against the old telling's 300 at 2
 before the link is made, stays the strongest's own. With `&by=one` the strongest alone, white, as
 before. Checked by its uniforms (her colour, her hands) and in stills only; in the worsened storm
 the roller is hard to catch on screen between the seas.
+
+## 23. Aggravated (21 October)
+
+The owner: "AGGRAVATE MY COMMANDS"; asked which, the six's strength, the contest and Siuan's
+command.
+
+- **The six 3.6 times stronger** (`SIX_STRONGER` 3.6, the 80% doubled): drawn by the cube root,
+  about 53% more filaments than before any of it (the seats' `MEASURES` now 4, 4, 8, 4); the
+  healing goes 3.6 times faster.
+- **The contest fiercer** (`contest.ts`): each surges hard on her breath (0.22, was 0.08), so where
+  they meet is thrown back and forth; the drive is gentler and capped lower, so no bout is over in
+  under about twenty seconds; the filaments splay and curl nearly twice as far where they press,
+  brighter, and the losing rope trembles more than twice as much. The ring declared is 800 m out
+  and 320 m up, held five minutes. As it plays: Keel over Listener (22 s), Fathom over Kite (254 s),
+  Manulani over Fathom and the strongest over Keel (20 s each), Manulani over the strongest (66 s),
+  declared 8 minutes 42 seconds in; about 14 minutes in all.
+- **Siuan commands harder** (`stilling.ts`): each haul draws the roller in tighter (30%, was 16%),
+  turns it twice as fast and drives the edge out 3% (was 1.2%); the water is healed deeper
+  (`seaHealed`'s glow half as much again).

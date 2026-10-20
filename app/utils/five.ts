@@ -42,7 +42,7 @@ const SEGMENTS = 120;
 // Filaments to a measure; the four mighty carry 2.5 measures, the strongest about 4.9, Manulani
 // about 5.1 (by the cube root of their strength, as MIGHT in channellers.ts).
 const FIBRES = 64;
-// The six's ropes carry more filaments for their 80% more strength (SIX_STRONGER), by its cube root.
+// The six's ropes carry more filaments for their greater strength (SIX_STRONGER), by its cube root.
 const SIX_MASS = Math.cbrt(SIX_STRONGER);
 const SLOTS = [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const THIRDS = [0, 1, 0, 1, 2, 2, 1, 0, 2, 1, 0, 2];

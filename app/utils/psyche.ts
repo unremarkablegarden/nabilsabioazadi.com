@@ -65,9 +65,10 @@ export const TEMPERS = [
 	[0.7, 0.7, 0.6, 0.95, 0.9, 0.7],
 ].map(([air, water, eager, stamina, steady, sociable]) => ({ air: air!, water: water!, eager: eager!, stamina: stamina!, steady: steady!, sociable: sociable! }));
 // The strongest six (the strongest, Manulani and the four mighty) given 80% more strength (the
-// owner, 21 October: "give them all 80% more strength"): their true strength, 1.8 times what it was.
+// owner, 21 October: "give them all 80% more strength"), and then that doubled ("aggravate my
+// commands"): their true strength, 3.6 times what it was.
 // Drawn, as all strength is, in mass by its cube root.
-export const SIX_STRONGER = 1.8;
+export const SIX_STRONGER = 3.6;
 // Strength as their ropes' measures (MIGHT in channellers.ts): the four mighty, the strongest, Manulani.
 const MIGHT = [2.5, 2.5, 2.5, 1, 1, 2.5, 1, 1, 1, 1, 1, 1, 4.9, 5.1].map((might) => (might > 2 ? might * Math.cbrt(SIX_STRONGER) : might));
 export const STRONGEST_MIND = 12;

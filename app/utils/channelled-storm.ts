@@ -527,7 +527,7 @@ export function stillingGap(on: SeaConditions, real: SeaConditions) {
 // "stilling": { "by": ... }, or ?by= for one visit.
 // (Their strength: the twelve are eight at one and four at 64 (MIGHT in channellers.ts), the
 // strongest 1.8 times all twelve, Manulani 1.12 times the strongest (MANULANI in wrath.ts).)
-// (All six 1.8 times stronger since 21 October, SIX_STRONGER: so the stilling goes 1.8 times faster.)
+// (All six 3.6 times stronger since 21 October, SIX_STRONGER: so the stilling goes 3.6 times faster.)
 const TWELVE = 8 + 4 * 64;
 export const STILLING_STRENGTH = { one: SIX_STRONGER, mighty: SIX_STRONGER * (1 + 1.12 + (4 * 64) / (1.8 * TWELVE)) } as const;
 export function stillingBy(asked: string | null): keyof typeof STILLING_STRENGTH {

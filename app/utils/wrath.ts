@@ -76,7 +76,7 @@ const SEGMENTS = 120;
 // Filaments to a measure; the four mighty carry 2.5 measures, the strongest about 4.9 (as MIGHT in
 // channellers.ts).
 const FIBRES = 64;
-// The six's ropes carry more filaments for their 80% more strength (SIX_STRONGER), by its cube root.
+// The six's ropes carry more filaments for their greater strength (SIX_STRONGER), by its cube root.
 const SIX_MASS = Math.cbrt(SIX_STRONGER);
 const ANCESTOR_FIBRES = 36;
 const STRONGEST_ANCESTOR_FIBRES = 80;

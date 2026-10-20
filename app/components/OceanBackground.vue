@@ -1507,7 +1507,8 @@ onMounted(async () => {
 		);
 		// The ocean they have healed, as far as the eye goes, when the mighty still it.
 		const healedOcean = stillBy === "mighty" && stillShare >= 0 && !calmMotion ? oceanHealed(stillShare, (stillBegun?.hours ?? 0) - stillHours) : 0;
-		waveUniforms.seaHealed.value.set(healedOcean * alive, (lerp(0.02, 0.06, daylight) * healedOcean * alive) / steadyExposure);
+		// (Siuan commanding harder, the 21st: the water healed deeper.)
+		waveUniforms.seaHealed.value.set(healedOcean * alive, (lerp(0.03, 0.09, daylight) * healedOcean * alive) / steadyExposure);
 		const seaEdge = stillingSeen ? stilledSeaEdge(stillShare) : { reach: 0, width: 0 };
 		waveUniforms.stillFront.value.set(camera.position.x, camera.position.z, seaEdge.reach * stilling.breath(), seaEdge.width * stilling.breath());
 		waveUniforms.stillAhead.value.copy(skyAhead);

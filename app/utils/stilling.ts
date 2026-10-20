@@ -116,7 +116,7 @@ vec3 rollerPoint( float s ) {
 	// As thick for its distance as a hawser is, drawn in a little as they haul; and like a stroke
 	// of a brush, not a pipe, swelling and thinning along its length.
 	float swell = max( 0.22, 0.6 + 0.4 * sin( s * 9.0 + 1.3 + uTime * 0.02 + uKind ) + 0.3 * sin( s * 23.0 + 0.7 + 2.0 * uKind ) );
-	float rad = ( 0.5 + uFront.w * 0.045 * dist ) * ( 1.0 - 0.16 * uHaul ) * swell;
+	float rad = ( 0.5 + uFront.w * 0.045 * dist ) * ( 1.0 - 0.3 * uHaul ) * swell;
 	// A gust bows it back downwind; under load it quivers, slowly.
 	c += uWindDir * uGust * 0.012 * dist * span;
 	c += up * uTension * 0.004 * dist * sin( uTime * 0.9 + s * 14.0 + uKind ) * span;
@@ -343,8 +343,9 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1, 
 			const withSea = Math.min(1, Math.abs(lift) / fastest) ** 0.7;
 			haul = THREE.MathUtils.lerp(breathed, withSea, smoothstep(siuan.swellHeight, 0.3, 1.2));
 		} else lastHeave = undefined;
-		// Rolled outward, faster as they haul.
-		roll += frame.delta * (0.06 + 0.3 * haul);
+		// Rolled outward, faster as they haul. (Siuan commands it hard, the owner's "aggravate my
+		// commands": each haul draws the roller in tighter, turns it faster and drives the edge further.)
+		roll += frame.delta * (0.06 + 0.6 * haul);
 		shared.uTime.value = frame.time;
 		shared.uBoat.value.copy(frame.boat);
 		shared.uAhead.value.copy(frame.ahead);
@@ -360,7 +361,7 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1, 
 		shared.uWhite.value = frame.white;
 		shared.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(pixelRatio.value);
 		// Each edge goes out a little further with each haul.
-		const breath = 1 + 0.012 * haul;
+		const breath = 1 + 0.03 * haul;
 		const [reading, sky, sea, telling] = parts as [(typeof parts)[0], (typeof parts)[0], (typeof parts)[0], (typeof parts)[0]];
 		reading.own.uCast.value = smoothstep(u, 0, 0.025) * 1.05;
 		reading.own.uLetGo.value = smoothstep(u, 0.045, 0.07) * 1.05;
@@ -396,7 +397,7 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1, 
 	};
 
 	// The breath's own share of the sea edge, for the water to go out with it.
-	const breath = () => 1 + 0.012 * shared.uHaul.value;
+	const breath = () => 1 + 0.03 * shared.uHaul.value;
 
 	const dispose = () => {
 		for (const { mesh } of parts) {

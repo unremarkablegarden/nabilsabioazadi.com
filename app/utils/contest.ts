@@ -47,7 +47,7 @@ const CAST = 6;
 const DRIVEN = 3;
 const RELEASE = 4;
 const REST = 15;
-const DECLARED = 180;
+const DECLARED = 300;
 const LET_GO = 10;
 const STEP = 0.05;
 // How long after the healing they begin (s).
@@ -75,7 +75,8 @@ function play() {
 	const winnerOf = (slot: Slot) => (typeof slot === "number" ? slot : bouts[slot.winnerOf]!.winner!);
 	const force = (seed: number, t: number) => {
 		const temper = TEMPERS[SIX[seed]!]!;
-		const breath = 1 + 0.08 * Math.sin((2 * Math.PI * t) / (8 + 4 * temper.steady) + seed * 1.7);
+		// (Each surges hard on her breath, so where they meet is thrown back and forth.)
+		const breath = 1 + 0.22 * Math.sin((2 * Math.PI * t) / (8 + 4 * temper.steady) + seed * 1.7);
 		return TRUE[seed]! * (0.75 + 0.25 * temper.steady) * (0.4 + 0.6 * (1 - spent[seed]!)) * breath;
 	};
 	const step = () => {
@@ -100,7 +101,8 @@ function play() {
 		if (current.ended !== undefined || at - begun < CAST) return;
 		const fa = force(current.a, at);
 		const fb = force(current.b, at);
-		current.x += THREE.MathUtils.clamp((0.5 * (fa - fb)) / (fa + fb), -0.09, 0.09) * STEP;
+		// (Even the weaker holds a while: no bout is over in under some twenty seconds.)
+		current.x += THREE.MathUtils.clamp((0.35 * (fa - fb)) / (fa + fb), -0.05, 0.05) * STEP;
 		current.pressed += STEP;
 		for (const seed of [current.a, current.b]) spent[seed] = Math.min(1, spent[seed]! + STEP * (1.4 - TEMPERS[SIX[seed]!]!.stamina) * 0.003);
 		if (Math.abs(current.x) >= 1) {
@@ -188,11 +190,11 @@ vec3 boutAt( float t ) {
 // Declared: up from her hands into a great ring about the boat, turning slowly.
 vec3 crownAt( float t ) {
 	float a0 = uTime * 0.015;
-	vec3 start = uBoat + vec3( 0.0, 230.0, 0.0 ) + ( aheadDir() * cos( a0 ) + acrossDir() * sin( a0 ) ) * 520.0;
+	vec3 start = uBoat + vec3( 0.0, 320.0, 0.0 ) + ( aheadDir() * cos( a0 ) + acrossDir() * sin( a0 ) ) * 800.0;
 	if ( t < 0.18 ) return bezier( uSeat, uSeat + vec3( 0.0, 120.0, 0.0 ) + aheadDir() * 40.0, start - ( acrossDir() * cos( a0 ) - aheadDir() * sin( a0 ) ) * 200.0, start, t / 0.18 );
 	float a = a0 + ( t - 0.18 ) / 0.82 * 6.28318;
 	float wave = 14.0 * sin( a * 3.0 + uTime * 0.1 );
-	return uBoat + vec3( 0.0, 230.0 + wave, 0.0 ) + ( aheadDir() * cos( a ) + acrossDir() * sin( a ) ) * 520.0;
+	return uBoat + vec3( 0.0, 320.0 + wave, 0.0 ) + ( aheadDir() * cos( a ) + acrossDir() * sin( a ) ) * 800.0;
 }
 vec3 placeAt( float t ) { return mix( boutAt( t ), crownAt( t ), uCrown ); }
 
@@ -208,11 +210,11 @@ void main() {
 	float turn = aSeed.y * 6.28318 + aT * 3.0 + uTime * 0.15 * ( aSeed.x - 0.5 );
 	vec3 off = ( n1 * cos( turn ) + n2 * sin( turn ) ) * spread;
 	// Losing, her rope trembles taut, slowly; never a thrash.
-	off += n1 * sin( aT * 8.0 - uTime * 2.0 + aSeed.x * 3.0 ) * 5.0 * uStrain * sin( 3.14159 * aT );
+	off += n1 * sin( aT * 8.0 - uTime * 2.0 + aSeed.x * 3.0 ) * 12.0 * uStrain * sin( 3.14159 * aT );
 	// Where they press: the filaments of both splay and curl out from the meeting, the more the harder.
 	float near = smoothstep( 0.78, 1.0, aT ) * uPress * ( 1.0 - uCrown );
 	float curl = aSeed.y * 6.28318 + uTime * ( 0.3 + 0.4 * aSeed.w ) + aT * 6.0;
-	off += ( n1 * cos( curl ) + n2 * sin( curl ) * 1.3 ) * near * ( 8.0 + 34.0 * aSeed.w ) - along * near * 12.0 * aSeed.z;
+	off += ( n1 * cos( curl ) + n2 * sin( curl ) * 1.3 ) * near * ( 14.0 + 60.0 * aSeed.w ) - along * near * 20.0 * aSeed.z;
 	here += off;
 	next += off;
 	// Cast out from her hands; driven back to them when beaten.
@@ -220,7 +222,7 @@ void main() {
 	float far = length( here - cameraPosition );
 	shown *= smoothstep( 12.0, 70.0, far ) * exp( - far / 9000.0 );
 	shown *= 0.55 + 0.45 * smoothstep( - 0.6, 0.6, sin( aT * 5.0 + aSeed.y * 2.0 + 1.0 ) + 0.5 * sin( aT * 13.0 + 2.0 ) );
-	vAlpha = shown * uFade * ( 1.0 + 0.6 * near );
+	vAlpha = shown * uFade * ( 1.0 + 0.9 * near );
 	vEdge = aSide;
 	mat4 vp = projectionMatrix * viewMatrix;
 	gl_Position = ribbonPosition( vp * vec4( here, 1.0 ), vp * vec4( next, 1.0 ), aSide, mix( 1.0, 1.3, uDay ) );
