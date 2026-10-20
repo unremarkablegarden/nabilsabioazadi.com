@@ -649,6 +649,9 @@ onMounted(async () => {
 	const wrath = createWrath(scene, SCREEN_LAYER);
 	const wrathFrom = Date.now() - (wrathAsked !== null && wrathAsked !== "" && Number.isFinite(Number(wrathAsked)) ? Number(wrathAsked) * 1000 : 0);
 	const five = createFive(scene, SCREEN_LAYER);
+	// The fourteen's minds, as the storm meets each (psyche.ts).
+	const psyche = createPsyche();
+	(window as unknown as { __minds?: () => string[] }).__minds = psyche.describe;
 	const fiveFrom = Date.now() - (fiveAsked !== null && fiveAsked !== "" && Number.isFinite(Number(fiveAsked)) ? Number(fiveAsked) * 1000 : 0);
 	const embroideryTints = [new THREE.Color(), new THREE.Color(), new THREE.Color()];
 	await breathe();
@@ -1350,6 +1353,8 @@ onMounted(async () => {
 					}
 				: undefined,
 		);
+		// What the storm is doing to each of the fourteen.
+		if ((wrathOn || fiveOn) && liveOnly) psyche.update({ delta, weather: liveOnly, grief: 1 });
 		// Peta's storm: the thirteen, each linked to three ancestors, raising it.
 		wrath.update(
 			wrathOn && liveOnly
@@ -1359,6 +1364,7 @@ onMounted(async () => {
 						since: wrathSeconds!,
 						breath: godBreath!,
 						presence: bothNow ? 1 - bothNow.five : undefined,
+						minds: psyche,
 						camera,
 						manu,
 						glowGain: 1.2 / steadyExposure,
@@ -1387,6 +1393,7 @@ onMounted(async () => {
 						breath: namesNow,
 						silent: namesNow.silent,
 						presence: bothNow?.five,
+						minds: psyche,
 						camera,
 						boat: camera.position,
 						ahead: skyAhead,

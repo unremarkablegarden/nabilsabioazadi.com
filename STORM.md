@@ -427,3 +427,20 @@ steepness of one in ten so it can stand. Peta's wave rises and lengthens with it
 `scale`). The ancestors' strands now fade from 400 m out to 80 m from the eye.
 Not yet right: riding such a sea the boat's own ropes (the five's) can fan across the foreground
 from a crest; seen only in stills.
+
+## 16. The channellers' minds (21 October)
+
+The owner: "you can psycho-analyse the channellers — make them react appropriately". `psyche.ts`
+(the whole reasoning is in its header): each of the fourteen meets the storm by her temperament
+through the window of tolerance (Siegel): within it she works; above it she fights (eager,
+air-minded: rope taut, trembling, hotter) or flees (wary, water-minded: rope drawn back towards her
+hands), and it spends her; spent past bearing, or pushed far past her window, she freezes (rope
+slack, sagging, still, grey) until rested. Arousal spreads to those beside her (contagion); those
+within their window and bound to others send part of their rope to lie beside the most troubled
+neighbour and ease her (tend and befriend; co-regulation); the strongest is the secure base, tends
+whoever is worst, and eases all while they hold. Load is the weather against Peta's storm, less
+each one's strength (the mighty, the strongest and Manulani meet it as a smaller thing). Drives
+both `wrath.ts` and `five.ts` (`mindChunk`). In the browser console `__minds()` lists each one's
+state. In the fifteen-times-worse storm, after six minutes: Leane's Ember, Sail and Lantern fight
+and near burning out, Loom and Ballast tend Ember and Lantern, the strongest tends Sail, the rest
+hold. Not yet seen: the freeze itself in a picture; never watched in motion.

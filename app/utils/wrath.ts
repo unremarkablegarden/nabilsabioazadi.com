@@ -69,6 +69,7 @@
 // slow and deepest), and never flickers.
 import * as THREE from "three";
 import type { GodsBreath } from "./channelled-storm";
+import { giveMinds, mindChunk, type Minds } from "./psyche";
 import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RENDER_ORDER } from "./weave";
 
 const SEGMENTS = 120;
@@ -127,6 +128,7 @@ varying float vAlpha;
 varying float vEdge;
 ${ribbonShaderChunk}
 ${tameShaderChunk}
+${mindChunk}
 const float THIRD_OF[ 14 ] = float[ 14 ]( ${THIRDS.map((x) => `${x}.0`).join(", ")}, 3.0, 4.0 );
 const float MEMBER_OF[ 14 ] = float[ 14 ]( ${MEMBERS.map((x) => `${x}.0`).join(", ")}, 0.0, 0.0 );
 const float SEAT_OF[ 14 ] = float[ 14 ]( ${SLOTS.map((x) => `${x}.0`).join(", ")}, 2.0, 13.0 );
@@ -234,15 +236,19 @@ vec3 ancestor( float who, float line, float t ) {
 	return p + vec3( 0.0, 14.0 * sin( t * 9.0 - uTime * 0.5 + who + line ) * ( 1.0 - t ), 0.0 );
 }
 
+vec3 placeOwn( float who, float t ) {
+	vec4 st = uState[ int( who ) ];
+	if ( who > 12.5 ) return manulaniRope( t );
+	if ( who > 11.5 ) return strongestRope( t, st.y );
+	float third = THIRD_OF[ int( who ) ];
+	if ( third < 0.5 ) return siuanRope( who, t, st.y );
+	if ( third < 1.5 ) return leaneRope( who, t, st.y, st.x );
+	return moiraineRope( who, t, st.y );
+}
+
 vec3 placeAt( float t ) {
-	vec4 st = uState[ int( aWho ) ];
 	if ( aLine > - 0.5 ) return ancestor( aWho, aLine, t );
-	if ( aWho > 12.5 ) return manulaniRope( t );
-	if ( aWho > 11.5 ) return strongestRope( t, st.y );
-	float third = THIRD_OF[ int( aWho ) ];
-	if ( third < 0.5 ) return siuanRope( aWho, t, st.y );
-	if ( third < 1.5 ) return leaneRope( aWho, t, st.y, st.x );
-	return moiraineRope( aWho, t, st.y );
+	return placeOwn( aWho, t );
 }
 
 void main() {
@@ -253,6 +259,15 @@ void main() {
 	bool own = aLine < - 0.5;
 	vec3 here = placeAt( aT );
 	vec3 next = placeAt( min( aT + 0.01, 1.0 ) ) + ( aT >= 0.99 ? here - placeAt( aT - 0.01 ) : vec3( 0.0 ) );
+	// Part of the rope of one who tends goes out from her hands to lie beside the rope of the one
+	// she tends (psyche.ts).
+	bool ownRope = aLine < - 0.5;
+	if ( ownRope && tending( aWho, aSeed.x ) ) {
+		float other = uTendTo[ int( aWho ) ];
+		float k = 0.92 * smoothstep( 0.04, 0.4, aT );
+		here = mix( here, placeOwn( other, aT ) + vec3( 0.0, 3.0, 0.0 ), k );
+		next = mix( next, placeOwn( other, min( aT + 0.01, 1.0 ) ) + vec3( 0.0, 3.0, 0.0 ), k );
+	}
 	// Each filament wanders about the line: a hawser's girth, wider and wilder the angrier she is,
 	// drawn tighter on each haul.
 	vec3 n1 = normalize( cross( next - here + vec3( 1e-5 ), vec3( 0.0, 1.0, 0.0 ) ) + vec3( 1e-4 ) );
@@ -263,6 +278,8 @@ void main() {
 	vec3 off = ( n1 * cos( turn ) + vec3( 0.0, sin( turn ), 0.0 ) ) * spread;
 	// The thrash: a long smooth wave through every filament.
 	off += n1 * sin( aT * 9.0 - uFlow + aSeed.x * 3.0 ) * ( 2.0 + 10.0 * rage ) * ( 1.0 - 0.85 * uHold ) * sin( 3.14159 * aT ) * ( own ? 1.0 : 0.3 );
+	// Her state of mind in the line itself: taut and trembling, or slack (psyche.ts).
+	if ( ownRope ) off += mindBend( aWho, aT, n1, aSeed.x );
 	here += off;
 	next += off;
 	float shown;
@@ -280,6 +297,7 @@ void main() {
 		shown *= 0.5 + 0.5 * smoothstep( 0.5, 1.0, sin( aT * 8.0 - uFlow * 1.2 + aSeed.y * 6.0 ) * 0.5 + 0.5 ) + 0.3 * haul * aT;
 	}
 	shown *= uPresence;
+	if ( ownRope ) shown *= mindShown( aWho, aT );
 	// (The ancestors' strands fade well before the boat: all fifty-odd meeting at the hands filled
 	// the foreground with a fan of broad bands, worst when the boat rides high on the sea.)
 	shown *= smoothstep( 1.0, 0.9, aT ) * ( own ? smoothstep( 25.0, 110.0, length( here - cameraPosition ) ) : smoothstep( 80.0, 400.0, length( here - cameraPosition ) ) );
@@ -291,6 +309,7 @@ void main() {
 	else if ( aWho > 11.5 ) vTint = vec3( 1.0 );
 	else if ( own ) vTint = tame( mix( uTints[ int( third + 0.5 ) ], EMBER, 0.5 * rage * ( 0.6 + 0.4 * haul ) ), mix( 0.22, 0.38, rage ) ) * ( 1.0 + 0.3 * rage );
 	else vTint = tame( uTints[ int( third + 0.5 ) ], 0.18 );
+	if ( ownRope && aWho < 11.5 ) vTint = mindTint( aWho, vTint );
 	vEdge = aSide;
 	mat4 vp = projectionMatrix * viewMatrix;
 	float width = uSheathPass > 0.5 ? 5.0 : ( uWhiteMesh > 0.5 ? 1.0 : 1.1 );
@@ -329,6 +348,8 @@ void main() {
 `;
 
 export interface WrathFrame {
+	// The fourteen's minds (psyche.ts).
+	minds?: Minds;
 	time: number;
 	delta: number;
 	// Seconds since the wrath began.
@@ -414,6 +435,9 @@ export function createWrath(scene: THREE.Scene, layer: number) {
 		uHold: { value: 0 },
 		uState: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) },
 		uPresence: { value: 1 },
+		uMind: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) },
+		uMindFlow: { value: new Array<number>(14).fill(0) },
+		uTendTo: { value: new Array<number>(14).fill(-1) },
 		uSphere: { value: new THREE.Vector3() },
 		uFoot: { value: Array.from({ length: 12 }, () => new THREE.Vector3()) },
 		uTints: { value: [new THREE.Color(), new THREE.Color(), new THREE.Color()] },
@@ -509,6 +533,7 @@ void main() {
 		}
 		strongestSheath.visible = frame.day > 0.3;
 		const dt = Math.min(frame.delta, 0.1);
+		giveMinds(shared, frame.minds);
 		let anger = 0;
 		courses.forEach((course, i) => {
 			const into = frame.since - course.begins;
