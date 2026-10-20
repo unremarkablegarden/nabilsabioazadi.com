@@ -64,6 +64,17 @@ uniform vec3 uWindDir;
 uniform vec3 uPlace;
 uniform float uCloud;
 uniform float uGust;
+uniform float uDay;
+// Faded in from well before the eye: close by, a rope is a broad band across the view, and by day,
+// laid as colour on a pale sea, many of them together crossed the foreground in pale bands; so by
+// day they come in from further off (the ancestors' strands further still).
+float nearFade( float d, bool own ) {
+	if ( ! own ) return smoothstep( mix( 80.0, 160.0, uDay ), mix( 400.0, 650.0, uDay ), d );
+	// (The five's ropes run low over the sea all the way out to the place, so from the boat they
+	// fan across the whole foreground: by day they come in from further off still, out of the
+	// spray, and are seen where they gather at the place.)
+	return smoothstep( mix( 50.0, 260.0, uDay ), mix( 180.0, 850.0, uDay ), d );
+}
 // How far the quiver has run (integrated, so it can slow without a jump); 0..1 how far they bow
 // under the name just spoken (lowest in the silence after the fifth).
 uniform float uFlow;
@@ -212,7 +223,7 @@ void main() {
 	// Fullest on each beat; laid on unevenly along its length, as a brush lays colour; never dark
 	// in a bow (they hold).
 	shown *= mix( 0.65 + 0.5 * draw, 0.7, uBow ) * ( 0.55 + 0.45 * smoothstep( - 0.6, 0.6, sin( aT * 6.0 + aSeed.y * 6.0 ) + 0.5 * sin( aT * 15.0 + 2.0 ) ) );
-	shown *= smoothstep( 1.0, 0.9, aT ) * smoothstep( 25.0, 110.0, length( here - cameraPosition ) );
+	shown *= smoothstep( 1.0, 0.9, aT ) * nearFade( length( here - cameraPosition ), true );
 	vAlpha = shown * uPresence * mindShown( aWho, aT );
 	// Tamed to the background's colour, cooling towards the bruise as they bow and as the ache grows.
 	// (The strongest's white; Manulani's the colour of her light.)

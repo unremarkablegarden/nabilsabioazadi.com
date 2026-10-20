@@ -189,8 +189,14 @@ void main() {
 	vec2 a = headClip.xy / max( headClip.w, 1e-3 );
 	vec2 b = tailClip.xy / max( tailClip.w, 1e-3 );
 	vec2 along = ( a - b ) * uResolution;
-	vec2 side = normalize( vec2( - along.y, along.x ) + vec2( 1e-5, 0.0 ) );
+	float len = length( along );
+	vec2 dir = len > 1e-3 ? along / len : vec2( 0.0, 1.0 );
+	vec2 side = vec2( - dir.y, dir.x );
 	clip.xy += side * aCorner.y * width / uResolution * clip.w;
+	// A drop coming straight at the eye is still a drop: never drawn shorter than it is wide.
+	// (Its streak, seen end-on, had no length, and was drawn as a hair-thin sideways line that
+	// broke into pairs of dashes all over the sky.)
+	clip.xy += dir * ( aCorner.x - 0.5 ) * max( 0.0, width - len ) / uResolution * clip.w;
 	gl_Position = clip;
 	// Fainter for being blurred, and lost in the rain with distance.
 	// Hanging, each drop glimmers a little, as a drop held in the light does; gone back up, it is

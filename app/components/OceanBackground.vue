@@ -1072,7 +1072,7 @@ onMounted(async () => {
 		waveUniforms.gustiness.value = 0.8 * alive;
 		waveUniforms.foam.value *= alive * (godBreath ? 0.45 + 0.55 * godBreath.depth : 1);
 		// Peta's wave, raised at the deepest breath of each run (wrath.ts).
-		layPetasWave(waveUniforms, godBreath, (fiveOn ? fiveSeconds : wrathSeconds) ?? 0, time, camera.position, skyAhead, Math.cbrt(worse) ** 2);
+		layPetasWave(waveUniforms, godBreath, (fiveOn ? fiveSeconds : wrathSeconds) ?? 0, time, camera.position, skyAhead, seaWorsened(WRATH_STORM, worse));
 		waterUniforms.distortionScale.value *= lerp(0.15, 1, alive);
 
 		// In heavy seas the view heaves, pitches and rolls like a ship's deck, and rides the giant swells.

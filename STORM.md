@@ -444,3 +444,14 @@ both `wrath.ts` and `five.ts` (`mindChunk`). In the browser console `__minds()` 
 state. In the fifteen-times-worse storm, after six minutes: Leane's Ember, Sail and Lantern fight
 and near burning out, Loom and Ballast tend Ember and Lantern, the strongest tends Sail, the rest
 hold. Not yet seen: the freeze itself in a picture; never watched in motion.
+
+## 17. Realistic beauty (21 October)
+
+The owner, on a 180 m sea with saw-tooth ridges and paired white dashes: "I thought we were creating
+realistic beauty". The worsened storm's sea is now drawn no higher than `SEA_MOST` (40 m
+significant, about twice the greatest measured); the fifteen times stays in the wind, rain and the
+channellers' load, and Peta's wave rises with the sea as drawn (`seaWorsened`). The dashes were
+raindrops seen end-on, whose streaks had no length: a drop is now never drawn shorter than it is
+wide (`rain.ts`). The ropes now fade in from 180 m to 50 m before the eye (they showed as white
+blots on the water close by). By day the ropes fade in from further off (`nearFade`; the five's
+low ropes from up to 850 m), so the foreground stays clear in troughs and on crests.

@@ -234,6 +234,13 @@ export function namesSea(seconds: number, period: number): GodsBreath & { peakAt
 // square, about 6; the heat in its towers likewise; the rain fifteen times, and the air fifteen
 // times thicker with it. No sea of such height can stand at its old length (past a steepness of
 // one in seven a wave breaks apart), so each swell is made long enough to stand: one in ten.
+// The highest the worst storm's sea is drawn, in metres (significant height).
+export const SEA_MOST = 40;
+// How many times taller than its own figures a worsened storm's sea is drawn (for Peta's wave).
+export function seaWorsened(storm: Partial<SeaConditions>, times: number) {
+	if (times <= 1) return 1;
+	return Math.min(Math.cbrt(times) ** 2, SEA_MOST / Math.max(storm.waveHeight ?? 1, 1));
+}
 export function worseTimes(asked: string | null) {
 	if (asked !== null && asked !== "" && Number.isFinite(Number(asked))) return Math.max(1, Number(asked));
 	return Math.max(1, (stormSwitch as { worse?: number }).worse ?? 1);
@@ -251,11 +258,15 @@ export function worsened(storm: Partial<SeaConditions>, times: number): Partial<
 	scale("windGusts", wind);
 	scale("windTrend", wind);
 	scale("cape", square);
-	scale("waveHeight", square);
-	scale("swellHeight", square);
-	scale("secondSwellHeight", square);
-	scale("windWaveHeight", square);
-	scale("waveTrend", square);
+	// The sea, though, only so far as water can be drawn true (the owner, 21 October, on a sea of
+	// 180 m: "I thought we were creating realistic beauty"): no more than SEA_MOST high, about twice
+	// the greatest sea ever measured; the force goes into the wind, the rain and the channellers.
+	const sea = Math.min(square, SEA_MOST / Math.max(out.waveHeight ?? 1, 1));
+	scale("waveHeight", sea);
+	scale("swellHeight", sea);
+	scale("secondSwellHeight", sea);
+	scale("windWaveHeight", sea);
+	scale("waveTrend", sea);
 	scale("precipitation", times);
 	scale("pressureTrend", square);
 	if (typeof out.pressure === "number") out.pressure = 1013 - (1013 - out.pressure) * square;

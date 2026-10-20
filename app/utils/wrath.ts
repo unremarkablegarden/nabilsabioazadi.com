@@ -107,6 +107,14 @@ uniform vec3 uCore;
 uniform float uCloud;
 uniform float uSpin;
 uniform float uGust;
+uniform float uDay;
+// Faded in from well before the eye: close by, a rope is a broad band across the view, and by day,
+// laid as colour on a pale sea, many of them together crossed the foreground in pale bands; so by
+// day they come in from further off (the ancestors' strands further still).
+float nearFade( float d, bool own ) {
+	if ( ! own ) return smoothstep( mix( 80.0, 160.0, uDay ), mix( 400.0, 650.0, uDay ), d );
+	return smoothstep( mix( 50.0, 150.0, uDay ), mix( 180.0, 520.0, uDay ), d );
+}
 // How far the swirl, lash and thrash have run (their speed integrated, so that they can slow and
 // still without a jump), and 0..1 how far they hold through a pause in the God's breath.
 uniform float uFlow;
@@ -300,7 +308,7 @@ void main() {
 	if ( ownRope ) shown *= mindShown( aWho, aT );
 	// (The ancestors' strands fade well before the boat: all fifty-odd meeting at the hands filled
 	// the foreground with a fan of broad bands, worst when the boat rides high on the sea.)
-	shown *= smoothstep( 1.0, 0.9, aT ) * ( own ? smoothstep( 25.0, 110.0, length( here - cameraPosition ) ) : smoothstep( 80.0, 400.0, length( here - cameraPosition ) ) );
+	shown *= smoothstep( 1.0, 0.9, aT ) * nearFade( length( here - cameraPosition ), own );
 	vAlpha = shown;
 	// Tamed to the background's colour, running hot towards ember with her anger; her ancestors
 	// in her own colour, cooler and paler.
