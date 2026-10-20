@@ -1,9 +1,10 @@
 {
-	"from": null,
-	"until": null,
+	"from": "2026-10-20T21:47:00+13:00",
+	"until": "2026-10-21T21:47:00+13:00",
 	"weavers": "aes-sedai",
 	"rain": true,
-	"wrath": { "from": null },
+	"wrath": { "from": "2026-10-20T21:47:00+13:00" },
+	"five": { "from": "2026-10-20T21:47:00+13:00" },
 	"mourning": { "from": null },
 	"calming": { "from": null, "hours": 7 },
 	"rainCut": { "from": null },

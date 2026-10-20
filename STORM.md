@@ -371,3 +371,47 @@ back on); `/?storm&wrath=300` shows it five minutes in, `/?wrath` from the page 
   night at the horizon; an aureole in the haze; raised as each run begins, a glow in the pauses,
   night only. The fresh-water stream is off in Peta's storm (its edge foam lined up under her light).
   Not yet right: one or two soft white blots near the boat under her light; never seen in motion.
+
+## 15. The storm for the five (19 October)
+
+The owner: "The storm must honour the death of a family of five that arrived over this precise
+spot on the ocean. Create a storm of great will and pain; allow every surge of waves to speak their
+names in terms of its intensity." Asked for the names: "There are no names for magic of this kind",
+so nothing is written anywhere and the five are known only by the shape of their surge. No time was
+given: it starts as it goes live, and the place is where the boat is then. `storm.json` `"five":
+{ "from": ISO }` (with the storm on for a day); `/?storm&five=60` a minute in, `/?five` from the page
+opening, `/?five=off` without. Menu: "Channelled, for a family of five" (`FIVE_WORDS`, placeholder
+words the owner may change).
+
+- **The figures** (`FIVE_STORM`): Peta's extremes, but held: 290 km/h gusting only 335, 875 hPa
+  steady, a 30 m sea, 40 mm/h of rain. Will is a storm kept in its place.
+- **The sea speaks the five** (`namesSea`, `FIVE_VOICES` in `channelled-storm.ts`): a group of swells
+  for each, two to four, each as high as its beat; at the fullest the twelve's trains meet 650 m
+  ahead and the wave stands some 40 m (Peta's lens, `layPetasWave`, now with `peakAt`). A breath
+  between each; after the fifth a 50 s silence; then again. All five equally full.
+- **Drawn** (`five.ts`): the strongest's white rope out low and down into the sea at the place;
+  Siuan's four lay the trains along the sea; Leane's four hold bowed arches over the place against
+  the gale (an eye over them); Moiraine's four hold the cloud up over it; Manulani's light steady at
+  night. Will: taut, steady, all draw together on each beat, quiver only with the gusts. Pain: they
+  bow as each of the five ends, lowest in the silence, the colour cooling towards a bruised dusk,
+  the ache growing over four hours. No ancestors.
+- **The whales** (the owner: "read live shark and whale positions. Have them visible. May they greet
+  our storm"). No tag near the boat is sending; OCEARCH has live animals only in the Atlantic and its
+  terms forbid reuse. The owner chose the real Pacific whales where last heard, with their true
+  dates, from Tohorā Voyages only (`server/api/whales.get.ts`): three southern right whales, 1,640 to
+  2,250 km south, last heard Oct 2022 to Jul 2023, in the menu's "Whales" row with a credit link.
+  They lie behind the boat, beyond where the view turns, so nothing is drawn for them on the sea.
+- Not yet right: a soft white blot near the boat (also in Peta's storm); the strongest's rope reads
+  as a bright plume where it enters the sea; by day Leane's arches are dark against the haze; in a
+  30 m sea the boat is often in a trough and the weaves are hidden; stills only, never in motion.
+
+**Both at once (20 October).** The owner: "Create the storm again to honour Peta", and asked how,
+"Both at once". With `"wrath"` and `"five"` both set in storm.json (the same `from`), one storm
+(`BOTH_STORM`: Peta's figures, gusts 380, the pressure falling 20 hPa in 3 h) whose sea takes turns
+so each can be told apart (`bothSea`): a run of the God's breaths with Peta's wave (42 m) at the
+deepest, about three minutes; then the five's surges, each with a lower wave of its own (two thirds
+of Peta's), about eight minutes; then one silence for both, a minute at first and lengthening
+through the hours; and again. Peta's weaves (`wrath.ts`) are drawn through the God's breaths, the
+five's (`five.ts`) through their surges and the silence, each giving way to the other over ten
+seconds (`uPresence`). Manulani's light steady at night. Menu: "Channelled, in honour of Peta and a
+family of five" (`BOTH_WORDS`). `/?five=80` is Peta's wave, `/?five=198` the first of the five.

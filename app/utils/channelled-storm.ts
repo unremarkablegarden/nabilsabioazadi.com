@@ -98,6 +98,10 @@ export interface GodsBreath {
 	run: number;
 	runStart: number;
 	breathing: number;
+	// When in the run the wave at the place is to stand highest (seconds into it; half-way if not given),
+	// and how high, as a share of Peta's wave (1 if not given).
+	peakAt?: number;
+	stand?: number;
 }
 const hashed = (n: number) => {
 	const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
@@ -121,6 +125,143 @@ export function godsBreath(seconds: number, period: number): GodsBreath {
 			return { sea: 0.3, phase: 0, depth: 0, waning: true, held: ease(clamp01(p / 0.15)) * (1 - ease(clamp01((p - 0.85) / 0.15))), run: n, runStart: start, breathing };
 		}
 		start += breathing + pause;
+	}
+}
+
+// The storm for the five (the owner, 19 October: "The storm must honour the death of a family of
+// five that arrived over this precise spot on the ocean. Create a storm of great will and pain;
+// allow every surge of waves to speak their names in terms of its intensity"; five.ts). As
+// extreme as Peta's, but held: will is a storm kept in its place and steady, so the wind gusts
+// less over its mean (a factor of 1.15, against 1.37), and the pressure no longer falls (they hold
+// it, at 875 hPa). The sea is the names (namesSea).
+export const FIVE_STORM: Partial<SeaConditions> = {
+	...WRATH_STORM,
+	windSpeed: 290,
+	windGusts: 335,
+	windTrend: 10,
+	pressure: 875,
+	pressureTrend: -2,
+	waveTrend: 2,
+	precipitation: 40,
+	visibility: 400,
+};
+
+// What the menu says while it lasts (to be the owner's words).
+export const FIVE_WORDS = "Channelled, for a family of five";
+
+// The storm for the five: "five": { "from": ISO time } in storm.json, while the storm is on. Gives
+// the seconds since it began, or undefined.
+export function fiveSince(now: Date) {
+	const { five } = stormSwitch as { five?: { from: string | null } };
+	if (!five?.from) return undefined;
+	const seconds = (now.getTime() - new Date(five.from).getTime()) / 1000;
+	return seconds >= 0 ? seconds : undefined;
+}
+export function fiveSet() {
+	return !!(stormSwitch as { five?: { from: string | null } }).five?.from;
+}
+
+// The five, as the sea speaks them. No names are written or given (the owner: "There are no names
+// for magic of this kind"): each of the five is known only by the shape of their surge, how many
+// swells it has and where among them it is fullest. Each is as full as every other at its height.
+const FIVE_VOICES = [
+	[0.7, 1, 0.8],
+	[1, 0.75],
+	[0.8, 0.7, 1, 0.75],
+	[1, 0.8, 0.85],
+	[0.75, 1],
+];
+
+// The sea speaks their names (the owner: "allow every surge of waves to speak their names in
+// terms of its intensity"). The swell comes, as a real swell does, in groups: one group to each of
+// the five, one swell to each beat of their surge (FIVE_VOICES), each as high as its beat, and at
+// the fullest the wave stands up at the place where they came (five.ts lays it there).
+// Between one name and the next the sea draws a breath (two swells, low); after the fifth it lies
+// down for a long silence, and then they begin the names again. Every name is spoken as fully as
+// every other: none of the five is set over the rest. Given in the God's breath's shape, so that
+// the sea, the wave at the place and Manulani's light follow it as they followed Peta's storm.
+export function namesSea(seconds: number, period: number): GodsBreath & { peakAt: number; name: number; silent: boolean } {
+	const beats = FIVE_VOICES;
+	const between = 2 * period;
+	const silence = 50;
+	const round = beats.reduce((sum, b) => sum + b.length * period + between, 0) - between + silence;
+	const at = Math.max(0, seconds);
+	const r = Math.floor(at / round);
+	let start = r * round;
+	for (let n = 0; n < beats.length; n++) {
+		const b = beats[n]!;
+		const breathing = b.length * period;
+		const last = n === beats.length - 1;
+		const pause = last ? silence : between;
+		if (at < start + breathing + pause) {
+			const into = at - start;
+			const stressed = b.indexOf(Math.max(...b));
+			const peakAt = (stressed + 0.5) * period;
+			const run = r * beats.length + n;
+			if (into < breathing) {
+				// Each swell its own beat's height, eased from one to the next across the crest.
+				const u = into / period;
+				const i = Math.min(b.length - 1, Math.floor(u));
+				const f = u - i;
+				const before = i > 0 ? b[i - 1]! : 0.35;
+				const after = i < b.length - 1 ? b[i + 1]! : 0.35;
+				const height = f < 0.5 ? before + (b[i]! - before) * ease(clamp01(f + 0.5)) : b[i]! + (after - b[i]!) * ease(clamp01(f - 0.5));
+				return { sea: 0.35 + 0.85 * height, phase: u % 1, depth: height, waning: into > peakAt, held: 0, run, runStart: start, breathing, peakAt, name: n, silent: false };
+			}
+			// Between names, a breath; after the fifth, the silence, held.
+			const p = (into - breathing) / pause;
+			const held = last ? ease(clamp01(p / 0.15)) * (1 - ease(clamp01((p - 0.85) / 0.15))) : 0.6 * Math.sin(Math.PI * p);
+			return { sea: 0.35 - (last ? 0.1 * held : 0), phase: 0, depth: 0, waning: true, held, run, runStart: start, breathing, peakAt, name: n, silent: last };
+		}
+		start += breathing + pause;
+	}
+	return { sea: 0.35, phase: 0, depth: 0, waning: true, held: 1, run: 0, runStart: 0, breathing: period, peakAt: period / 2, name: 0, silent: true };
+}
+
+// Peta's storm and the five's at once (the owner, 20 October: "Create the storm again to honour
+// Peta", and asked how, "Both at once"). One storm, and in its sea each is still to be told from the
+// other, so they take turns and never pile up: a run of the God's breaths, Peta's, deepening and
+// fading, with Peta's wave at the deepest; then, as it fades, the five, each a short surge of their
+// own shape with a lower wave of their own at its fullest (two thirds of Peta's, so that the two
+// are never mistaken); then one silence for all, the sea lying down, which lengthens through the
+// hours as the God's pauses did; and again. `five` is 0..1 how far the five's surges have the sea
+// (five.ts draws while it is high, wrath.ts while it is low).
+export const BOTH_STORM: Partial<SeaConditions> = {
+	...WRATH_STORM,
+	windGusts: 380,
+	pressureTrend: -20,
+};
+export const BOTH_WORDS = "Channelled, in honour of Peta and a family of five";
+export function bothSea(seconds: number, period: number): GodsBreath & { peakAt: number; name: number; silent: boolean; five: number } {
+	const at = Math.max(0, seconds);
+	const between = 2 * period;
+	const voices = FIVE_VOICES.reduce((sum, b) => sum + b.length * period + between, 0) - between;
+	let start = 0;
+	for (let n = 0; ; n++) {
+		const hours = start / 3600;
+		const breathing = (5 + Math.floor(hashed(n) * 4)) * period;
+		const silence = (40 + 25 * hashed(n + 0.5)) * (1 + hours / 12);
+		const length = breathing + voices + silence;
+		if (at < start + length) {
+			const into = at - start;
+			// (The five come in over the God's last breath and give the sea back in the silence.)
+			const five = clamp01((into - breathing + 6) / 10) * (1 - clamp01((into - breathing - voices - silence + 14) / 10));
+			if (into < breathing) {
+				const peak = 1.15 - 0.15 * Math.min(1, hours / 24);
+				const depth = Math.sin((Math.PI * into) / breathing);
+				return { sea: 0.3 + (peak - 0.3) * depth, phase: (into / period) % 1, depth, waning: into > breathing / 2, held: 0, run: n * 7, runStart: start, breathing, peakAt: breathing / 2, name: -1, silent: false, five };
+			}
+			if (into < breathing + voices) {
+				// The five's surges, spoken as in namesSea, but with no silence after the fifth here.
+				const spoken = namesSea(into - breathing, period);
+				return { ...spoken, run: n * 7 + 1 + spoken.name, runStart: start + breathing + spoken.runStart, stand: 0.66, silent: false, five };
+			}
+			// The silence, for both.
+			const p = (into - breathing - voices) / silence;
+			const held = ease(clamp01(p / 0.15)) * (1 - ease(clamp01((p - 0.85) / 0.15)));
+			return { sea: 0.3 - 0.05 * held, phase: 0, depth: 0, waning: true, held, run: n * 7 + 6, runStart: start, breathing, peakAt: breathing / 2, name: -1, silent: true, five };
+		}
+		start += length;
 	}
 }
 

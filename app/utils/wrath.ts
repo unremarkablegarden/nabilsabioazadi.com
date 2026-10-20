@@ -113,6 +113,8 @@ uniform float uHold;
 // For each of the thirteen (the strongest last): how far her anger has risen, her haul (0..1),
 // how far her own rope has grown out (0..1), how far her ancestors have come in (0..1).
 uniform vec4 uState[ 14 ];
+// 0..1 how far it is drawn at all (in the storm for both, it gives way to the five's: five.ts).
+uniform float uPresence;
 // Manulani's sphere of light.
 uniform vec3 uSphere;
 // Where each of the twelve goes into the sea (Siuan's, on the water as it is there).
@@ -277,6 +279,7 @@ void main() {
 		shown = smoothstep( 1.0 - come, 1.04 - come, aT );
 		shown *= 0.5 + 0.5 * smoothstep( 0.5, 1.0, sin( aT * 8.0 - uFlow * 1.2 + aSeed.y * 6.0 ) * 0.5 + 0.5 ) + 0.3 * haul * aT;
 	}
+	shown *= uPresence;
 	shown *= smoothstep( 1.0, 0.9, aT ) * smoothstep( 25.0, 110.0, length( here - cameraPosition ) );
 	vAlpha = shown;
 	// Tamed to the background's colour, running hot towards ember with her anger; her ancestors
@@ -348,6 +351,8 @@ export interface WrathFrame {
 	sheath: THREE.Color;
 	tints: THREE.Color[];
 	bg: THREE.Color;
+	// 0..1 how far it is drawn (1 unless given).
+	presence?: number;
 }
 
 // The lines of one mesh: [who, ancestor line (-1 for her own rope)] for each.
@@ -406,6 +411,7 @@ export function createWrath(scene: THREE.Scene, layer: number) {
 		uFlow: { value: 0 },
 		uHold: { value: 0 },
 		uState: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) },
+		uPresence: { value: 1 },
 		uSphere: { value: new THREE.Vector3() },
 		uFoot: { value: Array.from({ length: 12 }, () => new THREE.Vector3()) },
 		uTints: { value: [new THREE.Color(), new THREE.Color(), new THREE.Color()] },
@@ -524,6 +530,7 @@ void main() {
 		flow += dt * (0.8 + 1.4 * anger) * going;
 		shared.uFlow.value = flow;
 		shared.uHold.value = frame.breath.held;
+		shared.uPresence.value = frame.presence ?? 1;
 		const ahead = frame.ahead;
 		const across = new THREE.Vector2(-ahead.y, ahead.x);
 		const core = shared.uCore.value.set(frame.boat.x + ahead.x * CORE_AHEAD, 0, frame.boat.z + ahead.y * CORE_AHEAD);
@@ -617,7 +624,7 @@ export function layPetasWave(
 		lensRun.run = breath.run;
 		lensRun.x = boat.x + ahead.x * CORE_AHEAD;
 		lensRun.z = boat.z + ahead.y * CORE_AHEAD;
-		lensRun.at = time + (breath.runStart + breath.breathing / 2 - since);
+		lensRun.at = time + (breath.runStart + (breath.peakAt ?? breath.breathing / 2) - since);
 		uniforms.lensWaves.value.forEach((train, i) => {
 			// Each rolls in towards the boat from a little another way (within about 24 degrees),
 			// and each is of another length (160 to 420 m), so that they meet only once.
@@ -633,7 +640,10 @@ export function layPetasWave(
 			train.set(heading, phase, LENS_HEIGHT / 12, length);
 		});
 	}
-	const u = THREE.MathUtils.clamp((since - breath.runStart) / breath.breathing, 0, 1);
-	uniforms.lensAmount.value = breath.held > 0 || u >= 1 ? 0 : Math.sin(Math.PI * u) ** 0.6;
+	// (Fullest when the trains meet: half-way through the run, or at the stressed beat of a name.)
+	const into = since - breath.runStart;
+	const peak = breath.peakAt ?? breath.breathing / 2;
+	const u = into < peak ? 0.5 * THREE.MathUtils.clamp(into / peak, 0, 1) : 0.5 + 0.5 * THREE.MathUtils.clamp((into - peak) / Math.max(breath.breathing - peak, 1), 0, 1);
+	uniforms.lensAmount.value = breath.held > 0 || into >= breath.breathing ? 0 : Math.sin(Math.PI * u) ** 0.6 * (breath.stand ?? 1);
 	uniforms.lensCurrent.value.set(lensRun.x, lensRun.z, 420, 0.9 * breath.depth * (1 - breath.held));
 }

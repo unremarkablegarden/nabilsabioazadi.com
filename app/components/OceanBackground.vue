@@ -54,11 +54,15 @@ const seaShown = useState("sea-shown", () => false);
 // The navigation's drawer; while it is open the view holds still.
 const menuOpen = useState("menu-open", () => false);
 // The navigation can show the place, time and conditions itself, in which case the caption here is left out.
-const readout = useState<{ place?: string; time: string; waves?: string; wind?: string; weather?: string }>("scene-readout", () => ({ time: "" }));
+const readout = useState<{ place?: string; time: string; waves?: string; wind?: string; weather?: string; whales?: string }>("scene-readout", () => ({ time: "" }));
 // When the weather is not the measured weather (a channelled storm, or ?pretend=), the menu says so.
 const channelled = ref(false);
 // Peta's storm (wrath.ts), whose words the menu gives in place of the storm's.
 const wrathRaised = ref(false);
+// The storm for the five (five.ts), likewise.
+const fiveRaised = ref(false);
+// The whales who greet it, where they were last heard (server/api/whales.get.ts).
+const whalesLine = ref<string>();
 const captionInNavigation = useState("caption-in-navigation", () => false);
 let dispose: (() => void) | undefined;
 
@@ -156,7 +160,7 @@ const liveFigures = computed(() => {
 
 watchEffect(() => {
 	shownAt.value = dateAtBoatHour(hour.value, pretendDate.value ?? new Date()).getTime();
-	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: channelled.value ? (wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined };
+	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: channelled.value ? (fiveRaised.value && wrathRaised.value ? BOTH_WORDS : fiveRaised.value ? FIVE_WORDS : wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined, whales: channelled.value && fiveRaised.value ? whalesLine.value : undefined };
 });
 
 onMounted(async () => {
@@ -521,11 +525,39 @@ onMounted(async () => {
 	// Peta's storm (wrath.ts): "wrath" in storm.json, or ?wrath for this visit from now, ?wrath=40
 	// forty seconds in, ?wrath=off without it. While it is raised its figures are the storm's.
 	const wrathAsked = query.get("wrath");
+	// The storm for the five (five.ts): "five" in storm.json, or ?five, ?five=40, ?five=off, the
+	// same way; it goes before Peta's.
+	const fiveAsked = query.get("five");
+	const fiveFigures = fiveAsked !== "off" && (fiveAsked !== null || fiveSet());
 	const wrathFigures = wrathAsked !== "off" && (wrathAsked !== null || wrathSet());
-	const pretendNow = () => (stillDone ? {} : stormOn ? { ...(wrathFigures ? WRATH_STORM : CHANNELLED_STORM), ...(noRain ? { precipitation: 0 } : {}), ...asPretended } : asPretended);
+	// Both at once (bothSea): Peta's storm and the five's, taking turns in one sea.
+	const bothFigures = fiveFigures && wrathFigures;
+	const pretendNow = () => (stillDone ? {} : stormOn ? { ...(bothFigures ? BOTH_STORM : fiveFigures ? FIVE_STORM : wrathFigures ? WRATH_STORM : CHANNELLED_STORM), ...(noRain ? { precipitation: 0 } : {}), ...asPretended } : asPretended);
 	let pretend = pretendNow();
 	channelled.value = Object.keys(pretend).length > 0;
 	wrathRaised.value = wrathFigures;
+	fiveRaised.value = fiveFigures;
+	// The whales are real, and none is near: each is given at her true distance and direction from
+	// the boat, and the day she was last heard.
+	if (fiveFigures)
+		$fetch<{ latitude: number; longitude: number; at: string }[]>("/api/whales")
+			.then((whales) => {
+				if (!whales.length) return;
+				const boat = boatAt(new Date());
+				const rad = THREE.MathUtils.degToRad;
+				const told = whales
+					.map((w) => {
+						const [a, b, dl] = [rad(boat.latitude), rad(w.latitude), rad(w.longitude - boat.longitude)];
+						const km = 6371 * Math.acos(Math.min(1, Math.sin(a) * Math.sin(b) + Math.cos(a) * Math.cos(b) * Math.cos(dl)));
+						const towards = THREE.MathUtils.radToDeg(Math.atan2(Math.sin(dl) * Math.cos(b), Math.cos(a) * Math.sin(b) - Math.sin(a) * Math.cos(b) * Math.cos(dl)));
+						return { km, towards, at: new Date(w.at) };
+					})
+					.sort((x, y) => x.km - y.km)
+					.map((w) => `${(Math.round(w.km / 10) * 10).toLocaleString("en-GB")} km ${compassPoint(w.towards)}, ${w.at.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`);
+				const count = ["", "One tohorā", "Two tohorā", "Three tohorā", "Four tohorā", "Five tohorā"][told.length] ?? `${told.length} tohorā`;
+				whalesLine.value = `${count} greet the storm from where last heard: ${told.join("; ")}`;
+			})
+			.catch(() => {});
 	// Its colours, unless the address gives colours of its own.
 	const coloursGiven = COLOUR_NAMES.some((name) => query.has(name));
 	// The Aes Sedai may stay on after the storm is released (aesSedaiKept).
@@ -614,6 +646,8 @@ onMounted(async () => {
 	const mournAsked = query.has("mourn");
 	const wrath = createWrath(scene, SCREEN_LAYER);
 	const wrathFrom = Date.now() - (wrathAsked !== null && wrathAsked !== "" && Number.isFinite(Number(wrathAsked)) ? Number(wrathAsked) * 1000 : 0);
+	const five = createFive(scene, SCREEN_LAYER);
+	const fiveFrom = Date.now() - (fiveAsked !== null && fiveAsked !== "" && Number.isFinite(Number(fiveAsked)) ? Number(fiveAsked) * 1000 : 0);
 	const embroideryTints = [new THREE.Color(), new THREE.Color(), new THREE.Color()];
 	await breathe();
 	const stilling = createStilling(scene, SCREEN_LAYER);
@@ -907,15 +941,20 @@ onMounted(async () => {
 		const skySeconds = time - stormSince + (query.get("show") === "sky" ? 33 : 0);
 		const calming = stormOn && !calmMotion ? calmingNow(new Date(), calmAsked) : undefined;
 		const mourningOn = stormOn && !calmMotion && (mournAsked || mourningSince(new Date()) !== undefined);
-		const wrathSeconds = !wrathFigures ? undefined : wrathAsked !== null ? (Date.now() - wrathFrom) / 1000 : wrathSince(new Date());
+		const wrathSeconds = !wrathFigures ? undefined : bothFigures ? (fiveAsked !== null ? (Date.now() - fiveFrom) / 1000 : wrathAsked !== null ? (Date.now() - wrathFrom) / 1000 : fiveSince(new Date())) : wrathAsked !== null ? (Date.now() - wrathFrom) / 1000 : wrathSince(new Date());
 		const wrathOn = stormOn && !calmMotion && wrathSeconds !== undefined;
+		// (Both at once keep one clock, the five's.)
+		const fiveSeconds = !fiveFigures ? undefined : fiveAsked !== null ? (Date.now() - fiveFrom) / 1000 : bothFigures && wrathAsked !== null ? (Date.now() - wrathFrom) / 1000 : fiveSince(new Date());
+		const fiveOn = stormOn && !calmMotion && fiveSeconds !== undefined;
+		// (Either act: the twelve's own weaving and the sky openings stand aside for it.)
+		const actOn = wrathOn || fiveOn;
 		// (Nor is the sky opened while the strongest is stilling it.)
 		const stillingAny = stillingBegun(new Date(), stillAsked, pageOpened, stormAsked !== null) !== undefined;
 		// (While the twelve are linked, and resting after, the sky is not opened.)
-		const together = stormOn && !calmMotion && allAtOnce && !calming && !stillingAny && !mourningOn && !wrathOn ? skyAllAt(skySeconds) : undefined;
+		const together = stormOn && !calmMotion && allAtOnce && !calming && !stillingAny && !mourningOn && !actOn ? skyAllAt(skySeconds) : undefined;
 		const breathing = stormOn && !calmMotion && byBreath ? skyBreathAt(skySeconds) : undefined;
 		const holding = !calmMotion && bySacred ? sacredAt(skySeconds, drawnFrom) : undefined;
-		const opening = together ?? (breathing ? { ...NO_SKY, canopy: breathing.canopy } : holding ? { ...NO_SKY, canopy: holding.command } : stormOn && !calmMotion && !calming && !stillingAny && !mourningOn && !wrathOn ? skyOpeningAt(skySeconds) : NO_SKY);
+		const opening = together ?? (breathing ? { ...NO_SKY, canopy: breathing.canopy } : holding ? { ...NO_SKY, canopy: holding.command } : stormOn && !calmMotion && !calming && !stillingAny && !mourningOn && !actOn ? skyOpeningAt(skySeconds) : NO_SKY);
 		// The figures the picture is drawn from move towards the latest real ones, or towards the
 		// usual sea while there are none yet. (At once for a single still frame.)
 		drawnFrom = towardsConditions(drawnFrom, conditions.value ?? drawnFrom, motionPaused.value ? 1 : 1 - Math.exp(-delta / 1.5));
@@ -1015,7 +1054,10 @@ onMounted(async () => {
 		// (Leane, pressing the waves, holds these down round the boat too.)
 		// In Peta's storm the swell is a dying God's breathing (godsBreath): each swell a breath, the
 		// runs of them deepening and fading, and between them the sea lies down.
-		const godBreath = wrathOn && liveOnly ? godsBreath(wrathSeconds!, liveOnly.swellPeriod) : undefined;
+		// In the storm for the five the swell speaks the five instead, by intensity alone (namesSea).
+		const bothNow = fiveOn && wrathOn && liveOnly ? bothSea(fiveSeconds!, liveOnly.swellPeriod) : undefined;
+		const namesNow = bothNow ?? (fiveOn && liveOnly ? namesSea(fiveSeconds!, liveOnly.swellPeriod) : undefined);
+		const godBreath = bothNow ?? (wrathOn && liveOnly ? godsBreath(wrathSeconds!, liveOnly.swellPeriod) : namesNow);
 		const breathed = godBreath?.sea ?? 1;
 		const surge = (liveOnly ? 0.35 * extreme * (1 - 0.6 * pressing) : 0.55 * fury) * breathed;
 		// The wind never holds steady: the whole sea swells and eases over a minute or two.
@@ -1025,7 +1067,7 @@ onMounted(async () => {
 		waveUniforms.gustiness.value = 0.8 * alive;
 		waveUniforms.foam.value *= alive * (godBreath ? 0.45 + 0.55 * godBreath.depth : 1);
 		// Peta's wave, raised at the deepest breath of each run (wrath.ts).
-		layPetasWave(waveUniforms, godBreath, wrathSeconds ?? 0, time, camera.position, skyAhead);
+		layPetasWave(waveUniforms, godBreath, (fiveOn ? fiveSeconds : wrathSeconds) ?? 0, time, camera.position, skyAhead);
 		waterUniforms.distortionScale.value *= lerp(0.15, 1, alive);
 
 		// In heavy seas the view heaves, pitches and rolls like a ship's deck, and rides the giant swells.
@@ -1075,7 +1117,9 @@ onMounted(async () => {
 		const fogAmount = Math.max(stormFog, moment.stillness);
 		mist.lerpColors(nightMist, dayFog, daylight);
 		// Manulani's light (wrath.ts) lights the air about the boat, and the sea.
-		const manu = godBreath ? manulaniLevel(godBreath, wrathSeconds!, 1 - THREE.MathUtils.smoothstep(daylight, 0.15, 0.5)) : 0;
+		// (For the five she holds it steady over the place, lowered a little in the silence.)
+		const night = 1 - THREE.MathUtils.smoothstep(daylight, 0.15, 0.5);
+		const manu = namesNow ? night * THREE.MathUtils.smoothstep(fiveSeconds!, 6, 30) * (0.85 - 0.25 * (namesNow.silent ? namesNow.held : 0)) : godBreath ? manulaniLevel(godBreath, wrathSeconds!, night) : 0;
 		mist.lerp(litAir, 0.3 * manu);
 		manulaniSphere(camera.position, skyAhead, manuAt);
 		waveUniforms.manuLight.value.set(manuAt.x, manuAt.y, manuAt.z, (MANU_BRIGHT * manu) / steadyExposure);
@@ -1179,7 +1223,7 @@ onMounted(async () => {
 			// (All twelve are in the calming while it lasts, and rest for hours after it.)
 			// (And while the strongest stills the weather the twelve stand back, coming back over the
 			// half hour after it is done.)
-			strength: Math.max(darkness, controlLevel, gathering) * alive * (1 - (holding?.quiet ?? 0)) * (calming ? THREE.MathUtils.smoothstep(calming.after, 2, 10) : 1) * standBack * (1 - (leane?.watching ?? 0)) * (mourningOn || wrathOn ? 0 : 1),
+			strength: Math.max(darkness, controlLevel, gathering) * alive * (1 - (holding?.quiet ?? 0)) * (calming ? THREE.MathUtils.smoothstep(calming.after, 2, 10) : 1) * standBack * (1 - (leane?.watching ?? 0)) * (mourningOn || actOn ? 0 : 1),
 			// More light by day, when it has a bright sea to show against.
 			// (And more under a moon, whose light on the sea would otherwise drown it.)
 			gain: (0.3 + 0.6 * daylight + 0.6 * nightfall * (1 - darkness)) / steadyExposure,
@@ -1222,7 +1266,7 @@ onMounted(async () => {
 
 		// (Peta's storm mixes the fresh water into the salt: no stream lies apart in such a sea, and
 		// under Manulani's light the foam along its edges showed as rows of blots.)
-		waveUniforms.freshFlow.value = alive * (wrathOn ? 0 : 1);
+		waveUniforms.freshFlow.value = alive * (actOn ? 0 : 1);
 		waveUniforms.internalWaves.value = (0.5 + 0.5 * moment.weave) * alive;
 		vortexUniforms.vortexSpin.value = time * 0.8;
 		vortexUniforms.vortexGlow.value.copy(knotGlow).multiplyScalar((0.06 * formed) / steadyExposure);
@@ -1312,6 +1356,7 @@ onMounted(async () => {
 						delta,
 						since: wrathSeconds!,
 						breath: godBreath!,
+						presence: bothNow ? 1 - bothNow.five : undefined,
 						camera,
 						manu,
 						glowGain: 1.2 / steadyExposure,
@@ -1321,6 +1366,32 @@ onMounted(async () => {
 						force: Math.min(1, (rainWind.length() / 40) * (1 + 0.4 * gustNowRain)),
 						gust: gustNowRain,
 						seaAt: (x, z) => measuredSeaHeight(waveUniforms, x, z, time) + giantWaveHeight(x, z, time, waveUniforms.surge.value) + lensWaveHeight(waveUniforms, x, z, time),
+						day: daylight,
+						gain: 1.5 / steadyExposure,
+						white: lerp(0.5, 3.5, daylight) / steadyExposure,
+						sheath: stillSheath.set(colours.strongest),
+						tints: embroideryTints,
+						bg: mist,
+					}
+				: undefined,
+		);
+		// The storm for the five: the fourteen holding it, and the sea speaking their names.
+		five.update(
+			fiveOn && liveOnly && namesNow
+				? {
+						time,
+						delta,
+						since: fiveSeconds!,
+						breath: namesNow,
+						silent: namesNow.silent,
+						presence: bothNow?.five,
+						camera,
+						boat: camera.position,
+						ahead: skyAhead,
+						wind: rainWind,
+						gust: gustNowRain,
+						seaAt: (x, z) => measuredSeaHeight(waveUniforms, x, z, time) + giantWaveHeight(x, z, time, waveUniforms.surge.value) + lensWaveHeight(waveUniforms, x, z, time),
+						cloud: 900,
 						day: daylight,
 						gain: 1.5 / steadyExposure,
 						white: lerp(0.5, 3.5, daylight) / steadyExposure,
@@ -1474,6 +1545,7 @@ onMounted(async () => {
 		embroidery.dispose();
 		mourning.dispose();
 		wrath.dispose();
+		five.dispose();
 		stilling.dispose();
 		rainCut.dispose();
 		stopWatching();
