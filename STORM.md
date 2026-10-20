@@ -260,7 +260,8 @@ boat like a leaf whose sides leave the boat sideways and curve round to meet far
 across the view as it goes out and flung wide at the end; within it the sea is the stilled sea,
 beyond it the old weather still, which piles against the roller and breaks white (`stillChunk` in
 `gerstner-waves.ts`). They roll it out on a ten-second breath; gusts bow it back; it quivers under
-the real wind. By day each thread is white over a soft sheath of the site's deep blue.
+the real wind. By day each thread is white (the deep blue sheath once laid under it was taken
+away on 21 October, section 21).
 
 **Not yet right**: once the edge is beyond about three kilometres it is a band along the horizon,
 nearly straight, and a small hump of the old sea shows where the leaf's tip is; the sky roller by
@@ -511,3 +512,41 @@ away from the boat into the POV and burn them in spheres of fire". The law is in
 - Not yet right: in the storm as it is, nobody ever goes above her window, so nobody flees and
   nobody is tried unless accused by hand. The trial's shield is unseen in a picture. A dead sister
   comes back with a page load (the minds are per visit).
+
+## 20. The six 80% stronger, and their contest of strength (21 October)
+
+The owner: "give them all 80% more strength and then make them fight in a scenario to declare
+strength"; asked, the owner chose the strongest six, in a knockout.
+
+- **80% more strength** (`SIX_STRONGER` in `psyche.ts`): the strongest, Manulani and the four
+  mighty are 1.8 times their true strength. Drawn by its cube root, as all strength is (about 22%
+  more filaments): in the storm weaves (`five.ts`, `wrath.ts` `SIX_MASS`), the everyday weaves
+  (`channellers.ts` `MIGHT`; the seats' `MEASURES` raised to 4, 4, 6, 4 to hold it), and the
+  stilling's mass. Their healing goes 1.8 times faster (`STILLING_STRENGTH`), and the storm weighs
+  less on their minds.
+- **The contest** (`contest.ts`): five minutes after the mighty have healed the ocean
+  (`CONTEST_AFTER`), seeded by true strength. Keel against Listener and Kite against Fathom; then
+  Manulani and the strongest each meet a winner; then the final. In a bout each casts her rope
+  wide on her own side to meet the other's head-on, high over the sea about 380 m ahead, where
+  their filaments splay and curl as they press. Where they meet is driven towards the weaker, by
+  true strength held up by steadiness and worn down by stamina spent, on each one's own breath;
+  at her side her rope is driven back to her hands. The winner raises her rope into a great ring
+  about the boat, 520 m out and 230 m up, for three minutes. The same for every visitor: played
+  from its beginning, nothing by chance.
+- As it plays: Keel beats Listener (11 s); Fathom, behind for most of it, outlasts Kite (210 s);
+  Manulani beats Fathom and the strongest beats Keel (11 s each); **Manulani beats the strongest
+  in the final (46 s)** and is declared the strongest of the boat, 7 minutes in. About 10 minutes
+  in all.
+- `?contest=60` to look a minute in at any time; `__contest()` in the console tells the bouts.
+- Not yet right: the ring, seen from inside it, shows as one arc ahead rather than a ring; never
+  seen by night; stills only.
+
+## 21. No blue edges on the ropes (21 October)
+
+The owner: "Rid the streams of bars", asked which: the blue edges on the ropes. The soft sheath of
+the site's deep blue (the bar's colour) laid under the white and the coloured ropes by day, so
+they would not be white on white, read as a navy outline. It is gone from all four weaves that had
+it: the strongest's and Manulani's ropes in both storms (`wrath.ts`, `five.ts`), the stilling and
+healing (`stilling.ts`) and the contest (`contest.ts`). By day the ropes are their threads alone;
+pale ones are fainter against a pale sky. (Leane's rain-cut keeps the deepened sheath of her own
+air colour, which is not the bar's blue.)

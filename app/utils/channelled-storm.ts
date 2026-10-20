@@ -9,6 +9,7 @@
 // everyone: /?storm. To look at the site without it while it is on: /?storm=off.
 import stormSwitch from "~~/storm.json";
 import type { SeaConditions } from "./manawatawhi";
+import { SIX_STRONGER } from "./psyche";
 
 // Beyond hurricane force: gusts of 300 km/h, an 18 m sea, thunder, and the pressure falling 20 hPa
 // in three hours, so that it reads as building and the channellers answer it in full.
@@ -525,8 +526,9 @@ export function stillingGap(on: SeaConditions, real: SeaConditions) {
 // "stilling": { "by": ... }, or ?by= for one visit.
 // (Their strength: the twelve are eight at one and four at 64 (MIGHT in channellers.ts), the
 // strongest 1.8 times all twelve, Manulani 1.12 times the strongest (MANULANI in wrath.ts).)
+// (All six 1.8 times stronger since 21 October, SIX_STRONGER: so the stilling goes 1.8 times faster.)
 const TWELVE = 8 + 4 * 64;
-export const STILLING_STRENGTH = { one: 1, mighty: 1 + 1.12 + (4 * 64) / (1.8 * TWELVE) } as const;
+export const STILLING_STRENGTH = { one: SIX_STRONGER, mighty: SIX_STRONGER * (1 + 1.12 + (4 * 64) / (1.8 * TWELVE)) } as const;
 export function stillingBy(asked: string | null): keyof typeof STILLING_STRENGTH {
 	const by = asked ?? (stormSwitch as { stilling?: { by?: string } }).stilling?.by;
 	return by === "mighty" ? "mighty" : "one";

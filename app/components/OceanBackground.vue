@@ -666,11 +666,15 @@ onMounted(async () => {
 	const stillBy = stillingBy(query.get("by"));
 	const stillStrength = STILLING_STRENGTH[stillBy];
 	const stilling = createStilling(scene, SCREEN_LAYER, stillStrength);
+	// The six's contest of strength (contest.ts), once they have healed the ocean; ?contest=60 to
+	// look a minute into it at any time. In the console __contest() tells the bouts.
+	const contest = createContest(scene, SCREEN_LAYER);
+	const contestAsked = query.get("contest");
+	(window as unknown as { __contest?: () => string[] }).__contest = contest.describe;
 	// Leane cutting the rain off (rain-cut.ts): set in storm.json, or ?raincut for this visit.
 	await breathe();
 	const rainCut = createRainCut(scene, SCREEN_LAYER);
 	const rainCutAsked = query.get("raincut");
-	const stillSheath = new THREE.Color();
 	// The measured weather alone, eased as drawnFrom is: what the stilling goes to.
 	let drawnMeasured: SeaConditions | undefined;
 	// The stilling's gap and hours, worked out once there are measured figures to go to.
@@ -1401,7 +1405,6 @@ onMounted(async () => {
 						day: daylight,
 						gain: 1.5 / steadyExposure,
 						white: lerp(0.5, 3.5, daylight) / steadyExposure,
-						sheath: stillSheath.set(colours.strongest),
 						tints: embroideryTints,
 						bg: mist,
 					}
@@ -1428,7 +1431,6 @@ onMounted(async () => {
 						day: daylight,
 						gain: 1.5 / steadyExposure,
 						white: lerp(0.5, 3.5, daylight) / steadyExposure,
-						sheath: stillSheath.set(colours.strongest),
 						tints: embroideryTints,
 						bg: mist,
 					}
@@ -1478,8 +1480,28 @@ onMounted(async () => {
 						day: daylight,
 						gain: 1.5 / steadyExposure,
 						white: lerp(0.5, 3.5, daylight) / steadyExposure,
-						sheath: stillSheath.set(colours.strongest),
 						siuan: stillBy === "mighty" && liveOnly ? { tint: skySheath[1]!, heave: seaAtBoat, swellHeight: liveOnly.swellHeight, swellPeriod: liveOnly.swellPeriod } : undefined,
+					}
+				: undefined,
+		);
+		// Five minutes after the mighty have healed the ocean, the six fight to declare their strength.
+		const contestSince =
+			contestAsked !== null
+				? (Number(contestAsked) || 0) + (Date.now() - pageOpened) / 1000
+				: stillBy === "mighty" && stillDone && stillBegun?.hours !== undefined
+					? (stillBegun.hours - stillHours) * 3600 - CONTEST_AFTER
+					: -1;
+		contest.update(
+			drawn && !calmMotion
+				? {
+						since: contestSince,
+						time,
+						boat: camera.position,
+						ahead: skyAhead,
+						day: daylight,
+						gain: 1.5 / steadyExposure,
+						white: lerp(0.5, 3.5, daylight) / steadyExposure,
+						tints: embroideryTints,
 					}
 				: undefined,
 		);
@@ -1584,6 +1606,7 @@ onMounted(async () => {
 		wrath.dispose();
 		five.dispose();
 		treason.dispose();
+		contest.dispose();
 		stilling.dispose();
 		rainCut.dispose();
 		stopWatching();

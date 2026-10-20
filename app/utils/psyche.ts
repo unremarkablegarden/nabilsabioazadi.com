@@ -41,14 +41,14 @@ import * as THREE from "three";
 import type { SeaConditions } from "./manawatawhi";
 
 // In the order the weaves use: the twelve in SLOTS order (wrath.ts, five.ts), the strongest, Manulani.
-const NAMES = [
+export const NAMES = [
 	"Siuan · Keel", "Leane · Kite", "Siuan · Fathom", "Leane · Ember", "Moiraine · Loom", "Moiraine · Listener",
 	"Leane · Sail", "Siuan · Reef", "Moiraine · Glass", "Leane · Lantern", "Siuan · Ballast", "Moiraine · Mist",
 	"the strongest", "Manulani",
 ];
 // air, water, eager, stamina, steady, sociable (AES_SEDAI in channellers.ts; Manulani's her own:
 // she who holds the light is steady and long-lasting, and close to the others).
-const TEMPERS = [
+export const TEMPERS = [
 	[0.5, 0.7, 0.55, 0.95, 0.95, 0.6],
 	[0.9, 0.35, 0.8, 0.6, 0.65, 0.5],
 	[0.3, 0.95, 0.4, 0.85, 0.85, 0.4],
@@ -64,8 +64,12 @@ const TEMPERS = [
 	[0.84, 0.84, 1, 1, 1, 0.5],
 	[0.7, 0.7, 0.6, 0.95, 0.9, 0.7],
 ].map(([air, water, eager, stamina, steady, sociable]) => ({ air: air!, water: water!, eager: eager!, stamina: stamina!, steady: steady!, sociable: sociable! }));
+// The strongest six (the strongest, Manulani and the four mighty) given 80% more strength (the
+// owner, 21 October: "give them all 80% more strength"): their true strength, 1.8 times what it was.
+// Drawn, as all strength is, in mass by its cube root.
+export const SIX_STRONGER = 1.8;
 // Strength as their ropes' measures (MIGHT in channellers.ts): the four mighty, the strongest, Manulani.
-const MIGHT = [2.5, 2.5, 2.5, 1, 1, 2.5, 1, 1, 1, 1, 1, 1, 4.9, 5.1];
+const MIGHT = [2.5, 2.5, 2.5, 1, 1, 2.5, 1, 1, 1, 1, 1, 1, 4.9, 5.1].map((might) => (might > 2 ? might * Math.cbrt(SIX_STRONGER) : might));
 export const STRONGEST_MIND = 12;
 // The strongest channellers, who try the others: the four mighty, the strongest, Manulani.
 const JUDGES = MIGHT.map((might, i) => (might > 2 ? i : -1)).filter((i) => i >= 0);

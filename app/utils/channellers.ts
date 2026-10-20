@@ -35,6 +35,7 @@
 import * as THREE from "three";
 import { CHANNELLERS, channelPathChunk } from "./channel-path";
 import type { GerstnerUniforms } from "./gerstner-waves";
+import { SIX_STRONGER } from "./psyche";
 import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RENDER_ORDER } from "./weave";
 
 // What the weaving looks like follows the owner's reference (the women channelling together in
@@ -70,8 +71,9 @@ const FILAMENTS = 64;
 const GOLDEN = 14;
 // The mighty have more than one measure of filaments (see MIGHT in update): each further measure
 // is another 64, gold among them as in the first, alight only while one so strong holds the seat.
-// The strongest's seat has room for five measures, the others for three.
-const MEASURES = [3, 3, 5, 3];
+// The strongest's seat has room for six measures, the others for four (one more each since the six
+// were made 1.8 times stronger, 21 October: the strongest's about 6, the four's about 3).
+const MEASURES = [4, 4, 6, 4];
 const SEGMENTS = 300;
 
 // The height of the sea at a place (x), and beside it (y) the height of the long swell alone,
@@ -2199,8 +2201,10 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	// How many measures of filaments their tress carries (see MEASURES): the four's drawn mass is
 	// what it was times the cube root of 64, and the strongest's is the four's times the cube root
 	// of how much stronger the strongest is than they. (About 2.5 for the four, 4.9 for the strongest.)
+	// (And since 21 October the strongest and the four 1.8 times stronger again, SIX_STRONGER: their
+	// mass by its cube root.)
 	const MIGHT = TRUE_STRENGTH.map((strength, member) =>
-		member === 0 || MIGHTY.includes(member) ? (0.62 * REST[0]! * Math.cbrt(MIGHTIER) * Math.cbrt(strength / (MIGHTIER * REST[0]!))) / 0.9 : 1,
+		member === 0 || MIGHTY.includes(member) ? ((0.62 * REST[0]! * Math.cbrt(MIGHTIER) * Math.cbrt(strength / (MIGHTIER * REST[0]!))) / 0.9) * Math.cbrt(SIX_STRONGER) : 1,
 	);
 	// The farthest any of the eight would sound (see uReach): as far as the strongest of them went before.
 	const ORDINARY_MOST = 0.62 * REST[0]!;

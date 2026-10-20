@@ -55,8 +55,6 @@ uniform float uTension;
 uniform vec3 uWindDir;
 uniform float uFade;
 uniform float uDay;
-// 1 for the deep blue sheath laid under the white by day.
-uniform float uSheathPass;
 varying float vAlpha;
 varying float vEdge;
 ${ribbonShaderChunk}
@@ -186,10 +184,10 @@ void main() {
 	shown *= 0.8 + 0.35 * uHaul;
 	// Laid on unevenly along its length, as a brush lays colour, never in dashes.
 	shown *= 0.55 + 0.45 * smoothstep( - 0.6, 0.6, sin( aT * 5.0 + aSeed.y * 2.0 + 1.0 ) + 0.5 * sin( aT * 13.0 + 2.0 ) );
-	vAlpha = shown * uFade * ( uSheathPass > 0.5 ? smoothstep( 0.3, 0.7, uDay ) : 1.0 );
+	vAlpha = shown * uFade;
 	vEdge = aSide;
 	mat4 vp = projectionMatrix * viewMatrix;
-	gl_Position = ribbonPosition( vp * vec4( here, 1.0 ), vp * vec4( next, 1.0 ), aSide, uSheathPass > 0.5 ? 5.0 : mix( 1.0, 1.3, uDay ) );
+	gl_Position = ribbonPosition( vp * vec4( here, 1.0 ), vp * vec4( next, 1.0 ), aSide, mix( 1.0, 1.3, uDay ) );
 }
 `;
 
@@ -197,9 +195,7 @@ const fragment = /* glsl */ `
 uniform float uGain;
 uniform float uDay;
 uniform float uWhite;
-uniform vec3 uSheath;
 uniform float uOpacity;
-uniform float uSheathPass;
 // Siuan's own colour, the tamed water of her four, for her telling (1); the strongest's white (0).
 uniform vec3 uTint;
 uniform float uTinted;
@@ -207,16 +203,10 @@ varying float vAlpha;
 varying float vEdge;
 void main() {
 	float across = abs( vEdge );
-	// By night white light. By day white threads over a broad, soft sheath of the deep blue of the
-	// site's bar, as all the strongest's weaves are (never white on white): the sheath is laid
-	// first, wide and faint, so that the mass of the weave reads against the pale sky and sea.
-	if ( uSheathPass > 0.5 ) {
-		gl_FragColor = vec4( uSheath, exp( - across * across * 2.5 ) * min( 1.0, vAlpha * 1.6 ) );
-	} else {
-		float body = 1.0 - smoothstep( 0.7, 1.0, across );
-		vec3 night = mix( vec3( 0.93, 0.96, 1.0 ), uTint, uTinted ) * uGain;
-		gl_FragColor = vec4( mix( night, mix( vec3( uWhite ), uTint, uTinted ), uDay ), body * vAlpha * uOpacity * mix( 1.0, 3.0, uDay ) );
-	}
+	// By night white light; by day white threads.
+	float body = 1.0 - smoothstep( 0.7, 1.0, across );
+	vec3 night = mix( vec3( 0.93, 0.96, 1.0 ), uTint, uTinted ) * uGain;
+	gl_FragColor = vec4( mix( night, mix( vec3( uWhite ), uTint, uTinted ), uDay ), body * vAlpha * uOpacity * mix( 1.0, 3.0, uDay ) );
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }
@@ -237,7 +227,6 @@ export interface StillingFrame {
 	day: number;
 	gain: number;
 	white: number;
-	sheath: THREE.Color;
 	// Siuan's telling (the owner, 21 October: "Siuan, command the channellers"), when the mighty
 	// still it: her colour, and the sea under the boat (m) and its swell, which she works by.
 	siuan?: { tint: THREE.Color; heave: number; swellHeight: number; swellPeriod: number };
@@ -279,7 +268,6 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1) 
 		uDay: { value: 0 },
 		uGain: { value: 1 },
 		uWhite: { value: 1 },
-		uSheath: { value: new THREE.Color() },
 		uResolution: { value: new THREE.Vector2(1, 1) },
 		uPixelRatio: pixelRatio,
 	};
@@ -299,17 +287,13 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1) 
 			uTint: { value: new THREE.Color() },
 			uTinted: { value: kind === 3 ? 1 : 0 },
 		};
-		// (Two of each: the white threads, and by day the sheath laid under them.)
-		const meshes = [1, 0].map((sheath) => {
-			const mesh = new THREE.Mesh(geometry, new THREE.ShaderMaterial({ uniforms: { ...shared, ...own, uSheathPass: { value: sheath } }, vertexShader: vertex, fragmentShader: fragment, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
-			mesh.frustumCulled = false;
-			mesh.renderOrder = WEAVE_RENDER_ORDER - sheath;
-			mesh.layers.set(layer);
-			mesh.visible = false;
-			scene.add(mesh);
-			return mesh;
-		});
-		return { meshes, own, sheath: meshes[0]!, mesh: meshes[1]! };
+		const mesh = new THREE.Mesh(geometry, new THREE.ShaderMaterial({ uniforms: { ...shared, ...own }, vertexShader: vertex, fragmentShader: fragment, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+		mesh.frustumCulled = false;
+		mesh.renderOrder = WEAVE_RENDER_ORDER;
+		mesh.layers.set(layer);
+		mesh.visible = false;
+		scene.add(mesh);
+		return { own, mesh };
 	});
 
 	// Where they are in the slow stroke of their breath (0..1).
@@ -320,7 +304,7 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1) 
 	let lift = 0;
 	const update = (frame: StillingFrame | undefined) => {
 		if (!frame || frame.presence <= 0.001) {
-			for (const { meshes } of parts) for (const mesh of meshes) mesh.visible = false;
+			for (const { mesh } of parts) mesh.visible = false;
 			return;
 		}
 		const u = frame.share;
@@ -358,7 +342,6 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1) 
 		shared.uDay.value = frame.day;
 		shared.uGain.value = frame.gain;
 		shared.uWhite.value = frame.white;
-		shared.uSheath.value.copy(frame.sheath);
 		shared.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(pixelRatio.value);
 		// Each edge goes out a little further with each haul.
 		const breath = 1 + 0.012 * haul;
@@ -384,11 +367,9 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1) 
 		telling.own.uFade.value = siuan && edge.reach > 0 ? frame.presence : 0;
 		if (siuan) telling.own.uTint.value.copy(siuan.tint);
 		const blending = frame.day > 0.5 ? THREE.NormalBlending : THREE.AdditiveBlending;
-		for (const { mesh, sheath, own } of parts) {
+		for (const { mesh, own } of parts) {
 			mesh.visible = own.uFade.value > 0.001;
-			sheath.visible = own.uFade.value > 0.001 && frame.day > 0.3;
 			(mesh.material as THREE.ShaderMaterial).blending = blending;
-			(sheath.material as THREE.ShaderMaterial).blending = THREE.NormalBlending;
 		}
 	};
 
@@ -396,12 +377,10 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1) 
 	const breath = () => 1 + 0.012 * shared.uHaul.value;
 
 	const dispose = () => {
-		for (const { meshes } of parts) {
-			for (const mesh of meshes) {
-				scene.remove(mesh);
-				(mesh.material as THREE.Material).dispose();
-			}
-			meshes[0]!.geometry.dispose();
+		for (const { mesh } of parts) {
+			scene.remove(mesh);
+			(mesh.material as THREE.Material).dispose();
+			mesh.geometry.dispose();
 		}
 	};
 

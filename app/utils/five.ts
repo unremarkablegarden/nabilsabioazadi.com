@@ -35,13 +35,15 @@
 import * as THREE from "three";
 import type { GodsBreath } from "./channelled-storm";
 import { manulaniSphere, CORE_AHEAD, MANULANI } from "./wrath";
-import { giveMinds, mindChunk, type Minds } from "./psyche";
+import { giveMinds, mindChunk, SIX_STRONGER, type Minds } from "./psyche";
 import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RENDER_ORDER } from "./weave";
 
 const SEGMENTS = 120;
 // Filaments to a measure; the four mighty carry 2.5 measures, the strongest about 4.9, Manulani
 // about 5.1 (by the cube root of their strength, as MIGHT in channellers.ts).
 const FIBRES = 64;
+// The six's ropes carry more filaments for their 80% more strength (SIX_STRONGER), by its cube root.
+const SIX_MASS = Math.cbrt(SIX_STRONGER);
 const SLOTS = [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const THIRDS = [0, 1, 0, 1, 2, 2, 1, 0, 2, 1, 0, 2];
 const MEMBERS = THIRDS.map((third, i) => THIRDS.slice(0, i).filter((other) => other === third).length);
@@ -89,7 +91,6 @@ uniform vec3 uSphere;
 uniform vec3 uEnd[ 12 ];
 uniform vec3 uTints[ 3 ];
 uniform float uWhiteMesh;
-uniform float uSheathPass;
 varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
@@ -235,7 +236,7 @@ void main() {
 	else vTint = mindTint( aWho, tame( mix( uTints[ int( third + 0.5 ) ], BRUISE, 0.25 * ache + 0.35 * uBow ), 0.24 + 0.08 * draw ) );
 	vEdge = aSide;
 	mat4 vp = projectionMatrix * viewMatrix;
-	float width = uSheathPass > 0.5 ? 5.0 : ( uWhiteMesh > 0.5 ? 1.0 : 1.1 );
+	float width = uWhiteMesh > 0.5 ? 1.0 : 1.1;
 	gl_Position = ribbonPosition( vp * vec4( here, 1.0 ), vp * vec4( next, 1.0 ), aSide, width );
 }
 `;
@@ -244,19 +245,14 @@ const fragment = /* glsl */ `
 uniform float uGain;
 uniform float uDay;
 uniform float uWhite;
-uniform vec3 uSheath;
 uniform float uWhiteMesh;
-uniform float uSheathPass;
 uniform float uOpacity;
 varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
 void main() {
 	float across = abs( vEdge );
-	if ( uSheathPass > 0.5 ) {
-		// By day, under the white, a soft sheath of the site's deep blue (never white on white).
-		gl_FragColor = vec4( uSheath, exp( - across * across * 2.5 ) * min( 1.0, vAlpha * 0.5 ) );
-	} else if ( uWhiteMesh > 0.5 ) {
+	if ( uWhiteMesh > 0.5 ) {
 		float body = 1.0 - smoothstep( 0.7, 1.0, across );
 		vec3 night = vec3( 0.93, 0.96, 1.0 ) * vTint * uGain;
 		gl_FragColor = vec4( mix( night, vTint * uWhite, uDay ), body * vAlpha * uOpacity * mix( 1.0, 3.0, uDay ) );
@@ -290,7 +286,6 @@ export interface FiveFrame {
 	day: number;
 	gain: number;
 	white: number;
-	sheath: THREE.Color;
 	tints: THREE.Color[];
 	bg: THREE.Color;
 	// Whether this is the silence after the last name.
@@ -329,11 +324,11 @@ function fiveLines(lines: number[]) {
 export function createFive(scene: THREE.Scene, layer: number) {
 	const twelve: number[] = [];
 	SLOTS.forEach((_, i) => {
-		for (let f = 0; f < Math.round(FIBRES * (MIGHTY.includes(i) ? 2.5 : 1)); f++) twelve.push(i);
+		for (let f = 0; f < Math.round(FIBRES * (MIGHTY.includes(i) ? 2.5 * SIX_MASS : 1)); f++) twelve.push(i);
 	});
 	const strongest: number[] = [];
-	for (let f = 0; f < Math.round(FIBRES * 4.9); f++) strongest.push(STRONGEST);
-	for (let f = 0; f < Math.round(FIBRES * MANULANI_MEASURES); f++) strongest.push(MANULANI_AT);
+	for (let f = 0; f < Math.round(FIBRES * 4.9 * SIX_MASS); f++) strongest.push(STRONGEST);
+	for (let f = 0; f < Math.round(FIBRES * MANULANI_MEASURES * SIX_MASS); f++) strongest.push(MANULANI_AT);
 
 	const shared = {
 		uTime: { value: 0 },
@@ -358,15 +353,14 @@ export function createFive(scene: THREE.Scene, layer: number) {
 		uGain: { value: 1 },
 		uDay: { value: 0 },
 		uWhite: { value: 1 },
-		uSheath: { value: new THREE.Color() },
 		uResolution: { value: new THREE.Vector2(1, 1) },
 		uPixelRatio: pixelRatio,
 	};
-	const meshOf = (geometry: THREE.BufferGeometry, white: number, sheath: number, opacity: number) => {
+	const meshOf = (geometry: THREE.BufferGeometry, white: number, opacity: number) => {
 		const mesh = new THREE.Mesh(
 			geometry,
 			new THREE.ShaderMaterial({
-				uniforms: { ...shared, uWhiteMesh: { value: white }, uSheathPass: { value: sheath }, uOpacity: { value: opacity } },
+				uniforms: { ...shared, uWhiteMesh: { value: white }, uOpacity: { value: opacity } },
 				vertexShader: vertex,
 				fragmentShader: fragment,
 				transparent: true,
@@ -375,7 +369,7 @@ export function createFive(scene: THREE.Scene, layer: number) {
 			}),
 		);
 		mesh.frustumCulled = false;
-		mesh.renderOrder = WEAVE_RENDER_ORDER - sheath;
+		mesh.renderOrder = WEAVE_RENDER_ORDER;
 		mesh.layers.set(layer);
 		mesh.visible = false;
 		scene.add(mesh);
@@ -383,10 +377,9 @@ export function createFive(scene: THREE.Scene, layer: number) {
 	};
 	const twelveGeometry = fiveLines(twelve);
 	const strongestGeometry = fiveLines(strongest);
-	const twelveMesh = meshOf(twelveGeometry, 0, 0, 0.12);
-	const strongestMesh = meshOf(strongestGeometry, 1, 0, 0.05);
-	const strongestSheath = meshOf(strongestGeometry, 1, 1, 1);
-	const meshes = [twelveMesh, strongestMesh, strongestSheath];
+	const twelveMesh = meshOf(twelveGeometry, 0, 0.12);
+	const strongestMesh = meshOf(strongestGeometry, 1, 0.05);
+	const meshes = [twelveMesh, strongestMesh];
 
 	// When each takes hold: the strongest first and alone, Manulani with them, then the eager.
 	const courses = [...EAGER, 1, 0.9].map((eager, i) => ({
@@ -411,7 +404,6 @@ export function createFive(scene: THREE.Scene, layer: number) {
 	const update = (frame: FiveFrame | undefined) => {
 		for (const mesh of meshes) mesh.visible = !!frame;
 		if (!frame) return;
-		strongestSheath.visible = frame.day > 0.3;
 		const dt = Math.min(frame.delta, 0.1);
 		giveMinds(shared, frame.minds);
 		const b = frame.breath;
@@ -467,7 +459,6 @@ export function createFive(scene: THREE.Scene, layer: number) {
 		shared.uDay.value = frame.day;
 		shared.uGain.value = frame.gain;
 		shared.uWhite.value = frame.white;
-		shared.uSheath.value.copy(frame.sheath);
 		shared.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(pixelRatio.value);
 		const blending = frame.day > 0.5 ? THREE.NormalBlending : THREE.AdditiveBlending;
 		(twelveMesh.material as THREE.ShaderMaterial).blending = blending;

@@ -144,6 +144,17 @@ void main() {
 }
 `;
 
+// Her seat, as the weaves place it (seatAt in five.ts), by her place among the minds.
+export function seatOf(who: number, boat: THREE.Vector3, ahead: THREE.Vector3, across: THREE.Vector3) {
+	const seat = SEAT_OF[who]!;
+	if (seat > 12.5) return boat.clone().addScaledVector(ahead, 2.6).add(new THREE.Vector3(0, -0.8, 0));
+	if (seat < 3.5) return boat.clone().addScaledVector(across, (seat - 1.5) * 1.5).addScaledVector(ahead, 0.5).add(new THREE.Vector3(0, -1.2, 0));
+	const k = seat - 4;
+	const side = (k % 2) * 2 - 1;
+	const back = Math.floor(k / 2);
+	return boat.clone().addScaledVector(across, side * (2.2 + 0.2 * back)).addScaledVector(ahead, -(1 + 1.6 * back)).add(new THREE.Vector3(0, -1.6, 0));
+}
+
 export interface TreasonFrame {
 	time: number;
 	delta: number;
@@ -164,17 +175,6 @@ export function createTreason(scene: THREE.Scene, layer: number) {
 	// Those sentenced since the last frame, waiting for the boat's place to be known.
 	const waiting: number[] = [];
 
-	// Her seat, as the weaves place it (seatAt in five.ts).
-	const seatAt = (who: number, boat: THREE.Vector3, ahead: THREE.Vector3, across: THREE.Vector3) => {
-		const seat = SEAT_OF[who]!;
-		if (seat > 12.5) return boat.clone().addScaledVector(ahead, 2.6).add(new THREE.Vector3(0, -0.8, 0));
-		if (seat < 3.5) return boat.clone().addScaledVector(across, (seat - 1.5) * 1.5).addScaledVector(ahead, 0.5).add(new THREE.Vector3(0, -1.2, 0));
-		const k = seat - 4;
-		const side = (k % 2) * 2 - 1;
-		const back = Math.floor(k / 2);
-		return boat.clone().addScaledVector(across, side * (2.2 + 0.2 * back)).addScaledVector(ahead, -(1 + 1.6 * back)).add(new THREE.Vector3(0, -1.6, 0));
-	};
-
 	const send = (who: number) => waiting.push(who);
 
 	const update = (frame: TreasonFrame | undefined) => {
@@ -186,7 +186,7 @@ export function createTreason(scene: THREE.Scene, layer: number) {
 		const across = new THREE.Vector3(-frame.ahead.y, 0, frame.ahead.x);
 		// Sent: up from her seat over the eye, out before it, and down far ahead into the sea.
 		for (const who of waiting.splice(0)) {
-			const seat = seatAt(who, frame.boat, ahead, across);
+			const seat = seatOf(who, frame.boat, ahead, across);
 			const side = Math.sign(seat.clone().sub(frame.boat).dot(across)) || 1;
 			const lands = frame.boat.clone().addScaledVector(ahead, 340 + 80 * Math.random()).addScaledVector(across, side * (40 + 50 * Math.random()));
 			lands.y = frame.seaAt(lands.x, lands.z) - 4;
