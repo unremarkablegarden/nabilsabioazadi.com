@@ -1082,10 +1082,14 @@ onMounted(async () => {
 		if (liveOnly) {
 			// On a measured sea the viewer is on a small boat: eyes EYE_HEIGHT above the water, and
 			// carried up and down by the very waves that are drawn.
-			const surface = measuredSeaHeight(waveUniforms, camera.position.x, camera.position.z, time) + giantWaveHeight(camera.position.x, camera.position.z, time, surge) + lensWaveHeight(waveUniforms, camera.position.x, camera.position.z, time);
+			waveUniforms.crestLimit.value = crestLimitFor(waveUniforms);
+			const surface = seaSurfaceAt(waveUniforms, camera.position.x, camera.position.z, time);
 			seaAtBoat = surface;
 			camera.position.y += (EYE_HEIGHT + surface - camera.position.y) * follow(0.2);
+			// (Never under the water: in a great sea the eye's easing behind the rising face put it there.)
+			camera.position.y = Math.max(camera.position.y, surface + 0.6 * EYE_HEIGHT);
 		} else {
+			waveUniforms.crestLimit.value = crestLimitFor(waveUniforms);
 			const swell = giantWaveHeight(camera.position.x, camera.position.z, time, surge);
 			camera.position.y += (cameraHeight + swell + heave - camera.position.y) * follow(0.05);
 		}

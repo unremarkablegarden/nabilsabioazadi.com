@@ -331,6 +331,9 @@ export function createRain(scene: THREE.Scene, camera: THREE.PerspectiveCamera, 
 		}
 		held.lerp(frame.shelter, Math.min(1, frame.delta * 2.5));
 		const wind = frame.wind.clone().multiplyScalar(1 + 0.35 * frame.gust);
+		// (Past some 45 m/s rain is torn to spray: drops drawn going faster only rushed at the eye
+		// as streaks out of one point, like stars in a jump to light speed.)
+		if (wind.length() > 45) wind.setLength(45);
 		// Hanging, they all but stop; going back up, they rise slowly and the wind barely moves them.
 		const along = THREE.MathUtils.lerp(THREE.MathUtils.lerp(1, 0.04, frame.hang), 0.12, frame.rise);
 		const down = THREE.MathUtils.lerp(THREE.MathUtils.lerp(1, 0.03, frame.hang), -0.35, frame.rise);

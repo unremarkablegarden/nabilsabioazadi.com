@@ -222,6 +222,59 @@ export function lensWaveHeight(uniforms: GerstnerUniforms, x: number, z: number,
 	return height;
 }
 
+// How much of the waves' sideways sway can be kept without any crest folding over itself. A
+// Gerstner surface loops where the steepnesses of the waves meeting at a point sum past 1; here
+// the sum is taken at its worst (every train in step, the gusts at their strongest, Leane's
+// current at its hardest) and the sway drawn in to keep it under 0.8. Any ordinary sea is far
+// under, and is drawn exactly as before.
+export function crestLimitFor(uniforms: GerstnerUniforms) {
+	let sum = 0;
+	uniforms.waves.value.forEach((train, i) => (sum += train.z * uniforms.waveSteepness.value * (1 + 0.5 * uniforms.gustiness.value * uniforms.waveWind.value[i]!)));
+	for (const wave of GIANT_WAVES) sum += wave.z * uniforms.surge.value;
+	for (const w of uniforms.lensWaves.value) sum += 0.5 * w.z * uniforms.lensAmount.value * ((2 * Math.PI) / w.w);
+	sum *= 1 + 0.5 * uniforms.lensCurrent.value.w;
+	return Math.min(1, 0.8 / Math.max(sum, 1e-6));
+}
+
+// The height of the sea as drawn where the viewer is, sideways sway and all: a Gerstner wave
+// carries the water sideways as it lifts it, so the water over a point came from somewhere else;
+// it is found by following the sway back a few times. (In a great sea the plain sum of heights
+// put the viewer under the water on the steep faces.)
+export function seaSurfaceAt(uniforms: GerstnerUniforms, x: number, z: number, time: number) {
+	const limit = uniforms.crestLimit.value;
+	const at = (px: number, pz: number) => {
+		let dx = 0;
+		let dz = 0;
+		let h = 0;
+		const add = (heading: number, phase: number, k: number, a: number, sway: number) => {
+			const dirX = Math.sin(heading);
+			const dirZ = -Math.cos(heading);
+			const f = k * (dirX * px + dirZ * pz - Math.sqrt(9.8 / k) * time) + phase;
+			dx += dirX * a * sway * Math.cos(f);
+			dz += dirZ * a * sway * Math.cos(f);
+			h += a * Math.sin(f);
+		};
+		for (const train of uniforms.waves.value) {
+			const k = (2 * Math.PI) / train.w;
+			add(train.x, train.y, k, (train.z * uniforms.waveSteepness.value) / k, 1);
+		}
+		for (const wave of GIANT_WAVES) {
+			const k = (2 * Math.PI) / wave.w;
+			add(wave.x, wave.y, k, (uniforms.surge.value * wave.z) / k, 1);
+		}
+		if (uniforms.lensAmount.value > 0) for (const w of uniforms.lensWaves.value) add(w.x, w.y, (2 * Math.PI) / w.w, w.z * uniforms.lensAmount.value, 0.5);
+		return { dx: dx * limit, dz: dz * limit, h };
+	};
+	let px = x;
+	let pz = z;
+	for (let i = 0; i < 4; i++) {
+		const { dx, dz } = at(px, pz);
+		px = x - dx;
+		pz = z - dz;
+	}
+	return at(px, pz).h;
+}
+
 // 0..1 for the foam uniform from the wind speed in m/s. The share of the sea covered by
 // whitecaps is about 3.84e-6 × speed^3.41 (Monahan and O'Muircheartaigh, 1980): none to speak
 // of below 4 m/s, a few percent in a near gale, a fifth of the sea in a storm.
@@ -349,6 +402,8 @@ export interface GerstnerUniforms {
 	lensCurrent: THREE.IUniform<THREE.Vector4>;
 	// Manulani's light (wrath.ts): where her sphere is (world), and how bright, before tone mapping.
 	manuLight: THREE.IUniform<THREE.Vector4>;
+	// 0..1 how much of the waves' sideways sway is kept (crestLimitFor): 1 in any ordinary sea.
+	crestLimit: THREE.IUniform<number>;
 }
 
 const pressedChunk = /* glsl */ `
@@ -410,6 +465,7 @@ float stillOutside( vec2 p, out float rim ) {
 `;
 
 const vertexPars = /* glsl */ `
+uniform float crestLimit;
 uniform vec4 lensWaves[ 12 ];
 uniform float lensAmount;
 uniform vec4 lensCurrent;
@@ -575,6 +631,16 @@ vec3 gerstner( vec3 p, out vec3 normal, out float crest, out float gust ) {
 		tangent.y *= 1.0 + 0.7 * against;
 		binormal.y *= 1.0 + 0.7 * against;
 		crest *= 1.0 + 1.4 * against;
+	}
+	// No crest may fold over itself (crestLimitFor): in a sea steeper than water can stand the
+	// sideways sway of every wave is drawn in together, so the surface leans but never loops and
+	// shows its underside.
+	if ( crestLimit < 1.0 ) {
+		offset.xz *= crestLimit;
+		tangent.x = 1.0 + ( tangent.x - 1.0 ) * crestLimit;
+		tangent.z *= crestLimit;
+		binormal.x *= crestLimit;
+		binormal.z = 1.0 + ( binormal.z - 1.0 ) * crestLimit;
 	}
 	if ( weavePull > 0.0 ) {
 		vec2 rel = p.xz - weaveCentre;
@@ -1018,6 +1084,7 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		lensAmount: { value: 0 },
 		lensCurrent: { value: new THREE.Vector4() },
 		manuLight: { value: new THREE.Vector4() },
+		crestLimit: { value: 1 },
 	};
 	useDialSea(uniforms);
 	Object.assign(material.uniforms, uniforms, { giantWaves: { value: GIANT_WAVES } });
