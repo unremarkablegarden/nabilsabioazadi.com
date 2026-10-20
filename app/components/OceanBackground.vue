@@ -532,7 +532,9 @@ onMounted(async () => {
 	const wrathFigures = wrathAsked !== "off" && (wrathAsked !== null || wrathSet());
 	// Both at once (bothSea): Peta's storm and the five's, taking turns in one sea.
 	const bothFigures = fiveFigures && wrathFigures;
-	const pretendNow = () => (stillDone ? {} : stormOn ? { ...(bothFigures ? BOTH_STORM : fiveFigures ? FIVE_STORM : wrathFigures ? WRATH_STORM : CHANNELLED_STORM), ...(noRain ? { precipitation: 0 } : {}), ...asPretended } : asPretended);
+	// Fifteen times worse, or as storm.json or ?worse= says (worsened).
+	const worse = worseTimes(query.get("worse"));
+	const pretendNow = () => (stillDone ? {} : stormOn ? { ...worsened(bothFigures ? BOTH_STORM : fiveFigures ? FIVE_STORM : wrathFigures ? WRATH_STORM : CHANNELLED_STORM, worse), ...(noRain ? { precipitation: 0 } : {}), ...asPretended } : asPretended);
 	let pretend = pretendNow();
 	channelled.value = Object.keys(pretend).length > 0;
 	wrathRaised.value = wrathFigures;
@@ -1067,7 +1069,7 @@ onMounted(async () => {
 		waveUniforms.gustiness.value = 0.8 * alive;
 		waveUniforms.foam.value *= alive * (godBreath ? 0.45 + 0.55 * godBreath.depth : 1);
 		// Peta's wave, raised at the deepest breath of each run (wrath.ts).
-		layPetasWave(waveUniforms, godBreath, (fiveOn ? fiveSeconds : wrathSeconds) ?? 0, time, camera.position, skyAhead);
+		layPetasWave(waveUniforms, godBreath, (fiveOn ? fiveSeconds : wrathSeconds) ?? 0, time, camera.position, skyAhead, Math.cbrt(worse) ** 2);
 		waterUniforms.distortionScale.value *= lerp(0.15, 1, alive);
 
 		// In heavy seas the view heaves, pitches and rolls like a ship's deck, and rides the giant swells.

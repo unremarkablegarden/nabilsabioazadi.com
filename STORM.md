@@ -415,3 +415,15 @@ through the hours; and again. Peta's weaves (`wrath.ts`) are drawn through the G
 five's (`five.ts`) through their surges and the silence, each giving way to the other over ten
 seconds (`uPresence`). Manulani's light steady at night. Menu: "Channelled, in honour of Peta and a
 family of five" (`BOTH_WORDS`). `/?five=80` is Peta's wave, `/?five=198` the first of the five.
+
+## 15. Fifteen times worse (21 October)
+
+The owner: "I COMMAND YOU TO CREATE A STORM THAT IS 15 TIMES WORSE". `storm.json` `"worse": 15`
+(`?worse=15` for one visit, `?worse=1` without), applied to whichever storm is on by `worsened` in
+`channelled-storm.ts`. Worse read as a storm's power on the sea, which goes as the cube of its wind:
+the wind ×2.47 (about 740 km/h gusting over 900), pressure deficit, cape and the sea's heights ×6.1
+(a sea near 180 m), rain ×15, visibility ÷15 (never under 60 m); every swell lengthened to a
+steepness of one in ten so it can stand. Peta's wave rises and lengthens with it (`layPetasWave`'s
+`scale`). The ancestors' strands now fade from 400 m out to 80 m from the eye.
+Not yet right: riding such a sea the boat's own ropes (the five's) can fan across the foreground
+from a crest; seen only in stills.

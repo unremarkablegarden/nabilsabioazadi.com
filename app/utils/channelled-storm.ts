@@ -226,6 +226,46 @@ export function namesSea(seconds: number, period: number): GodsBreath & { peakAt
 // are never mistaken); then one silence for all, the sea lying down, which lengthens through the
 // hours as the God's pauses did; and again. `five` is 0..1 how far the five's surges have the sea
 // (five.ts draws while it is high, wrath.ts while it is low).
+// Fifteen times worse (the owner, 21 October: "I COMMAND YOU TO CREATE A STORM THAT IS 15 TIMES
+// WORSE"): "worse": 15 in storm.json, or ?worse=15 for one visit (?worse=1 without it). Worse read
+// as what a storm does: the power it spends on the sea (Emanuel's power dissipation) goes as the
+// cube of its wind, so fifteen times the power is the wind times the cube root of fifteen, about
+// 2.5; the fall of the pressure and the height of a sea the wind has fully raised go as the wind's
+// square, about 6; the heat in its towers likewise; the rain fifteen times, and the air fifteen
+// times thicker with it. No sea of such height can stand at its old length (past a steepness of
+// one in seven a wave breaks apart), so each swell is made long enough to stand: one in ten.
+export function worseTimes(asked: string | null) {
+	if (asked !== null && asked !== "" && Number.isFinite(Number(asked))) return Math.max(1, Number(asked));
+	return Math.max(1, (stormSwitch as { worse?: number }).worse ?? 1);
+}
+export function worsened(storm: Partial<SeaConditions>, times: number): Partial<SeaConditions> {
+	if (times <= 1) return storm;
+	const wind = Math.cbrt(times);
+	const square = wind * wind;
+	const standing = (height: number | undefined, period: number | undefined) => Math.max(period ?? 0, Math.sqrt((2 * Math.PI * 10 * (height ?? 0)) / 9.8));
+	const out = { ...storm };
+	const scale = (key: keyof SeaConditions, by: number) => {
+		if (typeof out[key] === "number") (out as Record<string, number>)[key] = (out[key] as number) * by;
+	};
+	scale("windSpeed", wind);
+	scale("windGusts", wind);
+	scale("windTrend", wind);
+	scale("cape", square);
+	scale("waveHeight", square);
+	scale("swellHeight", square);
+	scale("secondSwellHeight", square);
+	scale("windWaveHeight", square);
+	scale("waveTrend", square);
+	scale("precipitation", times);
+	scale("pressureTrend", square);
+	if (typeof out.pressure === "number") out.pressure = 1013 - (1013 - out.pressure) * square;
+	if (typeof out.visibility === "number") out.visibility = Math.max(60, out.visibility / times);
+	out.swellPeriod = standing(out.swellHeight, out.swellPeriod);
+	out.secondSwellPeriod = standing(out.secondSwellHeight, out.secondSwellPeriod);
+	out.windWavePeriod = standing(out.windWaveHeight, out.windWavePeriod);
+	return out;
+}
+
 export const BOTH_STORM: Partial<SeaConditions> = {
 	...WRATH_STORM,
 	windGusts: 380,

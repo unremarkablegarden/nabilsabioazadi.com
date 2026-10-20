@@ -280,7 +280,9 @@ void main() {
 		shown *= 0.5 + 0.5 * smoothstep( 0.5, 1.0, sin( aT * 8.0 - uFlow * 1.2 + aSeed.y * 6.0 ) * 0.5 + 0.5 ) + 0.3 * haul * aT;
 	}
 	shown *= uPresence;
-	shown *= smoothstep( 1.0, 0.9, aT ) * smoothstep( 25.0, 110.0, length( here - cameraPosition ) );
+	// (The ancestors' strands fade well before the boat: all fifty-odd meeting at the hands filled
+	// the foreground with a fan of broad bands, worst when the boat rides high on the sea.)
+	shown *= smoothstep( 1.0, 0.9, aT ) * ( own ? smoothstep( 25.0, 110.0, length( here - cameraPosition ) ) : smoothstep( 80.0, 400.0, length( here - cameraPosition ) ) );
 	vAlpha = shown;
 	// Tamed to the background's colour, running hot towards ember with her anger; her ancestors
 	// in her own colour, cooler and paler.
@@ -605,7 +607,7 @@ export function manulaniLevel(breath: GodsBreath, since: number, night: number) 
 // Peta's wave: lays the twelve's trains for this run of breaths so that they meet at the core at
 // its deepest breath, and Leane's current against the swell there.
 const LENS_HEIGHT = 42;
-const lensRun = { run: -1, x: 0, z: 0, at: 0 };
+const lensRun = { run: -1, x: 0, z: 0, at: 0, scale: 1 };
 export function layPetasWave(
 	uniforms: { lensWaves: { value: THREE.Vector4[] }; lensAmount: { value: number }; lensCurrent: { value: THREE.Vector4 } },
 	breath: GodsBreath | undefined,
@@ -613,13 +615,17 @@ export function layPetasWave(
 	time: number,
 	boat: THREE.Vector3,
 	ahead: THREE.Vector2,
+	// How many times taller the sea is than the storm's own (a worse storm, worsened): the wave is
+	// raised as much, and each train made as much longer, so that it can still stand.
+	scale = 1,
 ) {
 	if (!breath) {
 		uniforms.lensAmount.value = 0;
 		uniforms.lensCurrent.value.w = 0;
 		return;
 	}
-	if (breath.run !== lensRun.run) {
+	if (breath.run !== lensRun.run || scale !== lensRun.scale) {
+		lensRun.scale = scale;
 		// (Fixed for the whole run: the place, and the moment on the page's clock.)
 		lensRun.run = breath.run;
 		lensRun.x = boat.x + ahead.x * CORE_AHEAD;
@@ -632,12 +638,12 @@ export function layPetasWave(
 			const turn = (((Math.sin((i + 1) * 12.9898 + breath.run * 7.13) * 43758.5453) % 1) + 1) % 1 * 0.84 - 0.42;
 			const dx = -(ahead.x * Math.cos(turn) - ahead.y * Math.sin(turn));
 			const dz = -(ahead.y * Math.cos(turn) + ahead.x * Math.sin(turn));
-			const length = 160 + 260 * ((i * 0.618 + 0.3 + breath.run * 0.37) % 1);
+			const length = (160 + 260 * ((i * 0.618 + 0.3 + breath.run * 0.37) % 1)) * scale;
 			const k = (2 * Math.PI) / length;
 			const heading = Math.atan2(dx, -dz);
 			// Its crest at the place at the moment: k (d·P - c t) + phase = pi / 2.
 			const phase = Math.PI / 2 - k * (dx * lensRun.x + dz * lensRun.z - Math.sqrt(9.8 / k) * lensRun.at);
-			train.set(heading, phase, LENS_HEIGHT / 12, length);
+			train.set(heading, phase, (LENS_HEIGHT * scale) / 12, length);
 		});
 	}
 	// (Fullest when the trains meet: half-way through the run, or at the stressed beat of a name.)
