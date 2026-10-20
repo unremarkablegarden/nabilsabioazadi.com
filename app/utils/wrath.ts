@@ -270,9 +270,12 @@ void main() {
 	// Part of the rope of one who tends goes out from her hands to lie beside the rope of the one
 	// she tends (psyche.ts).
 	bool ownRope = aLine < - 0.5;
+	// (Lying along the rope of one being stilled, it goes with hers when the cut runs out.)
+	float alongside = 1.0;
 	if ( ownRope && tending( aWho, aSeed.x ) ) {
 		float other = uTendTo[ int( aWho ) ];
 		float k = 0.92 * smoothstep( 0.04, 0.4, aT );
+		alongside = lawShown( other, aT );
 		here = mix( here, placeOwn( other, aT ) + vec3( 0.0, 3.0, 0.0 ), k );
 		next = mix( next, placeOwn( other, min( aT + 0.01, 1.0 ) ) + vec3( 0.0, 3.0, 0.0 ), k );
 	}
@@ -305,7 +308,9 @@ void main() {
 		shown *= 0.5 + 0.5 * smoothstep( 0.5, 1.0, sin( aT * 8.0 - uFlow * 1.2 + aSeed.y * 6.0 ) * 0.5 + 0.5 ) + 0.3 * haul * aT;
 	}
 	shown *= uPresence;
-	if ( ownRope ) shown *= mindShown( aWho, aT );
+	if ( ownRope ) shown *= mindShown( aWho, aT ) * lawShown( aWho, aT ) * alongside;
+	// (Her ancestors' strands go out with her rope when she is stilled.)
+	else shown *= lawWhole( aWho );
 	// (The ancestors' strands fade well before the boat: all fifty-odd meeting at the hands filled
 	// the foreground with a fan of broad bands, worst when the boat rides high on the sea.)
 	shown *= smoothstep( 1.0, 0.9, aT ) * nearFade( length( here - cameraPosition ), own );
@@ -446,6 +451,7 @@ export function createWrath(scene: THREE.Scene, layer: number) {
 		uMind: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) },
 		uMindFlow: { value: new Array<number>(14).fill(0) },
 		uTendTo: { value: new Array<number>(14).fill(-1) },
+		uLaw: { value: new Array<number>(14).fill(-0.05) },
 		uSphere: { value: new THREE.Vector3() },
 		uFoot: { value: Array.from({ length: 12 }, () => new THREE.Vector3()) },
 		uTints: { value: [new THREE.Color(), new THREE.Color(), new THREE.Color()] },

@@ -197,9 +197,12 @@ void main() {
 	// Part of the rope of one who tends goes out from her hands to lie beside the rope of the one
 	// she tends (psyche.ts).
 	bool ownRope = true;
+	// (Lying along the rope of one being stilled, it goes with hers when the cut runs out.)
+	float alongside = 1.0;
 	if ( ownRope && tending( aWho, aSeed.x ) ) {
 		float other = uTendTo[ int( aWho ) ];
 		float k = 0.92 * smoothstep( 0.04, 0.4, aT );
+		alongside = lawShown( other, aT );
 		here = mix( here, placeOwn( other, aT ) + vec3( 0.0, 3.0, 0.0 ), k );
 		next = mix( next, placeOwn( other, min( aT + 0.01, 1.0 ) ) + vec3( 0.0, 3.0, 0.0 ), k );
 	}
@@ -224,7 +227,7 @@ void main() {
 	// in a bow (they hold).
 	shown *= mix( 0.65 + 0.5 * draw, 0.7, uBow ) * ( 0.55 + 0.45 * smoothstep( - 0.6, 0.6, sin( aT * 6.0 + aSeed.y * 6.0 ) + 0.5 * sin( aT * 15.0 + 2.0 ) ) );
 	shown *= smoothstep( 1.0, 0.9, aT ) * nearFade( length( here - cameraPosition ), true );
-	vAlpha = shown * uPresence * mindShown( aWho, aT );
+	vAlpha = shown * uPresence * mindShown( aWho, aT ) * lawShown( aWho, aT ) * alongside;
 	// Tamed to the background's colour, cooling towards the bruise as they bow and as the ache grows.
 	// (The strongest's white; Manulani's the colour of her light.)
 	if ( aWho > 12.5 ) vTint = vec3( 1.0, 0.88, 0.66 );
@@ -346,6 +349,7 @@ export function createFive(scene: THREE.Scene, layer: number) {
 		uMind: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) },
 		uMindFlow: { value: new Array<number>(14).fill(0) },
 		uTendTo: { value: new Array<number>(14).fill(-1) },
+		uLaw: { value: new Array<number>(14).fill(-0.05) },
 		uState: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) },
 		uSphere: { value: new THREE.Vector3() },
 		uEnd: { value: Array.from({ length: 12 }, () => new THREE.Vector3()) },

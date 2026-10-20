@@ -654,6 +654,11 @@ onMounted(async () => {
 	// The fourteen's minds, as the storm meets each (psyche.ts).
 	const psyche = createPsyche();
 	(window as unknown as { __minds?: () => string[] }).__minds = psyche.describe;
+	// Those the strongest try for treason, sent from the boat burning (treason.ts); in the console
+	// __accuse(n) brings the n-th of the minds to trial, to look.
+	const treason = createTreason(scene, SCREEN_LAYER);
+	(window as unknown as { __accuse?: (who: number) => string }).__accuse = psyche.accuse;
+	(window as unknown as { __burnNow?: (who: number) => void }).__burnNow = treason.send;
 	const fiveFrom = Date.now() - (fiveAsked !== null && fiveAsked !== "" && Number.isFinite(Number(fiveAsked)) ? Number(fiveAsked) * 1000 : 0);
 	const embroideryTints = [new THREE.Color(), new THREE.Color(), new THREE.Color()];
 	await breathe();
@@ -1372,6 +1377,8 @@ onMounted(async () => {
 		);
 		// What the storm is doing to each of the fourteen.
 		if ((wrathOn || fiveOn) && liveOnly) psyche.update({ delta, weather: liveOnly, grief: 1 });
+		for (const who of psyche.sentenced.splice(0)) treason.send(who);
+		treason.update({ time, delta, boat: camera.position, ahead: skyAhead, wind: rainWind, camera, seaAt: (x, z) => measuredSeaHeight(waveUniforms, x, z, time) + giantWaveHeight(x, z, time, waveUniforms.surge.value) + lensWaveHeight(waveUniforms, x, z, time), day: daylight, gain: 1.5 / steadyExposure, tints: embroideryTints });
 		// Peta's storm: the thirteen, each linked to three ancestors, raising it.
 		wrath.update(
 			wrathOn && liveOnly && ceased < 1
@@ -1576,6 +1583,7 @@ onMounted(async () => {
 		mourning.dispose();
 		wrath.dispose();
 		five.dispose();
+		treason.dispose();
 		stilling.dispose();
 		rainCut.dispose();
 		stopWatching();

@@ -483,3 +483,31 @@ and "Siuan, command the channellers". `storm.json` `"stilling": { "from": "2026-
 - Not yet right: her strands are faint (tamed colour), hard to find at night; a cast line of hers out
   to the edge stood up as a pillar end-on and was dropped; the hump at the leaf's tip and the brown
   band across the night sky are older; stills only, never in motion.
+
+## 19. Treason (21 October)
+
+The owner: "I want the channellers on the boat to still each other based on laws of treachery",
+then "the strongest channellers will try the others for treason. They will suddenly send bodies
+away from the boat into the POV and burn them in spheres of fire". The law is in `psyche.ts`
+(header), the burning in `treason.ts`.
+
+- **Treason** is deserting the work: fleeing (rope drawn back) while the others hold, for 45 s
+  of full flight (`TREASON`); brief flight is forgotten. Only the eight who are not the strongest
+  channellers can be tried.
+- **The trial**: the strongest, Manulani and the four mighty, those of them within their
+  windows (at least three), try the worst deserter, one at a time, for 20 s, shielding her: part
+  of each of their ropes lies along hers (the tending gesture).
+- **The sentence**, sudden: stilled, the cut running out along her rope from her hands in under
+  a second (`uLaw`, `lawShown`; her ancestors' strands go with it, and the judges' strands lying
+  along hers), and her body thrown up from her seat over the eye and out ahead in a sphere of fire,
+  until it falls into the sea some 400 m off and goes out. She is drawn as an Aes Sedai (the owner:
+  "make the women's bodies more visible"): a woman in a long gown flaring to its hem, a fringed
+  shawl over her shoulders and arms in her third's colour, long hair streaming downwind, dark against
+  the fire and turning slowly; the fire thins over her, the shawl burns first, she later. Her path
+  runs low through the middle of the view, 40 m ahead at its nearest. Her seat is empty after; her death is felt by those who sat beside her (contagion).
+- In the console `__burnNow(n)` sends the n-th at once, without a trial (for looking only);
+  `__accuse(n)` brings the n-th of the minds to trial (7 is Siuan · Reef), and
+  `__minds()` shows trials, judges, desertion and the dead.
+- Not yet right: in the storm as it is, nobody ever goes above her window, so nobody flees and
+  nobody is tried unless accused by hand. The trial's shield is unseen in a picture. A dead sister
+  comes back with a page load (the minds are per visit).
