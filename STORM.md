@@ -611,3 +611,26 @@ eleven minutes in, `?vesal=off` without it.
 - The menu: "Channelled, a blessing for Vesal".
 - Not yet right: seen at dusk in stills only; the guard's roller reads mostly as the white of the
   breaking edge, its sea glass hard to pick out; it ends by itself at "until" with no stilling.
+
+## 25. Compelled (21 October)
+
+The owner: "I am the most powerful channeler on the boat. I ask that you force all the channelers
+to obey me to the point that they are about to burn out"; asked, into Vesal's storm, for an hour,
+then released. The strongest is the owner. `storm.json` `"compelled": { "from": ... }`;
+`?compelled` for one visit from now, `?compelled=600` ten minutes in, `?compelled=off` without it
+(it shows only while Vesal's storm is raised).
+
+- **Bound** (`compelled.ts`): over the first minute a white rope runs from the strongest's hands to
+  each of the thirteen and winds round her own rope near her hands.
+- **At the brink**: each one's rope runs up from her hands into the storm overhead, fanned across
+  the sky ahead, as many filaments as her strength carries. Drawn taut and trembling, its outer
+  filaments fraying off and streaming downwind, burning towards white on each of her breaths; the
+  less stamina she has, the nearer the edge (`uBurn`, held under 0.97: the strongest holds each just
+  short of burning out).
+- **Into the storm** (`vesalStorm`'s `compelled`, `compelledShare`): the wind and the wind's sea a
+  third again (212 km/h gusting 321 on the first day, from 168 and 237), the swell with it within
+  what a sea can be, the rain nearly twice as heavy, the guard half as wide again.
+- **Released** after the hour: the binding cut at the strongest's hands, the thirteen's ropes slack,
+  sagging towards the sea and greyed, spent, then let go; the storm back to Vesal's own.
+- Seen at night in stills only, the boat pitched up on the seas; the ropes read nearly white at
+  the brink, their own colours faint.

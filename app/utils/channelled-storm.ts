@@ -349,15 +349,18 @@ export function mourningSince(now: Date) {
 // own sea comes from the raised wind, as a real sea would. While it lasts the strongest six,
 // linked under Siuan, hold the real sea calm round the boat (vesalGuard, stilling.ts).
 // `raised`: 0 the day as it is, 1 the storm in full (the twelve raise it over ten minutes).
-export function vesalStorm(real: SeaConditions, raised = 1): Partial<SeaConditions> {
+// `compelled`: how much of all the thirteen's strength the strongest is driving into it (compelled.ts):
+// the excess goes into the wind, the rain and the sea, never past what a sea can be (SEA_MOST).
+export function vesalStorm(real: SeaConditions, raised = 1, compelled = 0): Partial<SeaConditions> {
 	const k = ease(clamp01(raised));
 	const to = (from: number, storm: number) => from + (storm - from) * k;
-	const wind = Math.min(220, 120 + 4 * real.windSpeed);
+	const driven = 1 + 0.35 * clamp01(compelled);
+	const wind = Math.min(220, 120 + 4 * real.windSpeed) * driven;
 	const gustiness = Math.max(1.25, real.windGusts / Math.max(real.windSpeed, 1));
-	const swell = Math.min(16, Math.max(6, 8 * real.swellHeight));
+	const swell = Math.min(16 * driven, Math.max(6, 8 * real.swellHeight * driven), SEA_MOST * 0.6);
 	const swellPeriod = Math.max(12, 1.5 * real.swellPeriod);
 	// (The wind's own sea, from the raised wind over a few hundred kilometres: about 8 m at 170 km/h.)
-	const windSea = Math.min(10, 0.048 * wind);
+	const windSea = Math.min(10 * driven, 0.048 * wind);
 	const thunder = real.cape > 300;
 	const sky = (cover: number) => to(cover, cover + (100 - cover) * 0.85);
 	return {
@@ -379,7 +382,7 @@ export function vesalStorm(real: SeaConditions, raised = 1): Partial<SeaConditio
 		cloudMid: sky(real.cloudMid),
 		cloudHigh: sky(real.cloudHigh),
 		cloudCover: sky(real.cloudCover),
-		precipitation: to(real.precipitation, 4 + 3 * real.precipitation),
+		precipitation: to(real.precipitation, (4 + 3 * real.precipitation) * (1 + 0.8 * clamp01(compelled))),
 		cape: to(real.cape, thunder ? real.cape * 3 : real.cape),
 		weatherCode: k > 0.5 ? (thunder ? 95 : 65) : real.weatherCode,
 		visibility: to(real.visibility, Math.min(real.visibility, 3000)),
@@ -414,8 +417,16 @@ export function vesalSince(now: Date) {
 export const vesalGuard = (since: number) => ease(clamp01(since / 90));
 // How far the twelve have raised it (0..1): from a minute in, over ten.
 export const vesalRaised = (since: number) => clamp01((since - 60) / 600);
-// How far the guard reaches round the boat (m): by the six's linked strength, as a rope's girth goes.
-export const vesalGuardReach = () => 300 * Math.cbrt(STILLING_STRENGTH.mighty);
+// How far the guard reaches round the boat (m): by the six's linked strength, as a rope's girth goes;
+// wider, as far again by a half, while the strongest drives them all (compelled).
+export const vesalGuardReach = (compelled = 0) => 300 * Math.cbrt(STILLING_STRENGTH.mighty) * (1 + 0.5 * clamp01(compelled));
+// Compelled (compelled.ts): storm.json "compelled": { "from": ISO time }, seconds since.
+export function compelledSince(now: Date) {
+	const from = (stormSwitch as { compelled?: { from: string | null } }).compelled?.from;
+	if (!from) return undefined;
+	const since = (now.getTime() - new Date(from).getTime()) / 1000;
+	return since >= 0 ? since : undefined;
+}
 
 // Whether the twelve stay Aes Sedai (Siuan's, Leane's and Moiraine's four each, with the storm's
 // graded colours) when no storm is on: "weavers": "aes-sedai" in storm.json (the owner, 16

@@ -4,6 +4,7 @@
 	"weavers": "aes-sedai",
 	"rain": true,
 	"vesal": { "from": "2026-10-21T17:37:00+13:00" },
+	"compelled": { "from": "2026-10-21T21:20:00+13:00" },
 	"wrath": { "from": null },
 	"five": { "from": null },
 	"mourning": { "from": null },

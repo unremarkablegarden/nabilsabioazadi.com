@@ -528,9 +528,17 @@ onMounted(async () => {
 	const vesalAsked = query.get("vesal");
 	const vesalSeconds = () => (vesalAsked === "off" ? undefined : vesalAsked !== null ? (Number(vesalAsked) || 0) + (Date.now() - pageOpened) / 1000 : vesalSince(new Date()));
 	let realNow: SeaConditions | undefined = conditions.value;
+	// The strongest compelling all thirteen into it (compelled.ts): "compelled" in storm.json, or
+	// ?compelled for this visit from now, ?compelled=600 ten minutes in, ?compelled=off without it.
+	const compelledAsked = query.get("compelled");
+	const compelledSeconds = () => (compelledAsked === "off" ? undefined : compelledAsked !== null ? (Number(compelledAsked) || 0) + (Date.now() - pageOpened) / 1000 : compelledSince(new Date()));
+	const compelledNow = () => {
+		const since = compelledSeconds();
+		return since === undefined ? 0 : compelledShare(since);
+	};
 	const vesalFigures = () => {
 		const since = vesalSeconds();
-		return since !== undefined && realNow ? vesalStorm(realNow, vesalRaised(since)) : undefined;
+		return since !== undefined && realNow ? vesalStorm(realNow, vesalRaised(since), compelledNow()) : undefined;
 	};
 	const stormNow = () => (vesalAsked !== null && vesalAsked !== "off" ? true : stillDone || stormAsked === "off" ? false : stormAsked !== null ? true : channelledStormOn(new Date()));
 	let stormOn = stormNow();
@@ -691,6 +699,8 @@ onMounted(async () => {
 	// The six's contest of strength (contest.ts), once they have healed the ocean; ?contest=60 to
 	// look a minute into it at any time. In the console __contest() tells the bouts.
 	const contest = createContest(scene, SCREEN_LAYER);
+	// The thirteen compelled into Vesal's storm (compelled.ts).
+	const compelled = createCompelled(scene, SCREEN_LAYER);
 	const contestAsked = query.get("contest");
 	(window as unknown as { __contest?: () => string[] }).__contest = contest.describe;
 	// Leane cutting the rain off (rain-cut.ts): set in storm.json, or ?raincut for this visit.
@@ -893,7 +903,9 @@ onMounted(async () => {
 	const followSwitch = () => {
 		// (While the twelve raise Vesal's storm, its figures are worked out again as they go.)
 		const raising = vesalSeconds();
-		if (raising !== undefined && raising < 700 && stormNow() === stormOn && measured) {
+		const driving = compelledSeconds();
+		const changing = (raising !== undefined && raising < 700) || (driving !== undefined && (driving < COMPEL_BIND + 60 || (driving > COMPEL_HELD - 30 && driving < COMPEL_LENGTH + 60)));
+		if (raising !== undefined && changing && stormNow() === stormOn && measured) {
 			pretend = pretendNow();
 			conditions.value = { ...measured, ...pretend };
 			return;
@@ -1499,7 +1511,7 @@ onMounted(async () => {
 		);
 		// The strongest's stilling, and the water they have stilled with the weather still beyond it.
 		const stillingSeen = stillShare >= 0 && !stillDone && !calmMotion && !!drawn;
-		const guardReach = vesalGuardReach();
+		const guardReach = vesalGuardReach(compelledNow());
 		stilling.update(
 			!stillingSeen && guard > 0.001 && drawn
 				? {
@@ -1534,6 +1546,13 @@ onMounted(async () => {
 						white: lerp(0.5, 3.5, daylight) / steadyExposure,
 						siuan: stillBy === "mighty" && liveOnly ? { tint: skySheath[1]!, heave: seaAtBoat, swellHeight: liveOnly.swellHeight, swellPeriod: liveOnly.swellPeriod } : undefined,
 					}
+				: undefined,
+		);
+		// The strongest's compulsion: the thirteen at the brink, pouring all they have into the storm.
+		const compelledAt = compelledSeconds();
+		compelled.update(
+			drawn && !calmMotion && compelledAt !== undefined && vesalNow !== undefined
+				? { since: compelledAt, time, delta, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, white: lerp(0.5, 3.5, daylight) / steadyExposure, tints: embroideryTints }
 				: undefined,
 		);
 		// Five minutes after the mighty have healed the ocean, the six fight to declare their strength.
@@ -1669,6 +1688,7 @@ onMounted(async () => {
 		five.dispose();
 		treason.dispose();
 		contest.dispose();
+		compelled.dispose();
 		stilling.dispose();
 		rainCut.dispose();
 		stopWatching();
