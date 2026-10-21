@@ -561,7 +561,8 @@ onMounted(async () => {
 		if (vesalSeconds() !== undefined && !realNow) return asPretended;
 		const vesal = vesalFigures();
 		vesalRaisedNow.value = !!vesal;
-		if (vesal) return { ...vesal, ...asPretended };
+		// (Worsened as any storm is, storm.json "worse": 12.66 since the owner's "worse by 1166%".)
+		if (vesal) return { ...worsened(vesal, worse), ...asPretended };
 		return stillDone ? {} : stormOn ? { ...worsened(bothFigures ? BOTH_STORM : fiveFigures ? FIVE_STORM : wrathFigures ? WRATH_STORM : CHANNELLED_STORM, worse), ...(noRain ? { precipitation: 0 } : {}), ...asPretended } : asPretended;
 	};
 	let pretend = pretendNow();
@@ -1594,7 +1595,9 @@ onMounted(async () => {
 			// against the six's roller, the real sea within.
 			const reach = guardReach * stilling.breath();
 			waveUniforms.stillFront.value.set(camera.position.x - skyAhead.x * 0.5 * reach, camera.position.z - skyAhead.y * 0.5 * reach, 1.5 * reach, 0.85 * reach);
-			const lift = THREE.MathUtils.clamp(unguarded.waveHeight / Math.max(drawn.waveHeight, 0.1), 0.3, 3);
+			// (The worst storm's sea stands higher against the guard than any stilled edge's: up to five
+			// times the real sea within, where it breaks.)
+			const lift = THREE.MathUtils.clamp(unguarded.waveHeight / Math.max(drawn.waveHeight, 0.1), 0.3, 5);
 			waveUniforms.stillSea.value.set(lift, 0.9 * Math.min(1, Math.abs(lift - 1) * 1.5) * guard * alive, whitecaps(unguarded.windSpeed / 3.6) * alive, stilling.edgePhase());
 			waveUniforms.foam.value *= 1 - 0.7 * guard;
 		} else if (leane && pressing > 0.001 && uncut && drawn) {

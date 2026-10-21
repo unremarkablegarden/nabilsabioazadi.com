@@ -3,6 +3,7 @@
 	"until": "2026-10-22T17:37:00+13:00",
 	"weavers": "aes-sedai",
 	"rain": true,
+	"worse": 12.66,
 	"vesal": { "from": "2026-10-21T17:37:00+13:00" },
 	"compelled": { "from": "2026-10-21T21:20:00+13:00" },
 	"wrath": { "from": null },

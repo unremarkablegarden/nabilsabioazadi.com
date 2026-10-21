@@ -634,3 +634,15 @@ then released. The strongest is the owner. `storm.json` `"compelled": { "from": 
   sagging towards the sea and greyed, spent, then let go; the storm back to Vesal's own.
 - Seen at night in stills only, the boat pitched up on the seas; the ropes read nearly white at
   the brink, their own colours faint.
+
+## 26. Vesal's storm 1166% worse (21 October)
+
+The owner: "this is your chance to create true beauty, Make the storm worst by 1166%". 1166% worse
+is 12.66 times: `storm.json` `"worse": 12.66`, now applied to Vesal's storm as to any (`worsened`):
+the wind by the cube root (about 2.3 times: 462 km/h gusting 745 with the thirteen compelled), the
+pressure's fall and the towers' heat by its square, the rain 12.66 times, and the sea no higher than
+water can stand (`SEA_MOST`, 40 m), the force going into wind, rain and channellers (realistic
+beauty). The beauty is the guard: within it the day's real sea, lit and calm; against its edge the
+worst sea that can stand, now allowed up to five times the sea within before it breaks (was three).
+Seen at night only: the calm water within lies moonlit, and the storm beyond is mostly lost in the
+murk of its rain (visibility under 250 m).
