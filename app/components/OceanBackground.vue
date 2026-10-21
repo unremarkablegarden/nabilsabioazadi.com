@@ -61,6 +61,8 @@ const channelled = ref(false);
 const wrathRaised = ref(false);
 // The storm for the five (five.ts), likewise.
 const fiveRaised = ref(false);
+// Vesal's storm (channelled-storm.ts): the day's own weather made great, the six guarding the boat.
+const vesalRaisedNow = ref(false);
 // The whales who greet it, where they were last heard (server/api/whales.get.ts).
 const whalesLine = ref<string>();
 const captionInNavigation = useState("caption-in-navigation", () => false);
@@ -160,7 +162,7 @@ const liveFigures = computed(() => {
 
 watchEffect(() => {
 	shownAt.value = dateAtBoatHour(hour.value, pretendDate.value ?? new Date()).getTime();
-	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: channelled.value ? (fiveRaised.value && wrathRaised.value ? BOTH_WORDS : fiveRaised.value ? FIVE_WORDS : wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined, whales: channelled.value && fiveRaised.value ? whalesLine.value : undefined };
+	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: channelled.value ? (vesalRaisedNow.value ? VESAL_WORDS : fiveRaised.value && wrathRaised.value ? BOTH_WORDS : fiveRaised.value ? FIVE_WORDS : wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined, whales: channelled.value && fiveRaised.value ? whalesLine.value : undefined };
 });
 
 onMounted(async () => {
@@ -520,7 +522,17 @@ onMounted(async () => {
 	const stillAsked = query.get("still");
 	const pageOpened = Date.now();
 	let stillDone = false;
-	const stormNow = () => (stillDone || stormAsked === "off" ? false : stormAsked !== null ? true : channelledStormOn(new Date()));
+	// Vesal's storm (vesalStorm): "vesal" in storm.json, or ?vesal for this visit from now, ?vesal=300
+	// five minutes in, ?vesal=off without it. Its figures are the day's own, made great, so they are
+	// worked out again whenever the measured figures come, and as the twelve raise it.
+	const vesalAsked = query.get("vesal");
+	const vesalSeconds = () => (vesalAsked === "off" ? undefined : vesalAsked !== null ? (Number(vesalAsked) || 0) + (Date.now() - pageOpened) / 1000 : vesalSince(new Date()));
+	let realNow: SeaConditions | undefined = conditions.value;
+	const vesalFigures = () => {
+		const since = vesalSeconds();
+		return since !== undefined && realNow ? vesalStorm(realNow, vesalRaised(since)) : undefined;
+	};
+	const stormNow = () => (vesalAsked !== null && vesalAsked !== "off" ? true : stillDone || stormAsked === "off" ? false : stormAsked !== null ? true : channelledStormOn(new Date()));
 	let stormOn = stormNow();
 	// (With the rain cut, the storm's figures say no rain: storm.json "rain": false.)
 	const noRain = stormRainCut();
@@ -536,7 +548,14 @@ onMounted(async () => {
 	const bothFigures = fiveFigures && wrathFigures;
 	// Fifteen times worse, or as storm.json or ?worse= says (worsened).
 	const worse = worseTimes(query.get("worse"));
-	const pretendNow = () => (stillDone ? {} : stormOn ? { ...worsened(bothFigures ? BOTH_STORM : fiveFigures ? FIVE_STORM : wrathFigures ? WRATH_STORM : CHANNELLED_STORM, worse), ...(noRain ? { precipitation: 0 } : {}), ...asPretended } : asPretended);
+	const pretendNow = () => {
+		// (Until the day's figures are known there is nothing yet to raise.)
+		if (vesalSeconds() !== undefined && !realNow) return asPretended;
+		const vesal = vesalFigures();
+		vesalRaisedNow.value = !!vesal;
+		if (vesal) return { ...vesal, ...asPretended };
+		return stillDone ? {} : stormOn ? { ...worsened(bothFigures ? BOTH_STORM : fiveFigures ? FIVE_STORM : wrathFigures ? WRATH_STORM : CHANNELLED_STORM, worse), ...(noRain ? { precipitation: 0 } : {}), ...asPretended } : asPretended;
+	};
 	let pretend = pretendNow();
 	channelled.value = Object.keys(pretend).length > 0;
 	wrathRaised.value = wrathFigures;
@@ -578,6 +597,9 @@ onMounted(async () => {
 			.catch(() => fetchSeaConditions(boatAt(pretendDate.value ?? new Date())))
 			.then((result) => {
 				measured = result;
+				realNow = result;
+				pretend = pretendNow();
+				channelled.value = Object.keys(pretend).length > 0;
 				conditions.value = { ...result, ...pretend };
 				try {
 					localStorage.setItem(REMEMBERED, JSON.stringify({ at: Date.now(), conditions: result }));
@@ -869,6 +891,13 @@ onMounted(async () => {
 	// A storm begins or ends while the page is open: the sea and sky move over to the new figures
 	// over a few seconds as they always do, and the crew and colours change over gradually.
 	const followSwitch = () => {
+		// (While the twelve raise Vesal's storm, its figures are worked out again as they go.)
+		const raising = vesalSeconds();
+		if (raising !== undefined && raising < 700 && stormNow() === stormOn && measured) {
+			pretend = pretendNow();
+			conditions.value = { ...measured, ...pretend };
+			return;
+		}
 		if (stormNow() === stormOn && !(stillDone && channelled.value)) return;
 		stormOn = stormNow();
 		pretend = pretendNow();
@@ -1025,7 +1054,12 @@ onMounted(async () => {
 		const cutCover = leane?.rain ?? 0;
 		// And then she begins to stop the waves: the wind's sea and the swell sink round the boat.
 		const pressing = stillShare >= 0 && !stillDone ? 0 : (leane?.sea ?? 0);
-		const drawn = uncut && leane ? leaneConditions(uncut, cutCover, pressing) : uncut;
+		const unguarded = uncut && leane ? leaneConditions(uncut, cutCover, pressing) : uncut;
+		// Vesal's guard: within it the six hold the sea as it really is today, while the storm's air
+		// rages over it and its sea breaks at their edge.
+		const vesalNow = calmMotion ? undefined : vesalSeconds();
+		const guard = vesalNow !== undefined && measured ? vesalGuard(vesalNow) : 0;
+		const drawn = unguarded && guard > 0 && measured ? guardedConditions(unguarded, measured, guard) : unguarded;
 		const air = ambientAir(drawn);
 		// By hand, the story stands still and its white-out and stillness are left out.
 		let moment: StormMoment;
@@ -1465,8 +1499,26 @@ onMounted(async () => {
 		);
 		// The strongest's stilling, and the water they have stilled with the weather still beyond it.
 		const stillingSeen = stillShare >= 0 && !stillDone && !calmMotion && !!drawn;
+		const guardReach = vesalGuardReach();
 		stilling.update(
-			stillingSeen
+			!stillingSeen && guard > 0.001 && drawn
+				? {
+						time,
+						delta,
+						share: 0.5,
+						presence: guard,
+						force: Math.min(1, (rainWind.length() / 40) * (1 + 0.4 * gustNowRain)),
+						gust: gustNowRain,
+						boat: camera.position,
+						ahead: skyAhead,
+						wind: rainWind,
+						day: daylight,
+						gain: 1.5 / steadyExposure,
+						white: lerp(0.5, 3.5, daylight) / steadyExposure,
+						siuan: liveOnly ? { tint: skySheath[1]!, heave: seaAtBoat, swellHeight: liveOnly.swellHeight, swellPeriod: liveOnly.swellPeriod } : undefined,
+						guard: { reach: 1.5 * guardReach, width: 0.85 * guardReach, back: 0.5 * guardReach, cast: guard },
+					}
+				: stillingSeen
 				? {
 						time,
 						delta,
@@ -1517,6 +1569,15 @@ onMounted(async () => {
 			const lift = THREE.MathUtils.clamp(stillFrom.waveHeight / Math.max(drawn.waveHeight, 0.1), 0.3, 3);
 			const breaking = THREE.MathUtils.smoothstep(stillShare, 0.2, 0.26) * (1 - THREE.MathUtils.smoothstep(stillShare, 0.93, 0.99));
 			waveUniforms.stillSea.value.set(lift, 0.9 * Math.min(1, Math.abs(lift - 1) * 1.5) * breaking * alive, whitecaps(stillFrom.windSpeed / 3.6) * alive, stilling.edgePhase());
+		} else if (guard > 0.001 && unguarded && drawn) {
+			// Vesal's guard: a broad lobe round the boat (as Leane's is, never out from it, or the
+			// storm's sea stands up close beside the boat like a wall), the storm's sea breaking white
+			// against the six's roller, the real sea within.
+			const reach = guardReach * stilling.breath();
+			waveUniforms.stillFront.value.set(camera.position.x - skyAhead.x * 0.5 * reach, camera.position.z - skyAhead.y * 0.5 * reach, 1.5 * reach, 0.85 * reach);
+			const lift = THREE.MathUtils.clamp(unguarded.waveHeight / Math.max(drawn.waveHeight, 0.1), 0.3, 3);
+			waveUniforms.stillSea.value.set(lift, 0.9 * Math.min(1, Math.abs(lift - 1) * 1.5) * guard * alive, whitecaps(unguarded.windSpeed / 3.6) * alive, stilling.edgePhase());
+			waveUniforms.foam.value *= 1 - 0.7 * guard;
 		} else if (leane && pressing > 0.001 && uncut && drawn) {
 			// The water Leane is stilling: a broad lobe round the boat, the storm's sea breaking at
 			// its edge, and her moonlight lying on it.

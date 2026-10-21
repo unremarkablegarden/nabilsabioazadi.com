@@ -581,3 +581,33 @@ command.
 - **Siuan commands harder** (`stilling.ts`): each haul draws the roller in tighter (30%, was 16%),
   turns it twice as fast and drives the edge out 3% (was 1.2%); the water is healed deeper
   (`seaHealed`'s glow half as much again).
+
+## 24. Vesal's storm (21 October)
+
+The owner: "Innovate a way to start a storm based on real weather conditions in the name of
+Vesal"; asked, a blessing (a storm that guards), begun at once and shaped by the day. `storm.json`
+from 17:37 on the 21st for 24 hours, `"vesal": { "from": ... }`; Peta's, the five's, the
+worsening and the finished healing switched off. `?vesal` for one visit from now, `?vesal=700`
+eleven minutes in, `?vesal=off` without it.
+
+- **The day's own weather made great** (`vesalStorm` in `channelled-storm.ts`): every other storm
+  is figures of its own; this one takes the measured figures and raises each in its own proportion,
+  so no two days make the same storm. The real wind from where it really blows, as gusty as it
+  really is, to hurricane force (120 + 4 × the real km/h, at most 220); the real swell from its own
+  bearing, eight times its height (6 to 16 m) and half as long again; the second swell with it;
+  the wind's own sea from the raised wind; the pressure 70 hPa below wherever it stands, falling;
+  the real cloud drawn most of the way to full, and rain from it; thunder only if the day's air
+  has the energy (CAPE over 300), never put there. Worked out again whenever new figures come.
+  The first day (a 1029 hPa high, 12 km/h south-easterly, 1.3 m south-west swell at 9.6 s, clear):
+  168 km/h from the south-east gusting 237, a 12.9 m sea, rain and no thunder.
+- **The guard** (`vesalGuard`, `guardedConditions`; `stilling.ts` `guard`): first, over ninety
+  seconds, the strongest six, linked under Siuan, cast their roller in a broad lobe round the boat
+  (about 640 m, by their linked strength's cube root, from half that behind the boat to that
+  ahead); within it the sea is the real sea of the day, the storm's air raging over it; beyond it
+  the storm's sea, which breaks white against their roller. Siuan's haul with the real swell as
+  in the healing.
+- **Raised by the twelve** (`vesalRaised`): from a minute in, over ten minutes, the day's figures
+  move to the storm's (worked out again each half minute).
+- The menu: "Channelled, a blessing for Vesal".
+- Not yet right: seen at dusk in stills only; the guard's roller reads mostly as the white of the
+  breaking edge, its sea glass hard to pick out; it ends by itself at "until" with no stilling.

@@ -337,6 +337,86 @@ export function mourningSince(now: Date) {
 	return seconds >= 0 ? seconds : undefined;
 }
 
+// Vesal's storm (the owner, 21 October: "innovate a way to start a storm based on real weather
+// conditions in the name of Vesal"; a blessing, a storm that guards, begun at once and shaped by
+// the day). Every other storm is figures of its own laid over the measured; this one is the day's
+// own weather made great, element by element, each in its own proportion, so that no two days
+// raise the same storm: the real wind, from where it really blows and as gusty as it really is,
+// to hurricane force; the real swell, from its own bearing, eight times its height and half as
+// long again, so a long swell makes a long great sea; the real second swell with it; the pressure
+// falling from wherever it stands; the real cloud drawn on towards a full sky, and rain from it;
+// and thunder only if the day's air has the energy for it (its CAPE), never put there. The wind's
+// own sea comes from the raised wind, as a real sea would. While it lasts the strongest six,
+// linked under Siuan, hold the real sea calm round the boat (vesalGuard, stilling.ts).
+// `raised`: 0 the day as it is, 1 the storm in full (the twelve raise it over ten minutes).
+export function vesalStorm(real: SeaConditions, raised = 1): Partial<SeaConditions> {
+	const k = ease(clamp01(raised));
+	const to = (from: number, storm: number) => from + (storm - from) * k;
+	const wind = Math.min(220, 120 + 4 * real.windSpeed);
+	const gustiness = Math.max(1.25, real.windGusts / Math.max(real.windSpeed, 1));
+	const swell = Math.min(16, Math.max(6, 8 * real.swellHeight));
+	const swellPeriod = Math.max(12, 1.5 * real.swellPeriod);
+	// (The wind's own sea, from the raised wind over a few hundred kilometres: about 8 m at 170 km/h.)
+	const windSea = Math.min(10, 0.048 * wind);
+	const thunder = real.cape > 300;
+	const sky = (cover: number) => to(cover, cover + (100 - cover) * 0.85);
+	return {
+		windSpeed: to(real.windSpeed, wind),
+		windGusts: to(real.windGusts, wind * gustiness),
+		windTrend: to(real.windTrend, 40),
+		pressure: to(real.pressure, real.pressure - 70),
+		pressureTrend: to(real.pressureTrend, -(6 + 10 * Math.abs(real.pressureTrend))),
+		swellHeight: to(real.swellHeight, swell),
+		swellPeriod: to(real.swellPeriod, swellPeriod),
+		secondSwellHeight: to(real.secondSwellHeight, Math.min(8, 8 * real.secondSwellHeight)),
+		secondSwellPeriod: to(real.secondSwellPeriod, Math.max(10, 1.4 * real.secondSwellPeriod)),
+		windWaveHeight: to(real.windWaveHeight, windSea),
+		windWavePeriod: to(real.windWavePeriod, 3.3 * Math.sqrt(windSea)),
+		windWaveDirection: real.windDirection,
+		waveHeight: to(real.waveHeight, Math.hypot(swell, windSea)),
+		waveTrend: to(real.waveTrend, 2),
+		cloudLow: sky(real.cloudLow),
+		cloudMid: sky(real.cloudMid),
+		cloudHigh: sky(real.cloudHigh),
+		cloudCover: sky(real.cloudCover),
+		precipitation: to(real.precipitation, 4 + 3 * real.precipitation),
+		cape: to(real.cape, thunder ? real.cape * 3 : real.cape),
+		weatherCode: k > 0.5 ? (thunder ? 95 : 65) : real.weatherCode,
+		visibility: to(real.visibility, Math.min(real.visibility, 3000)),
+	};
+}
+// The sea within Vesal's guard: the storm's air, and the sea as it really is today (its waves'
+// heights and periods), as far as the guard is held (0..1).
+export function guardedConditions(storm: SeaConditions, real: SeaConditions, guard: number): SeaConditions {
+	const to = (key: keyof SeaConditions) => (storm[key] as number) + ((real[key] as number) - (storm[key] as number)) * guard;
+	return {
+		...storm,
+		waveHeight: to("waveHeight"),
+		wavePeriod: to("wavePeriod"),
+		swellHeight: to("swellHeight"),
+		swellPeriod: to("swellPeriod"),
+		windWaveHeight: to("windWaveHeight"),
+		windWavePeriod: to("windWavePeriod"),
+		secondSwellHeight: to("secondSwellHeight"),
+		secondSwellPeriod: to("secondSwellPeriod"),
+		waveTrend: to("waveTrend"),
+	};
+}
+export const VESAL_WORDS = "Channelled, a blessing for Vesal";
+// Whether Vesal's storm is raised (storm.json "vesal": { "from": ISO time }), and seconds since.
+export function vesalSince(now: Date) {
+	const from = (stormSwitch as { vesal?: { from: string | null } }).vesal?.from;
+	if (!from || !channelledStormOn(now)) return undefined;
+	const since = (now.getTime() - new Date(from).getTime()) / 1000;
+	return since >= 0 ? since : undefined;
+}
+// The guard (0..1): the six cast it first, before the storm is raised round it.
+export const vesalGuard = (since: number) => ease(clamp01(since / 90));
+// How far the twelve have raised it (0..1): from a minute in, over ten.
+export const vesalRaised = (since: number) => clamp01((since - 60) / 600);
+// How far the guard reaches round the boat (m): by the six's linked strength, as a rope's girth goes.
+export const vesalGuardReach = () => 300 * Math.cbrt(STILLING_STRENGTH.mighty);
+
 // Whether the twelve stay Aes Sedai (Siuan's, Leane's and Moiraine's four each, with the storm's
 // graded colours) when no storm is on: "weavers": "aes-sedai" in storm.json (the owner, 16
 // October: "release the storm but keep these weavers").

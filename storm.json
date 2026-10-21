@@ -1,13 +1,13 @@
 {
-	"from": "2026-10-20T21:47:00+13:00",
-	"until": "2026-10-21T21:47:00+13:00",
+	"from": "2026-10-21T17:37:00+13:00",
+	"until": "2026-10-22T17:37:00+13:00",
 	"weavers": "aes-sedai",
 	"rain": true,
-	"worse": 15,
-	"wrath": { "from": "2026-10-20T21:47:00+13:00" },
-	"five": { "from": "2026-10-20T21:47:00+13:00" },
+	"vesal": { "from": "2026-10-21T17:37:00+13:00" },
+	"wrath": { "from": null },
+	"five": { "from": null },
 	"mourning": { "from": null },
 	"calming": { "from": null, "hours": 7 },
 	"rainCut": { "from": null },
-	"stilling": { "from": "2026-10-21T06:33:00+13:00", "by": "mighty" }
+	"stilling": { "from": null, "by": "mighty" }
 }

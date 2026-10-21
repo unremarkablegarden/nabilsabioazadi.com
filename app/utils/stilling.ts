@@ -54,6 +54,8 @@ uniform float uKind;
 uniform float uHandsAt;
 uniform float uTime;
 uniform vec3 uBoat;
+// Where the edge is drawn from: the boat, or behind it when the edge is held round the boat.
+uniform vec3 uEdgeFrom;
 uniform vec2 uAhead;
 // The edge: how far ahead it reaches (m), its widest half-width (m), its height (0 on the sea, the
 // cloud base in the sky), and how thick the roller is for its distance.
@@ -92,7 +94,7 @@ float halfWidth( float x, float side ) {
 vec3 edgeAt( float s ) {
 	float side = s < 0.5 ? - 1.0 : 1.0;
 	float x = uFront.x * 0.5 * ( 1.0 - cos( 6.28318 * clamp( s, 0.0, 1.0 ) ) );
-	vec3 p = uBoat + aheadDir() * x + acrossDir() * side * halfWidth( x, side );
+	vec3 p = uEdgeFrom + aheadDir() * x + acrossDir() * side * halfWidth( x, side );
 	float away = 2.0 * min( s, 1.0 - s );
 	vec3 h = hand( side );
 	// Out of the hands, and (in the sky) up in one long rise.
@@ -244,6 +246,9 @@ export interface StillingFrame {
 	// Siuan's telling (the owner, 21 October: "Siuan, command the channellers"), when the mighty
 	// still it: her colour, and the sea under the boat (m) and its swell, which she works by.
 	siuan?: { tint: THREE.Color; heave: number; swellHeight: number; swellPeriod: number };
+	// Vesal's guard: the edge held round the boat (how far it reaches, its half-width, how far
+	// behind the boat it begins, m) and how far it is cast (0..1), in place of the stilling's stages.
+	guard?: { reach: number; width: number; back: number; cast: number };
 }
 
 const { smoothstep } = THREE.MathUtils;
@@ -273,6 +278,7 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1, 
 	const shared = {
 		uTime: { value: 0 },
 		uBoat: { value: new THREE.Vector3() },
+		uEdgeFrom: { value: new THREE.Vector3() },
 		uAhead: { value: new THREE.Vector2(0, -1) },
 		uEdgePhase: { value: 0 },
 		uRoll: { value: 0 },
@@ -348,6 +354,7 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1, 
 		roll += frame.delta * (0.06 + 0.6 * haul);
 		shared.uTime.value = frame.time;
 		shared.uBoat.value.copy(frame.boat);
+		shared.uEdgeFrom.value.copy(frame.boat);
 		shared.uAhead.value.copy(frame.ahead);
 		shared.uEdgePhase.value = frame.time * 0.004;
 		shared.uRoll.value = roll;
@@ -389,6 +396,19 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1, 
 		for (const part of [sky, sea]) part.own.uTinted.value = leads ? 1 : 0;
 		telling.own.uTinted.value = leads ? 0 : 1;
 		if (siuan) for (const part of [sky, sea, telling]) part.own.uTint.value.copy(siuan.tint);
+		// Vesal's guard: the sea roller held in a lobe round the boat, from behind it to ahead, the
+		// storm's sea breaking against it; nothing read, nothing in the sky.
+		const guard = frame.guard;
+		if (guard) {
+			shared.uEdgeFrom.value.copy(frame.boat).addScaledVector(new THREE.Vector3(frame.ahead.x, 0, frame.ahead.y), -guard.back);
+			reading.own.uFade.value = sky.own.uFade.value = 0;
+			for (const part of [sea, telling]) {
+				part.own.uFront.value.set(guard.reach * breath, guard.width * breath, 0, 2);
+				part.own.uCast.value = guard.cast * 1.05;
+				part.own.uLetGo.value = 0;
+				part.own.uFade.value = frame.presence;
+			}
+		}
 		const blending = frame.day > 0.5 ? THREE.NormalBlending : THREE.AdditiveBlending;
 		for (const { mesh, own } of parts) {
 			mesh.visible = own.uFade.value > 0.001;
