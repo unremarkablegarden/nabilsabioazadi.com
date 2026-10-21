@@ -38,7 +38,7 @@ const onChart = (elevation: number, azimuth: number) => {
 const catalogue = ref<[number, number, number, number][]>([]);
 watchEffect(async () => {
 	if (import.meta.server || props.kind !== "sky" || catalogue.value.length) return;
-	const stars = (await (await fetch("/stars.json")).json()) as [number, number, number, number][];
+	const stars = await starCatalogue();
 	// Down to the stars a town-dweller can see: about nine hundred of them.
 	catalogue.value = stars.filter((star) => star[2] <= 4.6);
 });

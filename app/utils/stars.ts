@@ -132,6 +132,10 @@ const FAINTEST_BY_SUN: [number, number][] = [
 	[-15, 7.2],
 	[-18, 8],
 ];
+// The catalogue, fetched once for the night sky and the menu's chart of it (MenuFigure).
+let catalogueLoad: Promise<[number, number, number, number][]> | undefined;
+export const starCatalogue = () => (catalogueLoad ??= fetch("/stars.json").then((response) => response.json()));
+
 export function faintestSeen(sunElevation: number, moonlight: number) {
 	const after = FAINTEST_BY_SUN.findIndex(([elevation]) => sunElevation >= elevation);
 	const dark = FAINTEST_BY_SUN[FAINTEST_BY_SUN.length - 1]![1];
@@ -217,8 +221,7 @@ export function createStars(
 		glowUniforms.uMap.value = texture;
 	});
 
-	fetch("/stars.json")
-		.then((response) => response.json())
+	starCatalogue()
 		.then((stars: [number, number, number, number][]) => {
 			catalogue = stars;
 			// The planets take the last places.

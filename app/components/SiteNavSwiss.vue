@@ -43,6 +43,12 @@
 // and speaks its status, there is a skip link, the ocean can be paused, and the slab folds away.
 
 const route = useRoute();
+// The three weights the bar shows at once are asked for with the page, not only once its style
+// has been read: they had come in nearly three seconds into a load, behind the sea's picture.
+// (Medium is seen only in the open menu, and is left to come when needed.)
+useHead({
+	link: ["Lt", "Roman", "Bd"].map((weight) => ({ rel: "preload", as: "font", type: "font/ttf", href: `/fonts/licensed/HelveticaNeueLTCom-${weight}.ttf`, crossorigin: "anonymous" })),
+});
 // Shared with OceanBackground, which stops drawing while this is true.
 const paused = useState("motion-paused", () => false);
 // Filled in by OceanBackground. This slab shows it, so the floating caption is turned off.
