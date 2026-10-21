@@ -362,6 +362,7 @@ export interface GerstnerUniforms {
 	channelBalmGlow: THREE.IUniform<number>;
 	// The great calming's pressed water (see pressedCalm), and the braids' light in it, before tone mapping.
 	pressed: THREE.IUniform<THREE.Vector4[]>;
+	pressedAny: THREE.IUniform<number>;
 	// The strongest's stilled water (see stillOutside): where it reaches, the way ahead, and how
 	// the sea beyond it differs.
 	stillFront: THREE.IUniform<THREE.Vector4>;
@@ -416,10 +417,13 @@ const pressedChunk = /* glsl */ `
 // is at the edge of a calm, where the storm's waves pile up and die, and in core how near it is to
 // where a braid goes down.
 uniform vec4 pressed[ 12 ];
+// 1 while any of them is pressing, 0 when none is: then there is nothing to look through.
+uniform float pressedAny;
 float pressedCalm( vec2 p, out float rim, out float core ) {
 	float calm = 1.0;
 	rim = 0.0;
 	core = 0.0;
+	if ( pressedAny <= 0.0 ) return calm;
 	for ( int i = 0; i < 12; i ++ ) {
 		vec4 q = pressed[ i ];
 		if ( q.w <= 0.0 ) continue;
@@ -592,7 +596,8 @@ vec3 gerstner( vec3 p, out vec3 normal, out float crest, out float gust ) {
 		binormal += vec3( - d.x * d.y * steepness * sin( f ), d.y * steepness * cos( f ), - d.y * d.y * steepness * sin( f ) );
 		crest += steepness * sin( f );
 	}
-	for ( int i = 0; i < ${GIANT_WAVES.length}; i ++ ) {
+	// (Without a surge they add nothing at all.)
+	if ( surge != 0.0 ) for ( int i = 0; i < ${GIANT_WAVES.length}; i ++ ) {
 		vec2 d = vec2( sin( giantWaves[ i ].x ), - cos( giantWaves[ i ].x ) );
 		float steepness = giantWaves[ i ].z * surge;
 		float k = 2.0 * PI / giantWaves[ i ].w;
@@ -1077,6 +1082,7 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		channelBalm: { value: 0 },
 		channelBalmGlow: { value: 0 },
 		pressed: { value: Array.from({ length: 12 }, () => new THREE.Vector4()) },
+		pressedAny: { value: 0 },
 		pressGlow: { value: 0 },
 		stillFront: { value: new THREE.Vector4() },
 		stillAhead: { value: new THREE.Vector2(0, -1) },

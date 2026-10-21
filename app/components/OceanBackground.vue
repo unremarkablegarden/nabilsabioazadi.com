@@ -7,6 +7,8 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 
 const container = ref<HTMLDivElement>();
 const veil = ref<HTMLDivElement>();
+// Only the 6500 navigation stands on the horizon (it reads --horizon and --roll).
+const route = useRoute();
 // Seconds into the story (see storm-cycle.ts). The dev slider moves it.
 const cycle = ref(0);
 // The page opens on the sea as it is now where the boat is: the boat's clock and the live
@@ -334,6 +336,12 @@ onMounted(async () => {
 	);
 	scene.add(moon);
 	const towardsSun = new THREE.Vector3();
+	// Kept for each frame, rather than made anew.
+	const sunFrom = new THREE.Vector3();
+	const moonFrom = new THREE.Vector3();
+	const moonTurned = new THREE.Quaternion();
+	const nightLit = new THREE.Color();
+	const stormLit = new THREE.Color();
 
 	const NIGHT_EXPOSURE = 15;
 	const TWILIGHT_GLOW = Number(query.get("glow") ?? 0.24);
@@ -365,8 +373,8 @@ onMounted(async () => {
 	// The moon is a separate light: a disc mesh plus the water's specular source.
 	// Sky blends towards a storm sky: overcast, haze, grey light.
 	// Sea blends towards a storm sea: longer and steeper waves, foam.
-	const directionFrom = (elevation: number, azimuth: number) =>
-		new THREE.Vector3().setFromSphericalCoords(
+	const directionFrom = (elevation: number, azimuth: number, into: THREE.Vector3) =>
+		into.setFromSphericalCoords(
 			1,
 			THREE.MathUtils.degToRad(90 - elevation),
 			THREE.MathUtils.degToRad(azimuth),
@@ -447,8 +455,8 @@ onMounted(async () => {
 		// a tenth of its face is lit (about three days either side of new), not at all past a quarter.
 		darkness = staged ? 0 : night * (1 - THREE.MathUtils.smoothstep(realMoon.illuminated, 0.1, 0.25));
 
-		const sun = directionFrom(sunElevation, sunAzimuth);
-		const moonDirection = directionFrom(realMoon.elevation, moonAzimuth);
+		const sun = directionFrom(sunElevation, sunAzimuth, sunFrom);
+		const moonDirection = directionFrom(realMoon.elevation, moonAzimuth, moonFrom);
 		skyUniforms.sunPosition.value.copy(sun);
 		waterUniforms.sunDirection.value.copy(isNight && moonlight > 0 ? moonDirection : sun);
 		// By day the moon is a pale mark in the sky; a new moon cannot be seen at all.
@@ -457,7 +465,7 @@ onMounted(async () => {
 		moon.scale.setScalar(staged ? 70 : 4000 * Math.tan(THREE.MathUtils.degToRad(0.26)));
 		moon.lookAt(camera.position);
 		drawMoon(realMoon.illuminated);
-		towardsSun.copy(sun).applyQuaternion(moon.quaternion.clone().invert());
+		towardsSun.copy(sun).applyQuaternion(moonTurned.copy(moon.quaternion).invert());
 		moon.rotateZ(Math.atan2(towardsSun.y, towardsSun.x));
 		moon.material.opacity = lerp(0.35, 1, night) * lerp(1, 0.15, sky);
 
@@ -476,11 +484,11 @@ onMounted(async () => {
 		// Storm colours are scaled like the night colours so a night storm stays dark.
 		const brightness = lerp(0.05, 1, daylight);
 		waterUniforms.sunColor.value
-			.lerpColors(nightSunColor.clone().multiplyScalar(moonlight), daySunColor, daylight)
-			.lerp(stormSunColor.clone().multiplyScalar(brightness), sky);
+			.lerpColors(nightLit.copy(nightSunColor).multiplyScalar(moonlight), daySunColor, daylight)
+			.lerp(stormLit.copy(stormSunColor).multiplyScalar(brightness), sky);
 		waterUniforms.waterColor.value
-			.lerpColors(nightWaterColor.clone().multiplyScalar(lerp(0.15, 1, moonlight)), dayWaterColor, daylight)
-			.lerp(stormWaterColor.clone().multiplyScalar(brightness), sky);
+			.lerpColors(nightLit.copy(nightWaterColor).multiplyScalar(lerp(0.15, 1, moonlight)), dayWaterColor, daylight)
+			.lerp(stormLit.copy(stormWaterColor).multiplyScalar(brightness), sky);
 		waterUniforms.distortionScale.value = lerp(2, 8, sea);
 		steepness = lerp(0.15, 0.85, sea);
 		waveUniforms.waveScale.value = lerp(0.6, 2.6, sea);
@@ -657,6 +665,8 @@ onMounted(async () => {
 	const skyFoot = new THREE.Vector3();
 	const skyCanopy = new THREE.Vector4();
 	const skySheath = [new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color()];
+	// The colour names they were last set from: parsing a colour is not free, and they seldom change.
+	const sheathSet: string[] = [];
 	const NO_SKY = { gather: 0, lift: 0, open: 0, release: 0, canopy: 0 };
 	// Every way of opening the sky at once, as one piece (sky-all.ts; the owner's choice, 15
 	// October). ?sky=column shows the column alone, as it first was.
@@ -890,6 +900,7 @@ onMounted(async () => {
 	const dayVoid = new THREE.Color(0xc4c8cc);
 	const white = new THREE.Color(0xffffff);
 	const mist = new THREE.Color();
+	const voidMist = new THREE.Color();
 	// The knot of the weave hangs over the sea straight ahead, about 15° above the horizon.
 	const knotPosition = new THREE.Vector3(0, 250, -800);
 	await breathe();
@@ -967,25 +978,47 @@ onMounted(async () => {
 	let warming = true;
 	let notYetShown: THREE.Object3D[] = [];
 	const whenIdle = (then: () => void) => ("requestIdleCallback" in window ? requestIdleCallback(then, { timeout: 2000 }) : setTimeout(then, 100));
+	// The picture is drawn into the glow's own target and only then out to the screen (setEffects),
+	// so each shader is built for drawing into a target: built for the screen, with its tone
+	// mapping, it was another shader, and the one drawn was built again there and then anyway.
+	const drawnInto = new THREE.WebGLRenderTarget(1, 1);
+	// What was last written to the page's style, so that it is written again only when it changes.
+	const shown = query.get("show");
+	// The all-at-once sky at rest, for when it is not being opened.
+	const SKY_ALL_RESTING = skyAllAt(0);
+	let horizonSet = "";
+	let rollSet = "";
+	let veilColourSet = "";
+	let veilOpacitySet = "";
+	const compileFor = (object: THREE.Object3D) => {
+		const was = renderer.getRenderTarget();
+		renderer.setRenderTarget(drawnInto);
+		const done = renderer.compileAsync(object, camera, scene);
+		renderer.setRenderTarget(was);
+		return done;
+	};
 	const warmNext = () => {
 		const next = notYetShown.shift();
 		if (!next || !warming) return;
 		whenIdle(() => {
 			if (!warming) return;
-			renderer.compileAsync(next, camera, scene).catch(() => {}).finally(warmNext);
+			compileFor(next).catch(() => {}).finally(warmNext);
 		});
 	};
 	// (Called with the first picture set out, so that what it shows is known.)
 	const compileShown = () => {
 		compiling = true;
 		notYetShown = scene.children.filter((object) => !object.visible);
-		Promise.all(scene.children.filter((object) => object.visible).map((object) => renderer.compileAsync(object, camera, scene)))
+		Promise.all(scene.children.filter((object) => object.visible).map(compileFor))
 			.catch(() => {})
 			.finally(() => {
 				compiled = true;
 				warmNext();
 			});
 	};
+	// The sea's height at a point at this frame's moment, for what falls into it or stands on it.
+	let seaTime = 0;
+	const seaHeightAt = (x: number, z: number) => measuredSeaHeight(waveUniforms, x, z, seaTime) + giantWaveHeight(x, z, seaTime, waveUniforms.surge.value) + lensWaveHeight(waveUniforms, x, z, seaTime);
 	renderer.setAnimationLoop(() => {
 		// The timer is still updated while paused, so that motion resumes without a jump in speed.
 		timer.update();
@@ -996,10 +1029,11 @@ onMounted(async () => {
 		if ((motionPaused.value || covered) && drawnOnce) return;
 		drawnOnce = true;
 		const time = timer.getElapsed();
+		seaTime = time;
 		const delta = timer.getDelta();
 		watchFrameRate(delta);
 		if (stormSince < 0) stormSince = time;
-		const skySeconds = time - stormSince + (query.get("show") === "sky" ? 33 : 0);
+		const skySeconds = time - stormSince + (shown === "sky" ? 33 : 0);
 		const calming = stormOn && !calmMotion ? calmingNow(new Date(), calmAsked) : undefined;
 		const mourningOn = stormOn && !calmMotion && (mournAsked || mourningSince(new Date()) !== undefined);
 		const wrathSeconds = !wrathFigures ? undefined : bothFigures ? (fiveAsked !== null ? (Date.now() - fiveFrom) / 1000 : wrathAsked !== null ? (Date.now() - wrathFrom) / 1000 : fiveSince(new Date())) : wrathAsked !== null ? (Date.now() - wrathFrom) / 1000 : wrathSince(new Date());
@@ -1031,7 +1065,7 @@ onMounted(async () => {
 				? { ...drawnFrom, ...calmedConditions(drawnFrom, calming.progress) }
 				: drawnFrom;
 		// The strongest's stilling takes whatever is on screen to the measured weather.
-		const stillBegun = stillingBegun(new Date(), stillAsked, pageOpened, stormAsked !== null);
+		const stillBegun = stillingNow;
 		const measuredNow = measured ?? drawnMeasured ?? drawnFrom;
 		drawnMeasured = drawnMeasured ? towardsConditions(drawnMeasured, measuredNow, motionPaused.value ? 1 : 1 - Math.exp(-delta / 1.5)) : measuredNow;
 		let stillShare = stillDone ? 1 : -1;
@@ -1204,10 +1238,12 @@ onMounted(async () => {
 		fog.density = 0.0025 * fogAmount;
 		fog.color.copy(mist).multiplyScalar(1 / steadyExposure);
 		fogTint.copy(mist);
-		mist.lerp(mist.clone().lerpColors(nightMist, dayVoid, daylight), moment.stillness);
+		mist.lerp(voidMist.lerpColors(nightMist, dayVoid, daylight), moment.stillness);
 		mist.lerp(white, Math.max(moment.white, Math.min(1, 0.4 * flash)));
-		veil.value!.style.backgroundColor = mist.getStyle();
-		veil.value!.style.opacity = String(Math.max(0.15 * fogAmount, moment.veil));
+		const veilColour = mist.getStyle();
+		const veilOpacity = String(Math.max(0.15 * fogAmount, moment.veil));
+		if (veilColour !== veilColourSet) veil.value!.style.backgroundColor = veilColourSet = veilColour;
+		if (veilOpacity !== veilOpacitySet) veil.value!.style.opacity = veilOpacitySet = veilOpacity;
 
 		// (The rain drawn is the rain falling out of the cloud: under Leane's canopy it is cut off on
 		// its way down, in rain.ts.)
@@ -1259,9 +1295,9 @@ onMounted(async () => {
 			waveHeight: liveOnly ? liveOnly.waveHeight : lerp(0.5, 6, sea),
 			hold: holdLevel,
 			control: controlLevel,
-			showMasters: query.get("show") === "masters",
-			showSoundings: query.get("show") === "soundings",
-			showOnly: query.get("show") ?? undefined,
+			showMasters: shown === "masters",
+			showSoundings: shown === "soundings",
+			showOnly: shown ?? undefined,
 			// Each channeller's own hand, from their temperament (the plan's first part): try it with ?hands.
 			hands: query.has("hands"),
 			gathering,
@@ -1354,8 +1390,14 @@ onMounted(async () => {
 		toScreen(camera.position.x - Math.sin(camera.rotation.y) * 8000, 0, camera.position.z - Math.cos(camera.rotation.y) * 8000, horizonAhead);
 		// (Turned far round, the point ahead of the boat is behind the viewer; the horizon is still where it is.)
 		horizonScreen.y = horizonAhead.y;
-		document.documentElement.style.setProperty("--horizon", `${(horizonAhead.y * 100).toFixed(2)}vh`);
-		document.documentElement.style.setProperty("--roll", `${camera.rotation.z.toFixed(4)}rad`);
+		// (Set on the whole page they make the browser look again at the style of everything on it,
+		// so only while that navigation is there to read them, and only when they change.)
+		if (route.query.type === "6500") {
+			const horizonNow = `${(horizonAhead.y * 100).toFixed(2)}vh`;
+			const rollNow = `${camera.rotation.z.toFixed(4)}rad`;
+			if (horizonNow !== horizonSet) document.documentElement.style.setProperty("--horizon", (horizonSet = horizonNow));
+			if (rollNow !== rollSet) document.documentElement.style.setProperty("--roll", (rollSet = rollNow));
+		}
 		// The rain is driven by the real wind, at its own speed and the way it blows.
 		if (liveOnly) {
 			const blowsTowards = THREE.MathUtils.degToRad(liveOnly.windDirection + 180 - PLACE.bearing);
@@ -1373,7 +1415,10 @@ onMounted(async () => {
 		if (together) skyCanopy.set(camera.position.x, camera.position.z, 1300 * together.ring, 260);
 		// By breath alone nothing is held over the boat: the rain itself goes.
 		if (breathing) skyCanopy.setZ(0);
-		skySheath.forEach((colour, i) => colour.set(colours[COLOUR_NAMES[i]!]));
+		skySheath.forEach((colour, i) => {
+			const named = colours[COLOUR_NAMES[i]!];
+			if (named !== sheathSet[i]) colour.set((sheathSet[i] = named));
+		});
 		skyOpening.update({ time, boat: camera.position, ahead: skyAhead, gather: opening.gather, lift: opening.lift, open: opening.open, release: opening.release, day: daylight, gain: 1.5 / steadyExposure, sheath: skySheath, wind: rainWind });
 		shelterAt.set(-0.75, -0.3, -2.5).applyEuler(camera.rotation).add(camera.position);
 		rainLight.copy(rainNight).lerp(rainDay, daylight).multiplyScalar(1 / steadyExposure);
@@ -1429,7 +1474,7 @@ onMounted(async () => {
 		// What the storm is doing to each of the fourteen.
 		if ((wrathOn || fiveOn) && liveOnly) psyche.update({ delta, weather: liveOnly, grief: 1 });
 		for (const who of psyche.sentenced.splice(0)) treason.send(who);
-		treason.update({ time, delta, boat: camera.position, ahead: skyAhead, wind: rainWind, camera, seaAt: (x, z) => measuredSeaHeight(waveUniforms, x, z, time) + giantWaveHeight(x, z, time, waveUniforms.surge.value) + lensWaveHeight(waveUniforms, x, z, time), day: daylight, gain: 1.5 / steadyExposure, tints: embroideryTints });
+		treason.update({ time, delta, boat: camera.position, ahead: skyAhead, wind: rainWind, camera, seaAt: seaHeightAt, day: daylight, gain: 1.5 / steadyExposure, tints: embroideryTints });
 		// Peta's storm: the thirteen, each linked to three ancestors, raising it.
 		wrath.update(
 			wrathOn && liveOnly && ceased < 1
@@ -1448,7 +1493,7 @@ onMounted(async () => {
 						wind: rainWind,
 						force: Math.min(1, (rainWind.length() / 40) * (1 + 0.4 * gustNowRain)),
 						gust: gustNowRain,
-						seaAt: (x, z) => measuredSeaHeight(waveUniforms, x, z, time) + giantWaveHeight(x, z, time, waveUniforms.surge.value) + lensWaveHeight(waveUniforms, x, z, time),
+						seaAt: seaHeightAt,
 						day: daylight,
 						gain: 1.5 / steadyExposure,
 						white: lerp(0.5, 3.5, daylight) / steadyExposure,
@@ -1473,7 +1518,7 @@ onMounted(async () => {
 						ahead: skyAhead,
 						wind: rainWind,
 						gust: gustNowRain,
-						seaAt: (x, z) => measuredSeaHeight(waveUniforms, x, z, time) + giantWaveHeight(x, z, time, waveUniforms.surge.value) + lensWaveHeight(waveUniforms, x, z, time),
+						seaAt: seaHeightAt,
 						cloud: 900,
 						day: daylight,
 						gain: 1.5 / steadyExposure,
@@ -1510,6 +1555,7 @@ onMounted(async () => {
 				letGo: stillShare >= 0 ? THREE.MathUtils.smoothstep(stillShare, 0, 0.035) : stillDone ? 1 : 0,
 			},
 		);
+		waveUniforms.pressedAny.value = waveUniforms.pressed.value.some((place) => place.w > 0) ? 1 : 0;
 		// The strongest's stilling, and the water they have stilled with the weather still beyond it.
 		const stillingSeen = stillShare >= 0 && !stillDone && !calmMotion && !!drawn;
 		const guardReach = vesalGuardReach(compelledNow());
@@ -1611,7 +1657,7 @@ onMounted(async () => {
 			waveUniforms.foam.value *= 1 - 0.7 * pressing;
 			waveUniforms.stillGlow.value = ((0.006 + 0.012 * (1 - leane.spent)) * pressing * alive) / steadyExposure;
 		}
-		skyAll.update({ time, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, sheath: skySheath, at: together ?? skyAllAt(0) });
+		skyAll.update({ time, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, sheath: skySheath, at: together ?? SKY_ALL_RESTING });
 		const strike = bolts.update(time, 4 / steadyExposure, air.vapour, stormFog);
 		if (strike > 0) {
 			for (let i = 0; i < BOLT_POINTS; i++) {
@@ -1674,6 +1720,7 @@ onMounted(async () => {
 
 	dispose = () => {
 		warming = false;
+		drawnInto.dispose();
 		window.removeEventListener("resize", onResize);
 		window.removeEventListener("pointermove", onPointerMove);
 		clearInterval(clockInterval);

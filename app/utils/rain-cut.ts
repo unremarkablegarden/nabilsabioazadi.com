@@ -46,6 +46,7 @@ import * as THREE from "three";
 import { lines } from "./embroidery";
 import { pixelRatio, ribbonShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
 import stormSwitch from "~~/storm.json";
+import { timeOf } from "./channelled-storm";
 import type { SeaConditions } from "./manawatawhi";
 
 const FILAMENTS = 520;
@@ -57,7 +58,7 @@ export function rainCutSince(now: Date, asked: string | null, opened: number, ow
 	if (ownStorm) return undefined;
 	const { rainCut } = stormSwitch as { rainCut?: { from: string | null } };
 	if (!rainCut?.from) return undefined;
-	const seconds = (now.getTime() - new Date(rainCut.from).getTime()) / 1000;
+	const seconds = (now.getTime() - timeOf(rainCut.from)) / 1000;
 	return seconds < 0 ? undefined : seconds;
 }
 

@@ -11,6 +11,14 @@ import stormSwitch from "~~/storm.json";
 import type { SeaConditions } from "./manawatawhi";
 import { SIX_STRONGER } from "./psyche";
 
+// The moment an ISO time in storm.json names (ms), read once: these are asked after every frame.
+const times = new Map<string, number>();
+export function timeOf(iso: string) {
+	let time = times.get(iso);
+	if (time === undefined) times.set(iso, (time = new Date(iso).getTime()));
+	return time;
+}
+
 // Beyond hurricane force: gusts of 300 km/h, an 18 m sea, thunder, and the pressure falling 20 hPa
 // in three hours, so that it reads as building and the channellers answer it in full.
 export const CHANNELLED_STORM: Partial<SeaConditions> = {
@@ -74,7 +82,7 @@ export const WRATH_WORDS = "Channelled, in honour of Peta";
 export function wrathSince(now: Date) {
 	const { wrath } = stormSwitch as { wrath?: { from: string | null } };
 	if (!wrath?.from) return undefined;
-	const seconds = (now.getTime() - new Date(wrath.from).getTime()) / 1000;
+	const seconds = (now.getTime() - timeOf(wrath.from)) / 1000;
 	return seconds >= 0 ? seconds : undefined;
 }
 
@@ -155,7 +163,7 @@ export const FIVE_WORDS = "Channelled, for a family of five";
 export function fiveSince(now: Date) {
 	const { five } = stormSwitch as { five?: { from: string | null } };
 	if (!five?.from) return undefined;
-	const seconds = (now.getTime() - new Date(five.from).getTime()) / 1000;
+	const seconds = (now.getTime() - timeOf(five.from)) / 1000;
 	return seconds >= 0 ? seconds : undefined;
 }
 export function fiveSet() {
@@ -333,7 +341,7 @@ export function stormRainCut() {
 export function mourningSince(now: Date) {
 	const { mourning } = stormSwitch as { mourning?: { from: string | null } };
 	if (!mourning?.from) return undefined;
-	const seconds = (now.getTime() - new Date(mourning.from).getTime()) / 1000;
+	const seconds = (now.getTime() - timeOf(mourning.from)) / 1000;
 	return seconds >= 0 ? seconds : undefined;
 }
 
@@ -410,7 +418,7 @@ export const VESAL_WORDS = "Channelled, a blessing for Vesal";
 export function vesalSince(now: Date) {
 	const from = (stormSwitch as { vesal?: { from: string | null } }).vesal?.from;
 	if (!from || !channelledStormOn(now)) return undefined;
-	const since = (now.getTime() - new Date(from).getTime()) / 1000;
+	const since = (now.getTime() - timeOf(from)) / 1000;
 	return since >= 0 ? since : undefined;
 }
 // The guard (0..1): the six cast it first, before the storm is raised round it.
@@ -424,7 +432,7 @@ export const vesalGuardReach = (compelled = 0) => 300 * Math.cbrt(STILLING_STREN
 export function compelledSince(now: Date) {
 	const from = (stormSwitch as { compelled?: { from: string | null } }).compelled?.from;
 	if (!from) return undefined;
-	const since = (now.getTime() - new Date(from).getTime()) / 1000;
+	const since = (now.getTime() - timeOf(from)) / 1000;
 	return since >= 0 ? since : undefined;
 }
 
@@ -439,7 +447,7 @@ export function aesSedaiKept() {
 export function channelledStormOn(now: Date) {
 	const { from, until } = stormSwitch as { from: string | null; until: string | null };
 	if (!until) return false;
-	return (!from || now >= new Date(from)) && now < new Date(until);
+	return (!from || now.getTime() >= timeOf(from)) && now.getTime() < timeOf(until);
 }
 
 // The great calming (the owner, 16 October: "they will now use innovative weaves based on complex
@@ -474,11 +482,11 @@ export function calmingNow(now: Date, asked?: number): Calming | undefined {
 	if (asked !== undefined) return { progress: Math.min(1, Math.max(0, asked)), after: Math.max(0, asked - 1) * 7, hours: 7 };
 	const { calming } = stormSwitch as { calming?: { from: string; hours: number; ceased?: string } };
 	if (!calming?.from) return undefined;
-	const hours = (now.getTime() - new Date(calming.from).getTime()) / 3_600_000;
+	const hours = (now.getTime() - timeOf(calming.from)) / 3_600_000;
 	if (hours < 0) return undefined;
 	// Ceased early ("ceased" in storm.json; the owner's, 16 October): all twelve let go at once.
 	// What they had done holds, and they rest from then.
-	const ceased = calming.ceased ? (new Date(calming.ceased).getTime() - new Date(calming.from).getTime()) / 3_600_000 : calming.hours;
+	const ceased = calming.ceased ? (timeOf(calming.ceased) - timeOf(calming.from)) / 3_600_000 : calming.hours;
 	const stop = Math.min(ceased, calming.hours);
 	return { progress: Math.min(1, Math.min(hours, stop) / calming.hours), after: Math.max(0, hours - stop), hours: calming.hours };
 }
@@ -582,7 +590,7 @@ export function stillingBegun(now: Date, asked: string | null, opened: number, o
 	if (ownStorm) return undefined;
 	const { stilling } = stormSwitch as { stilling?: { from: string | null } };
 	if (!stilling?.from) return undefined;
-	const hours = (now.getTime() - new Date(stilling.from).getTime()) / 3_600_000;
+	const hours = (now.getTime() - timeOf(stilling.from)) / 3_600_000;
 	return hours < 0 ? undefined : { hours };
 }
 

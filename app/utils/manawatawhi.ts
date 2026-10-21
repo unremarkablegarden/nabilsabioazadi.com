@@ -73,11 +73,13 @@ const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 // (200 sea miles) of where it left, and Hawai'i's within 370 km of where it lands. Between,
 // it keeps the time zones of the open sea, as ships do: one hour for each 15 degrees of
 // longitude, which here means the clock goes back a day where the boat crosses the date line.
+// Made once: making one is slow, and this is asked every frame while the boat is near home.
+const aucklandOffset = new Intl.DateTimeFormat("en-GB", { timeZone: "Pacific/Auckland", timeZoneName: "shortOffset" });
 function clockAhead(date: Date) {
 	const boat = boatAt(date);
 	if (boat.left < 370) return -10;
 	if (boat.gone < 370) {
-		const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Pacific/Auckland", timeZoneName: "shortOffset" }).formatToParts(date);
+		const parts = aucklandOffset.formatToParts(date);
 		return Number(parts.find((part) => part.type === "timeZoneName")!.value.replace("GMT", "") || 0);
 	}
 	return Math.round(boat.longitude / 15);

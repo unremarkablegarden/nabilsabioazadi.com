@@ -171,6 +171,20 @@ export interface TreasonFrame {
 
 export function createTreason(scene: THREE.Scene, layer: number) {
 	const geometry = new THREE.PlaneGeometry(2, 2);
+	// One fire kept in the scene, never shown, so that its shader is built while the page warms up
+	// (OceanBackground's warmNext) and stays built: each sentence's fire is a copy of it and shares
+	// the shader, where a fire of its own had to be built there and then, and the picture caught.
+	const kept = new THREE.Mesh(geometry, new THREE.ShaderMaterial({ uniforms: { uCentre: { value: new THREE.Vector3() }, uRadius: { value: 0 }, uTime: { value: 0 }, uLife: { value: 0 }, uSeed: { value: 0 }, uSpin: { value: 0 }, uQuench: { value: 0 }, uGain: { value: 1 }, uDay: { value: 0 }, uStream: { value: new THREE.Vector2() }, uShawl: { value: new THREE.Color() } }, vertexShader: vertex, fragmentShader: fragment, transparent: true, depthWrite: false }));
+	kept.visible = false;
+	kept.frustumCulled = false;
+	kept.layers.set(layer);
+	scene.add(kept);
+	// Kept for each frame, rather than made anew.
+	const ahead = new THREE.Vector3();
+	const across = new THREE.Vector3();
+	const right = new THREE.Vector3();
+	const up = new THREE.Vector3();
+	const wind = new THREE.Vector3();
 	const burning: { who: number; mesh: THREE.Mesh; uniforms: Record<string, THREE.IUniform>; path: THREE.CubicBezierCurve3; age: number; spin: number; fell?: number }[] = [];
 	// Those sentenced since the last frame, waiting for the boat's place to be known.
 	const waiting: number[] = [];
@@ -182,8 +196,9 @@ export function createTreason(scene: THREE.Scene, layer: number) {
 			for (const one of burning) one.mesh.visible = false;
 			return;
 		}
-		const ahead = new THREE.Vector3(frame.ahead.x, 0, frame.ahead.y);
-		const across = new THREE.Vector3(-frame.ahead.y, 0, frame.ahead.x);
+		if (!burning.length && !waiting.length) return;
+		ahead.set(frame.ahead.x, 0, frame.ahead.y);
+		across.set(-frame.ahead.y, 0, frame.ahead.x);
 		// Sent: up from her seat over the eye, out before it, and down far ahead into the sea.
 		for (const who of waiting.splice(0)) {
 			const seat = seatOf(who, frame.boat, ahead, across);
@@ -209,7 +224,9 @@ export function createTreason(scene: THREE.Scene, layer: number) {
 				uStream: { value: new THREE.Vector2() },
 				uShawl: { value: new THREE.Color() },
 			};
-			const mesh = new THREE.Mesh(geometry, new THREE.ShaderMaterial({ uniforms, vertexShader: vertex, fragmentShader: fragment, transparent: true, depthWrite: false }));
+			const material = (kept.material as THREE.ShaderMaterial).clone();
+			material.uniforms = uniforms;
+			const mesh = new THREE.Mesh(geometry, material);
 			mesh.frustumCulled = false;
 			mesh.renderOrder = WEAVE_RENDER_ORDER + 1;
 			mesh.layers.set(layer);
@@ -217,9 +234,9 @@ export function createTreason(scene: THREE.Scene, layer: number) {
 			burning.push({ who, mesh, uniforms, path, age: 0, spin: (Math.random() < 0.5 ? -1 : 1) * (0.35 + 0.3 * Math.random()) });
 		}
 		// The wind across the eye, for the flames to stream with.
-		const right = new THREE.Vector3().setFromMatrixColumn(frame.camera.matrixWorld, 0);
-		const up = new THREE.Vector3().setFromMatrixColumn(frame.camera.matrixWorld, 1);
-		const wind = frame.wind.clone().normalize();
+		right.setFromMatrixColumn(frame.camera.matrixWorld, 0);
+		up.setFromMatrixColumn(frame.camera.matrixWorld, 1);
+		wind.copy(frame.wind).normalize();
 		for (let i = burning.length - 1; i >= 0; i--) {
 			const one = burning[i]!;
 			one.age += frame.delta;
@@ -258,6 +275,8 @@ export function createTreason(scene: THREE.Scene, layer: number) {
 			scene.remove(one.mesh);
 			(one.mesh.material as THREE.Material).dispose();
 		}
+		scene.remove(kept);
+		(kept.material as THREE.Material).dispose();
 		geometry.dispose();
 	};
 

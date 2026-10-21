@@ -322,6 +322,9 @@ export function createRain(scene: THREE.Scene, camera: THREE.PerspectiveCamera, 
 	const forward = new THREE.Vector3();
 	// The shelter is held, not fixed: it trails the boat's heave and roll a moment behind.
 	const held = new THREE.Vector3();
+	// Kept for each frame, rather than made anew.
+	const wind = new THREE.Vector3();
+	const WHITE = new THREE.Color(1, 1, 1);
 	let started = false;
 	const drift = new THREE.Vector3();
 	let fallen = 0;
@@ -336,7 +339,7 @@ export function createRain(scene: THREE.Scene, camera: THREE.PerspectiveCamera, 
 			started = true;
 		}
 		held.lerp(frame.shelter, Math.min(1, frame.delta * 2.5));
-		const wind = frame.wind.clone().multiplyScalar(1 + 0.35 * frame.gust);
+		wind.copy(frame.wind).multiplyScalar(1 + 0.35 * frame.gust);
 		// (Past some 45 m/s rain is torn to spray: drops drawn going faster only rushed at the eye
 		// as streaks out of one point, like stars in a jump to light speed.)
 		if (wind.length() > 45) wind.setLength(45);
@@ -372,7 +375,7 @@ export function createRain(scene: THREE.Scene, camera: THREE.PerspectiveCamera, 
 			u.uHold.value = frame.hold * (1 - 0.25 * frame.gust);
 			u.uCanopy.value.copy(frame.canopy);
 			u.uCut.value.set(frame.cut?.height ?? 0, frame.cut?.depth ?? 0, frame.cut?.reach ?? 0);
-			u.uColour.value.copy(frame.light).lerp(new THREE.Color(1, 1, 1), 0.6 * frame.flash);
+			u.uColour.value.copy(frame.light).lerp(WHITE, 0.6 * frame.flash);
 			u.uOpacity.value = (0.6 + 0.4 * frame.flash) * volume.faint;
 		}
 	};
