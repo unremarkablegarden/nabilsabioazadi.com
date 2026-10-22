@@ -409,17 +409,24 @@ onMounted(async () => {
 	let starsOut = 0;
 	let faintestStar = -6;
 	let milkyWayOut = 0;
+	// Noon at night (noon.ts): how far the strongest six's sun is lit (set each frame), how far it
+	// holds the sky now that the real sun is where it is, and where it stands.
+	let noonByThem = 0;
+	let noonHeld = 0;
+	const theirSun = new THREE.Vector3();
 	const updateEnvironment = ([hour, sea, sky]: [number, number, number]) => {
 		const when = dateAtBoatHour(hour, pretendDate.value ?? new Date());
 		// The boat is wherever its voyage has brought it by then.
 		sailTo(when);
 		const realSun = sunPosition(when);
-		const sunElevation = realSun.elevation;
+		// (The six's sun takes the sky while the real one is down, and gives it back as day comes.)
+		noonHeld = noonByThem * (1 - THREE.MathUtils.smoothstep(realSun.elevation, -2, 8));
+		const sunElevation = lerp(realSun.elevation, NOON_ELEVATION, noonHeld);
 		const isNight = sunElevation < -2;
 		const staged = stagedLight.value;
 		// Scene azimuth of a compass direction.
 		const offBearing = (azimuth: number) => ((azimuth - PLACE.bearing + 540) % 360) - 180;
-		const sunAzimuth = 180 - offBearing(realSun.azimuth) / (staged ? 2 : 1);
+		const sunAzimuth = lerp(180 - offBearing(realSun.azimuth) / (staged ? 2 : 1), NOON_AZIMUTH, noonHeld);
 		const realMoon = staged
 			? { elevation: isNight ? THREE.MathUtils.clamp(-sunElevation * 0.35, 8, 20) : -90, azimuth: 0, illuminated: 1 }
 			: moonPosition(when);
@@ -458,6 +465,7 @@ onMounted(async () => {
 		const sun = directionFrom(sunElevation, sunAzimuth, sunFrom);
 		const moonDirection = directionFrom(realMoon.elevation, moonAzimuth, moonFrom);
 		skyUniforms.sunPosition.value.copy(sun);
+		theirSun.copy(sun);
 		waterUniforms.sunDirection.value.copy(isNight && moonlight > 0 ? moonDirection : sun);
 		// By day the moon is a pale mark in the sky; a new moon cannot be seen at all.
 		moon.visible = realMoon.elevation > -1 && realMoon.illuminated > 0.01;
@@ -712,6 +720,10 @@ onMounted(async () => {
 	const contest = createContest(scene, SCREEN_LAYER);
 	// The thirteen compelled into Vesal's storm (compelled.ts).
 	const compelled = createCompelled(scene, SCREEN_LAYER);
+	// Noon at night (noon.ts): "noon" in storm.json, or ?noon for this visit from now, ?noon=off.
+	const noon = createNoon(scene, SCREEN_LAYER);
+	const noonAsked = query.get("noon");
+	const noonSeconds = () => (noonAsked === "off" || calmMotion ? undefined : noonAsked !== null ? (Number(noonAsked) || 0) + (Date.now() - pageOpened) / 1000 : noonSince(new Date()));
 	const contestAsked = query.get("contest");
 	(window as unknown as { __contest?: () => string[] }).__contest = contest.describe;
 	// Leane cutting the rain off (rain-cut.ts): set in storm.json, or ?raincut for this visit.
@@ -1595,6 +1607,10 @@ onMounted(async () => {
 					}
 				: undefined,
 		);
+		// The six's noon: their sun, and their ropes up into it.
+		const noonAt = noonSeconds();
+		noonByThem = noonAt === undefined ? 0 : noonShare(noonAt);
+		noon.update(noonHeld > 0.001 ? { share: noonHeld, time, boat: camera.position, ahead: skyAhead, light: theirSun, day: daylight, gain: 1.5 / steadyExposure, tints: embroideryTints } : undefined);
 		// The strongest's compulsion: the thirteen at the brink, pouring all they have into the storm.
 		const compelledAt = compelledSeconds();
 		compelled.update(
@@ -1739,6 +1755,7 @@ onMounted(async () => {
 		treason.dispose();
 		contest.dispose();
 		compelled.dispose();
+		noon.dispose();
 		stilling.dispose();
 		rainCut.dispose();
 		stopWatching();

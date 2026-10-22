@@ -646,3 +646,17 @@ beauty). The beauty is the guard: within it the day's real sea, lit and calm; ag
 worst sea that can stand, now allowed up to five times the sea within before it breaks (was three).
 Seen at night only: the calm water within lies moonlit, and the storm beyond is mostly lost in the
 murk of its rain (visibility under 250 m).
+
+## 27. Noon at night (22 October)
+
+The owner, at 23:00 on the 22nd: "Cease the storm. I ask the strongest channelers to make it so
+bright it appears as noon". Vesal's storm had already ended by itself at its "until" (17:37). The
+strongest six (the strongest, Manulani and the four mighty, under Siuan) weave a sun and hold it
+high in the sky ahead (`noon.ts`, `NOON_ELEVATION` 62°, `NOON_AZIMUTH` 190, scene azimuth, a little
+right of ahead): `OceanBackground.vue`'s `updateEnvironment` lifts the sun the whole sky and sea are
+drawn from to theirs (`noonHeld`), so the sky is truly the noon sky, the sea lit as at noon, the
+stars gone. Woven up over two minutes (`NOON_RISE`), the sky passing through a dawn as their sun
+climbs; held until the real dawn comes and takes it over (it gives way as the real sun rises from
+2° under the horizon to 8° over: no clock). Their ropes run from their hands up into it, each as
+many filaments as her strength carries, lost in the light at the top. `storm.json` `"noon":
+{ "from": ... }`; `?noon` for one visit from now, `?noon=300` five minutes in, `?noon=off`.

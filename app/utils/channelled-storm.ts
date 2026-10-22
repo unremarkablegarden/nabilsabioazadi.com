@@ -428,6 +428,13 @@ export const vesalRaised = (since: number) => clamp01((since - 60) / 600);
 // How far the guard reaches round the boat (m): by the six's linked strength, as a rope's girth goes;
 // wider, as far again by a half, while the strongest drives them all (compelled).
 export const vesalGuardReach = (compelled = 0) => 300 * Math.cbrt(STILLING_STRENGTH.mighty) * (1 + 0.5 * clamp01(compelled));
+// Noon at night (noon.ts): storm.json "noon": { "from": ISO time }, seconds since.
+export function noonSince(now: Date) {
+	const from = (stormSwitch as { noon?: { from: string | null } }).noon?.from;
+	if (!from) return undefined;
+	const since = (now.getTime() - new Date(from).getTime()) / 1000;
+	return since >= 0 ? since : undefined;
+}
 // Compelled (compelled.ts): storm.json "compelled": { "from": ISO time }, seconds since.
 export function compelledSince(now: Date) {
 	const from = (stormSwitch as { compelled?: { from: string | null } }).compelled?.from;
