@@ -17,9 +17,11 @@ export const NOON_ELEVATION = 62;
 export const NOON_AZIMUTH = 190;
 // How long they take to weave it up from the dark (s).
 export const NOON_RISE = 120;
-// How far theirs is lit (0..1) at `since` seconds after they begin.
-export function noonShare(since: number) {
-	return THREE.MathUtils.smoothstep(since, 0, NOON_RISE);
+// How far theirs is lit (0..1) at `since` seconds after they begin, and `letGo` after they let it go
+// (the owner, 23 October: "ensure the lighting returns to meteo data"): given back to the real sun
+// over as long as it took to weave.
+export function noonShare(since: number, letGo?: number) {
+	return THREE.MathUtils.smoothstep(since, 0, NOON_RISE) * (letGo === undefined ? 1 : 1 - THREE.MathUtils.smoothstep(letGo, 0, NOON_RISE));
 }
 
 // The six, by their place among the minds: the strongest, Manulani, Keel, Kite, Fathom, Listener.

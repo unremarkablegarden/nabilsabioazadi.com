@@ -81,7 +81,7 @@ varying float vEdge;
 void main() {
 	float across = abs( vEdge );
 	float body = pow( max( 1.0 - across * across, 0.0 ), 1.5 );
-	gl_FragColor = vec4( mix( uTint * uGain, uTint * uWhite, uDay ), body * vAlpha * mix( 0.07, 0.12, uDay ) );
+	gl_FragColor = vec4( mix( uTint * uGain, uTint * uWhite, uDay ), body * vAlpha * mix( 0.035, 0.12, uDay ) );
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }
@@ -156,7 +156,8 @@ export function createRings(scene: THREE.Scene, layer: number) {
 		}
 		const dt = Math.min(frame.delta, 0.1);
 		// What the flow lets go, a ring at a time: up to one every couple of seconds when it works its hardest.
-		owed += dt * frame.working * (0.15 + 0.35 * Math.min(1, frame.energy));
+		// (A few at a time: on Siuan's great swells, a ring every couple of seconds made a heap of them.)
+		owed += dt * frame.working * (0.05 + 0.1 * Math.min(1, frame.energy));
 		if (owed >= 1) {
 			owed -= 1;
 			const free = rings.findIndex((one) => !one);

@@ -702,7 +702,10 @@ void main() {
 	}
 	// How far this stretch of the filament leans towards its element's colour just now.
 	float leaning = 0.5 + 0.5 * drift( q * 1.1 - channelStream * 0.12 + aSeed.y * 57.0 );
-	vTint = mix( uTints[ int( aThread.z + 0.5 ) ], mix( uBaseTone, uElements[ element ], 0.35 + 0.65 * leaning ), max( channelSurge, 0.85 * uDay ) );
+	// (At every hour each thread now leans to its element, faintly (the owner, 23 October: "don't be
+	// afraid of allowing the weaves of the elements to look like faint colours representative of
+	// their elements"): not only when driven, or by day.)
+	vTint = mix( uTints[ int( aThread.z + 0.5 ) ], mix( uBaseTone, uElements[ element ], 0.35 + 0.65 * leaning ), max( max( channelSurge, 0.85 * uDay ), 0.65 ) );
 	// Metal is half seen through.
 	if ( element == ${METAL} ) lit *= 1.0 - 0.5 * channelSurge;
 	// Spent, it cools towards blue; gathered, it burns white.
@@ -723,7 +726,8 @@ void main() {
 	// By night, tending, the light of each leans to its element's colour.
 	// (The same colour as its sheath by day, at its fullest and then paled.)
 	vec3 byNight = mix( vec3( 1.0 ), dye, mix( 0.62, 0.55, uGraded ) );
-	vTint = mix( vTint, byNight, 0.85 * tendingNow * ( 1.0 - uDay ) );
+	// (And faintly at every hour of the night, not only tending: the owner, 23 October.)
+	vTint = mix( vTint, byNight, max( 0.85 * tendingNow, 0.8 ) * ( 1.0 - uDay ) );
 	// A reading takes the colour of what it finds.
 	vTint = mix( vTint, found, finding );
 	// (Healing, its colours are muted by 46%, the owner's figure: that far towards a grey as light as they are.)
@@ -856,7 +860,9 @@ void main() {
 	// (The thread itself is a pale tint of its element's colour, leaning to whatever it has found:
 	// where many lie together, as in the healing flow, there is no room for sheaths, and the
 	// threads must carry the colour themselves.)
-	vec3 body = mix( mix( mix( vec3( 1.0 ), vSheath, 0.42 ), mix( hue * hue, hue, uGraded ), 0.4 ) * 0.96, pale, vWhite ) * uWhite;
+	// (Its element's colour carried a little further into the thread itself since 23 October: faint,
+	// but plainly air, water or akasha.)
+	vec3 body = mix( mix( mix( vec3( 1.0 ), vSheath, 0.58 ), mix( hue * hue, hue, uGraded ), 0.55 ) * 0.96, pale, vWhite ) * uWhite;
 	float solid = max( vWhite, uDay );
 	vec3 colour = mix( gl_FragColor.rgb, body, solid ) * amount;
 	float cover = amount * solid;

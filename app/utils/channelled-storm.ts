@@ -413,7 +413,8 @@ export function guardedConditions(storm: SeaConditions, real: SeaConditions, gua
 		waveTrend: to("waveTrend"),
 	};
 }
-export const VESAL_WORDS = "Channelled, a blessing for Vesal";
+// (The owner, 23 October: "Blessing for Vesal being channelled, or some such".)
+export const VESAL_WORDS = "A blessing for Vesal, being channelled";
 // Whether Vesal's storm is raised (storm.json "vesal": { "from": ISO time }), and seconds since.
 export function vesalSince(now: Date) {
 	const from = (stormSwitch as { vesal?: { from: string | null } }).vesal?.from;
@@ -453,7 +454,8 @@ export function siuanSea(real: SeaConditions, raised: number): Partial<SeaCondit
 		humidity: to(real.humidity, 100),
 	};
 }
-export const SIUAN_WORDS = "Channelled: Siuan's swells and mist";
+// (Siuan's swells too are for Vesal: the owner, 23 October.)
+export const SIUAN_WORDS = "A blessing for Vesal, being channelled";
 // The angle (degrees) the second swell runs across the first, swept slowly so the crests twist.
 export const siuanCrossing = (seconds: number) => 70 + 35 * Math.sin((2 * Math.PI * seconds) / 240);
 // Siuan's swells: storm.json "siuan": { "from": ISO time, "hours": 3 }: seconds since, and for how long.
@@ -470,11 +472,18 @@ export function siuanRaised(since: number, hours = siuanHours()) {
 	return clamp01(since / 600) * (1 - clamp01((since - held) / 1800));
 }
 
-// Noon at night (noon.ts): storm.json "noon": { "from": ISO time }, seconds since.
+// Noon at night (noon.ts): storm.json "noon": { "from": ISO time, "until": ISO time }, seconds
+// since it began, and since they let it go (undefined until then).
 export function noonSince(now: Date) {
 	const from = (stormSwitch as { noon?: { from: string | null } }).noon?.from;
 	if (!from) return undefined;
 	const since = (now.getTime() - new Date(from).getTime()) / 1000;
+	return since >= 0 ? since : undefined;
+}
+export function noonLetGo(now: Date) {
+	const until = (stormSwitch as { noon?: { until?: string | null } }).noon?.until;
+	if (!until) return undefined;
+	const since = (now.getTime() - new Date(until).getTime()) / 1000;
 	return since >= 0 ? since : undefined;
 }
 // Compelled (compelled.ts): storm.json "compelled": { "from": ISO time }, seconds since.

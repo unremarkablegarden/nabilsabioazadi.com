@@ -736,3 +736,23 @@ their style of weaving to support Siuan are changing."
 - Seen by day in the haze of Siuan's mist only: the everyday flow is now a far heavier sheaf; the
   support braids are hard to tell from her ropes there, and the pounamu green at their hands is too
   near the eye to be seen.
+
+## 31. For Vesal; the light given back; the elements' colours (23 October)
+
+The owner: "Change the channeling text: Blessing for Vessal being channeled or some such. Now ensure
+the lighting returns to meteo data and don't be afraid of allowing the weaves of the elements to
+look like faint colours representative of their elements."
+
+- **The words**: what is channelled now reads "A blessing for Vesal, being channelled" (Vesal's
+  storm and Siuan's swells alike; `VESAL_WORDS`, `SIUAN_WORDS`). Spelt Vesal, as the owner first
+  named the storm.
+- **The light**: the six let their noon go (`storm.json` `noon.until`, `noonLetGo`, `noonShare`'s
+  `letGo`): over two minutes the sun the sky is drawn from goes back to the real one, and the light
+  is the measured weather's again.
+- **The elements' colours** (`channellers.ts`): at every hour each thread of the everyday flow leans
+  to its element (65% at least, not only when driven or by day); by night faintly to the owner's own
+  element colours, air violet, water sea green, akasha gold (80%, not only while tending); by day the
+  thread carries more of its element's colour itself (58% of its sheath, 55% of its hue). Seen by
+  night: faint warm and cool tints, plainly not white, still quiet.
+- **The shed rings** a third as often (a heap of them on Siuan's great swells) and half as bright
+  by night.

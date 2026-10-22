@@ -1669,7 +1669,7 @@ onMounted(async () => {
 		);
 		// The six's noon: their sun, and their ropes up into it.
 		const noonAt = noonSeconds();
-		noonByThem = noonAt === undefined ? 0 : noonShare(noonAt);
+		noonByThem = noonAt === undefined ? 0 : noonShare(noonAt, noonAsked !== null ? undefined : noonLetGo(new Date()));
 		noon.update(noonHeld > 0.001 ? { share: noonHeld, time, boat: camera.position, ahead: skyAhead, light: theirSun, day: daylight, gain: 1.5 / steadyExposure, tints: embroideryTints } : undefined);
 		// The strongest's compulsion: the thirteen at the brink, pouring all they have into the storm.
 		const compelledAt = compelledSeconds();
