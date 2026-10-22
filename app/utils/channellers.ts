@@ -485,6 +485,18 @@ vec3 readingPoint( float t ) {
 // (onlyPlace: nothing but the place is wanted, as for the point a little further along that
 // gives a filament its direction. Wholly in its reading's form, a point's place is the reading's
 // alone, and the flow, with the sea under it, need not be worked out for it.)
+// The flow as a vortex tube (the owner, 23 October: "refine the flows; make them cleaner, but not
+// artefact-sharp", with a film of two vortex rings reconnecting, the Herodias serpents and the
+// Cerîde-i Adliye cosmogram; then "build it into the flow"). A vortex line cannot end in the
+// water: it closes as a ring or runs to a surface, and the lines of a tube wind round it with one
+// twist that the flow keeps (helicity is conserved, as the serpents' scales wind with their bodies).
+// So each tress is a tube: its filaments lie on the tube's shell, not strewn through it, which seen
+// from the side gives what a bubble ring gives, bright rims and a clear core; and all of them wind
+// round it at one rate. Waves run along the whole tube together (Kelvin waves), as large as the
+// sea and wind feed them, never quite still even on a still day (a floor, as a quantum field is
+// never at rest); and the order is kept only by spending: what the flow spends it sheds as small
+// rings off its far end (rings.ts), carrying away the disorder. CLEAN is how far it is so.
+const float CLEAN = 0.85;
 vec3 threadPoint( float t, bool onlyPlace ) {
 	float who = aThread.x;
 	float tt = clamp( t / 0.7, 0.0, 1.0 );
@@ -515,9 +527,14 @@ vec3 threadPoint( float t, bool onlyPlace ) {
 	// (In a storm the three strands lie side by side, broad and parallel, and only sway: thrown
 	// wide, the plait's figures of eight lay on the sea as great loops.)
 	across = mix( across, vec2( ( aThread.y - 1.0 ) * 0.36 + 0.08 * sin( phase ), 0.0 ), channelControl );
-	// Each filament has its own place in its strand, and winds slowly round it.
-	float wind = aSeed.x * 6.28319 + q * ( 1.2 + 1.6 * aSeed.y ) - channelTime * 0.15;
-	across += aSeed.z * 0.5 * vec2( cos( wind ), sin( wind ) );
+	// Each filament has its own place in its strand, and winds slowly round it: on the tube's shell,
+	// and all at the one twist (see CLEAN).
+	float wind = aSeed.x * 6.28319 + q * mix( 1.2 + 1.6 * aSeed.y, 2.0, CLEAN ) - channelTime * 0.15;
+	across += mix( aSeed.z, 0.62 + 0.38 * aSeed.z, CLEAN ) * 0.5 * vec2( cos( wind ), sin( wind ) );
+	// Kelvin waves: a helix running out along the whole tube at once, fed by the sea and the wind,
+	// with a floor it never falls below.
+	float kelvin = q * 4.2 - channelTime * 0.55 + who * 1.3;
+	across += ( 0.05 + 0.2 * clamp( channelSea.x, 0.0, 1.0 ) ) * vec2( cos( kelvin ), 0.6 * sin( kelvin ) );
 	// And strays from it, some hardly at all and some a long way.
 	// (Less and less as the flow goes down to the horizon, where strays would only make a tangle.)
 	// (In the trial, a strong channeller's tress is taut: its filaments hardly stray.)
@@ -526,7 +543,8 @@ vec3 threadPoint( float t, bool onlyPlace ) {
 	// (Each for themselves, the tresses are kept close: four clean lines over the sea, like strings.)
 	// (In a storm the strays are drawn in: thrown wide over the waves, they were loops and
 	// scribbles across the sea. Its breadth is in the tress, not in its strays.)
-	across += ( 1.0 - 0.6 * ( 1.0 - channelLink ) ) * aSeed.w * 0.55 * ( 0.55 + 1.1 * restless ) * ( 1.0 - 0.75 * skill ) * ( 1.0 - 0.6 * channelHold ) * ( 1.0 - 0.85 * smoothstep( 0.3, 0.8, way ) ) * ( 1.0 - 0.75 * channelControl ) * vec2(
+	// (A tube, the owner's "cleaner": the strays drawn in to under a third.)
+	across += ( 1.0 - 0.7 * CLEAN ) * ( 1.0 - 0.6 * ( 1.0 - channelLink ) ) * aSeed.w * 0.55 * ( 0.55 + 1.1 * restless ) * ( 1.0 - 0.75 * skill ) * ( 1.0 - 0.6 * channelHold ) * ( 1.0 - 0.85 * smoothstep( 0.3, 0.8, way ) ) * ( 1.0 - 0.75 * channelControl ) * vec2(
 		drift( q * 2.3 + aSeed.x * 40.0 - channelOf( uWanderX, who ) ),
 		drift( q * 2.9 + aSeed.y * 40.0 + channelOf( uWanderY, who ) )
 	);
@@ -536,7 +554,7 @@ vec3 threadPoint( float t, bool onlyPlace ) {
 	// opposite of what they are about: nothing in a weave has a corner now.)
 	float lost = spent( along );
 	float held = gathered( who, q ) * ( 0.5 + 0.5 * lost );
-	across += 0.16 * lost * ( 1.0 - held ) * ( 1.0 - 0.8 * skill ) * vec2(
+	across += 0.16 * ( 1.0 - 0.6 * CLEAN ) * lost * ( 1.0 - held ) * ( 1.0 - 0.8 * skill ) * vec2(
 		drift( q * 11.0 + aSeed.x * 211.0 - channelTime * 0.9 ),
 		drift( q * 13.0 + aSeed.y * 173.0 + channelTime * 0.8 )
 	);
@@ -811,11 +829,12 @@ varying float vShade;
 varying vec3 vSheath;
 
 void main() {
-	// A filament has a hard edge, softened by no more than it takes to stop it shimmering.
+	// A filament has a firm edge, softened enough that it never steps or shimmers (the owner: clean,
+	// "but not artefact-sharp").
 	// A veil has none: it is brightest along its middle and fades away to both sides.
 	// (The filament itself is the middle of its ribbon; by day the ribbon is wider than it.)
 	float across = abs( vEdge ) * vWide;
-	float edge = mix( 1.0 - smoothstep( 0.55, 1.0, across ), pow( max( 1.0 - across * across, 0.0 ), 2.0 ), vSoft );
+	float edge = mix( 1.0 - smoothstep( 0.35, 1.0, across ), pow( max( 1.0 - across * across, 0.0 ), 2.0 ), vSoft );
 	float amount = clamp( edge * vAlpha, 0.0, 1.0 );
 	gl_FragColor = vec4( vTint * uGain, 1.0 );
 	#include <tonemapping_fragment>
@@ -846,7 +865,9 @@ void main() {
 	// of it a sheath of deeper colour, its element's. It is the sheath that is seen against the
 	// sky and the glare, and the thread against deep water.
 	float beside = pow( max( 1.0 - vEdge * vEdge, 0.0 ), mix( 0.6, 1.5, vSoft ) );
-	float shade = vShade * clamp( ${DAY_SHADE} * vAlpha, 0.0, 0.85 ) * beside * ( 1.0 - cover );
+	// (Not the strongest's: the deep blue of the site's bar beside a weave read as bars along it, and
+	// the owner had those taken away, 21 October.)
+	float shade = vShade * clamp( ${DAY_SHADE} * vAlpha, 0.0, 0.85 ) * beside * ( 1.0 - cover ) * ( 1.0 - vWhite );
 	vec3 deep = vSheath;
 	colour += deep * uWhite * shade;
 	cover += shade;
@@ -1440,7 +1461,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 				const [ofThread, ofSeed, ofKind] = made[Math.floor(Math.random() * made.length)]!;
 				threadValues.splice(0, 4, ofThread![0]!, ofThread![1]!, ofThread![2]!, 4 + 4 * Math.random());
 				seedValues.splice(0, 4, ofSeed![0]! + 0.004, ofSeed![1]!, ofSeed![2]! * 1.06, ofSeed![3]!);
-				kindValues.splice(0, 4, ofKind![0]! * 0.3, ofKind![1]!, ofKind![2]! * 0.97, ofKind![3]!);
+				// (Fainter since the flow was made a clean tube: a blur about every line was the haze.)
+				kindValues.splice(0, 4, ofKind![0]! * 0.15, ofKind![1]!, ofKind![2]! * 0.97, ofKind![3]!);
 			}
 			for (let i = 0; i <= SEGMENTS; i++) {
 				for (const edge of [-1, 1]) {

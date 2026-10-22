@@ -735,6 +735,8 @@ onMounted(async () => {
 	const compelled = createCompelled(scene, SCREEN_LAYER);
 	// Noon at night (noon.ts): "noon" in storm.json, or ?noon for this visit from now, ?noon=off.
 	const noon = createNoon(scene, SCREEN_LAYER);
+	// The small vortex rings the flow sheds as it spends (rings.ts).
+	const rings = createRings(scene, SCREEN_LAYER);
 	// Siuan's haul and her mist (swells.ts).
 	const swells = createSwells(scene, SCREEN_LAYER);
 	const noonAsked = query.get("noon");
@@ -1391,6 +1393,12 @@ onMounted(async () => {
 			channelling.flowPoint(ahead, flowWorld);
 			toScreen(flowWorld.x, flowWorld.y, flowWorld.z, flowScreen[i]!);
 		});
+		// What the flow spends it sheds as small rings off its far reach (rings.ts).
+		rings.update(
+			calmMotion
+				? undefined
+				: { time, delta, working: channelling.working * alive, energy: sea, spentAt: channelling.flowPoint, boat: camera.position, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, white: lerp(0.5, 3.5, daylight) / steadyExposure },
+		);
 		// The weaker channellers' deep weaves round the boat, slowing it: by day or night, as much as it needs.
 		// (More of it, and more of the sea round the boat, when the strongest have taken it over.)
 		waveUniforms.deepWeave.value = (0.3 * Math.max(holdLevel, 0.6 * channelling.masters) * alive) / steadyExposure;
@@ -1808,6 +1816,7 @@ onMounted(async () => {
 		compelled.dispose();
 		noon.dispose();
 		swells.dispose();
+		rings.dispose();
 		stilling.dispose();
 		rainCut.dispose();
 		stopWatching();

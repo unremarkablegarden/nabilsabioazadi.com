@@ -685,3 +685,31 @@ fifteen minutes in, `?siuan=off`. Under the six's noon (§27) while it holds.
 - Seen at noon (the six's) in stills: hazy light, swell faces and peaks, the veils soft; her two
   haul ropes are hard to pick out in the haze. The mist veils follow her two swells only, not the
   drawn sea exactly, so where the sea runs high they can sit low on it.
+
+## 29. The flow as a vortex tube (23 October)
+
+The owner: "Refine the flows. Make them cleaner, but not artefact-sharp. Then understand how to use
+physics implicit in texts that are sacred such as these", with a film of two underwater vortex
+rings reconnecting into one loop that breaks into a chain of small rings, the Herodias serpents
+(seven necks rising from one interlace, each ending at a star), and a Cerîde-i Adliye cover (rays,
+concentric rings, a wavy line round one ring, a ring of blue and gold beads); then a passage on open
+quantum systems drawing energy from a bath under conservation and rising entropy; and "build it into
+the flow". Read as one physics: a vortex line cannot end in the fluid (it closes as a ring, or runs
+to a boundary: the necks to the stars); the lines of a tube wind round it with a conserved twist
+(helicity: the serpents' scales and interlace); waves run along it (Kelvin waves: the wavy ring, of
+a whole number of crests); a stretched tube pinches off into small rings (the beads, the end of the
+film); and order is kept only by drawing on the surroundings and shedding disorder.
+
+- **The everyday flow** (`channellers.ts`, `CLEAN` 0.85, in `threadPoint`): each tress's filaments
+  lie on the shell of its tube, not strewn through it, so it is bright at its rims and clear through,
+  as a bubble ring is; all wind round it at one twist; a Kelvin helix runs out along the whole tube
+  at once, fed by the sea and wind (`channelSea`) with a floor it never falls below; the strays drawn
+  in to under a third and the spent loosening to under half; the edge softened a little (no steps or
+  shimmer); the halos (blur about each filament) half as faint. The strongest's day sheath of the
+  bar's deep blue taken away, as from the other weaves (§21).
+- **The rings it sheds** (`rings.ts`): what the flow spends leaves as small glassy vortex rings off
+  its far reach (140 to 500 m out), as often as it works hard and the sea feeds it; each carries
+  itself along its axis, onward and a little up, widening and slowing, a gentle standing wave of 3
+  to 6 crests turning round it, and fades over ten to sixteen seconds.
+- Seen by day (the six's noon) in stills only. The standing wave on the rings is kept to 2.5%:
+  at 7% the rings read from far off as small polygons.
