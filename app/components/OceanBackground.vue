@@ -1663,6 +1663,7 @@ onMounted(async () => {
 						gain: 1.5 / steadyExposure,
 						tint: skySheath[1]!,
 						mist,
+						tints: embroideryTints,
 					}
 				: undefined,
 		);

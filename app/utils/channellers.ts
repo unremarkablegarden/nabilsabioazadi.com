@@ -35,7 +35,7 @@
 import * as THREE from "three";
 import { CHANNELLERS, channelPathChunk } from "./channel-path";
 import type { GerstnerUniforms } from "./gerstner-waves";
-import { SIX_STRONGER } from "./psyche";
+import { SIX_STRONGER, TER_ANGREAL } from "./psyche";
 import { pathPassChunk, pathsShared, ribbonPaths, THREAD_PATH } from "./ribbon-paths";
 import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RENDER_ORDER } from "./weave";
 
@@ -72,9 +72,9 @@ const FILAMENTS = 64;
 const GOLDEN = 14;
 // The mighty have more than one measure of filaments (see MIGHT in update): each further measure
 // is another 64, gold among them as in the first, alight only while one so strong holds the seat.
-// The strongest's seat has room for eight measures, the others for four (more since the six were
-// made 3.6 times stronger, 21 October: the strongest's about 7.5, the four's about 3.8).
-const MEASURES = [4, 4, 8, 4];
+// Every seat has room for eight measures (since the six were made 3.6 times stronger, 21 October, the
+// strongest's about 7.5; and since the ter'angreal, 23 October, Keel's about 6.7, Listener's 6.2).
+const MEASURES = [8, 8, 8, 8];
 const SEGMENTS = 300;
 
 // The height of the sea at a place (x), and beside it (y) the height of the long swell alone,
@@ -2237,8 +2237,12 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	// of how much stronger the strongest is than they. (About 2.5 for the four, 4.9 for the strongest.)
 	// (And since 21 October the strongest and the four 3.6 times stronger again, SIX_STRONGER: their
 	// mass by its cube root.)
-	const MIGHT = TRUE_STRENGTH.map((strength, member) =>
-		member === 0 || MIGHTY.includes(member) ? ((0.62 * REST[0]! * Math.cbrt(MIGHTIER) * Math.cbrt(strength / (MIGHTIER * REST[0]!))) / 0.9) * Math.cbrt(SIX_STRONGER) : 1,
+	// (And since 23 October each of the Aes Sedai but Siuan holds a pounamu ter'angreal, her strength
+	// up to nine times again, TER_ANGREAL in psyche.ts: her mass by its cube root.)
+	const MIGHT = TRUE_STRENGTH.map(
+		(strength, member) =>
+			(member === 0 || MIGHTY.includes(member) ? ((0.62 * REST[0]! * Math.cbrt(MIGHTIER) * Math.cbrt(strength / (MIGHTIER * REST[0]!))) / 0.9) * Math.cbrt(SIX_STRONGER) : 1) *
+			(member === 0 ? 1 : Math.cbrt(TER_ANGREAL[member - 1]!)),
 	);
 	// The farthest any of the eight would sound (see uReach): as far as the strongest of them went before.
 	const ORDINARY_MOST = 0.62 * REST[0]!;

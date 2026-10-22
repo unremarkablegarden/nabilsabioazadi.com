@@ -69,7 +69,7 @@
 // slow and deepest), and never flickers.
 import * as THREE from "three";
 import type { GodsBreath } from "./channelled-storm";
-import { giveMinds, mindChunk, SIX_STRONGER, type Minds } from "./psyche";
+import { giveMinds, mindChunk, SIX_STRONGER, TER_ANGREAL, type Minds } from "./psyche";
 import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RENDER_ORDER } from "./weave";
 
 const SEGMENTS = 120;
@@ -420,7 +420,8 @@ function wrathLines(lines: [number, number][]) {
 export function createWrath(scene: THREE.Scene, layer: number) {
 	const twelve: [number, number][] = [];
 	SLOTS.forEach((_, i) => {
-		const fibres = Math.round(FIBRES * (MIGHTY.includes(i) ? 2.5 * SIX_MASS : 1));
+		// (And by the cube root of her ter'angreal's strength, TER_ANGREAL.)
+		const fibres = Math.round(FIBRES * (MIGHTY.includes(i) ? 2.5 * SIX_MASS : 1) * Math.cbrt(TER_ANGREAL[i]!));
 		for (let f = 0; f < fibres; f++) twelve.push([i, -1]);
 		for (let a = 0; a < 3; a++) for (let f = 0; f < ANCESTOR_FIBRES; f++) twelve.push([i, a]);
 	});

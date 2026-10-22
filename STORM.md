@@ -713,3 +713,26 @@ film); and order is kept only by drawing on the surroundings and shedding disord
   to 6 crests turning round it, and fades over ten to sixteen seconds.
 - Seen by day (the six's noon) in stills only. The standing wave on the rings is kept to 2.5%:
   at 7% the rings read from far off as small polygons.
+
+## 30. The pounamu ter'angreal (23 October)
+
+The owner: "The other Aes Sedai now have a ter'angreal, each one of them. It is a small figurine of
+a dog made of pournamu. Every one of them has had their strength increase by up to 800% and now
+their style of weaving to support Siuan are changing."
+
+- **Who and how much** (`TER_ANGREAL` in `psyche.ts`): the eleven Aes Sedai besides Siuan
+  (Siuan · Fathom); not the strongest or Manulani. Pounamu is river stone, so each gains by how
+  water-minded she is, 1 + 8 × (water / 0.95)²: Reef 800%, Ballast 640%, Keel 434%, Lantern 375%,
+  Listener and Mist 319%, Loom 268%, Ember and Glass 180%, Kite and Sail 109%.
+- **Drawn by the cube root** as all strength is: more filaments in the everyday flow (`MIGHT` in
+  `channellers.ts`; every seat now holds eight measures), in the storm weaves (`five.ts`, `wrath.ts`),
+  and the minds bear the weather more lightly (`psyche.ts`). The judges of the treason law are
+  now named rather than read off their might, since some of the others are nearly as strong.
+- **Their new weaving, in support of Siuan** (`swells.ts`): while Siuan works her swells, each of the
+  eleven sends a rope of her own from her hands, green with the pounamu where it leaves them, across
+  to one of Siuan's two haul ropes, and winds it round hers along all its length, so that Siuan's are
+  braided cables of all their strength; each as many filaments as her strength carries, in her
+  third's colour.
+- Seen by day in the haze of Siuan's mist only: the everyday flow is now a far heavier sheaf; the
+  support braids are hard to tell from her ropes there, and the pounamu green at their hands is too
+  near the eye to be seen.

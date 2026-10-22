@@ -35,7 +35,7 @@
 import * as THREE from "three";
 import type { GodsBreath } from "./channelled-storm";
 import { manulaniSphere, CORE_AHEAD, MANULANI } from "./wrath";
-import { giveMinds, mindChunk, SIX_STRONGER, type Minds } from "./psyche";
+import { giveMinds, mindChunk, SIX_STRONGER, TER_ANGREAL, type Minds } from "./psyche";
 import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RENDER_ORDER } from "./weave";
 
 const SEGMENTS = 120;
@@ -324,7 +324,7 @@ function fiveLines(lines: number[]) {
 export function createFive(scene: THREE.Scene, layer: number) {
 	const twelve: number[] = [];
 	SLOTS.forEach((_, i) => {
-		for (let f = 0; f < Math.round(FIBRES * (MIGHTY.includes(i) ? 2.5 * SIX_MASS : 1)); f++) twelve.push(i);
+		for (let f = 0; f < Math.round(FIBRES * (MIGHTY.includes(i) ? 2.5 * SIX_MASS : 1) * Math.cbrt(TER_ANGREAL[i]!)); f++) twelve.push(i);
 	});
 	const strongest: number[] = [];
 	for (let f = 0; f < Math.round(FIBRES * 4.9 * SIX_MASS); f++) strongest.push(STRONGEST);

@@ -69,11 +69,20 @@ export const TEMPERS = [
 // commands"): their true strength, 3.6 times what it was.
 // Drawn, as all strength is, in mass by its cube root.
 export const SIX_STRONGER = 3.6;
+// The ter'angreal (the owner, 23 October: "The other Aes Sedai now have a ter'angreal, each one of
+// them. It is a small figurine of a dog made of pounamu. Every one of them has had their strength
+// increase by up to 800% and now their style of weaving to support Siuan are changing"). Each of
+// the eleven besides Siuan (Siuan · Fathom) holds one. Pounamu is river stone, so each is
+// strengthened by how near water she is: Siuan · Reef, the most water-minded, nine times (800%
+// more), the air-minded Leane's about twice. Their true strength, by mind (Siuan, the strongest and
+// Manulani, who hold none, 1).
+export const TER_ANGREAL = TEMPERS.map((temper, i) => (i === 2 || i >= 12 ? 1 : 1 + 8 * (temper.water / 0.95) ** 2));
 // Strength as their ropes' measures (MIGHT in channellers.ts): the four mighty, the strongest, Manulani.
-const MIGHT = [2.5, 2.5, 2.5, 1, 1, 2.5, 1, 1, 1, 1, 1, 1, 4.9, 5.1].map((might) => (might > 2 ? might * Math.cbrt(SIX_STRONGER) : might));
+const MIGHT = [2.5, 2.5, 2.5, 1, 1, 2.5, 1, 1, 1, 1, 1, 1, 4.9, 5.1].map((might, i) => (might > 2 ? might * Math.cbrt(SIX_STRONGER) : might) * Math.cbrt(TER_ANGREAL[i]!));
 export const STRONGEST_MIND = 12;
 // The strongest channellers, who try the others: the four mighty, the strongest, Manulani.
-const JUDGES = MIGHT.map((might, i) => (might > 2 ? i : -1)).filter((i) => i >= 0);
+// (Named, not read off their might: with the ter'angreal some of the others are nearly as strong.)
+const JUDGES = [0, 1, 2, 5, 12, 13];
 // Treason: deserting the work, fled for this long (s, at full flight) while the others held.
 const TREASON = 45;
 // The trial (s), and the cut that stills her, running out along her rope (s).
