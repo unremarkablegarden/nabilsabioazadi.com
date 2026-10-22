@@ -33,6 +33,7 @@
 // carry. The reading is still the strongest's own, alone, before the link is made.
 import * as THREE from "three";
 import { lines } from "./embroidery";
+import { GUARD_PATH, pathPassChunk, pathsShared, ribbonPaths } from "./ribbon-paths";
 import { pixelRatio, ribbonShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
 
 const SEA_FILAMENTS = 1400;
@@ -70,6 +71,7 @@ uniform float uTension;
 uniform vec3 uWindDir;
 uniform float uFade;
 uniform float uDay;
+${pathPassChunk}
 varying float vAlpha;
 varying float vEdge;
 ${ribbonShaderChunk}
@@ -203,7 +205,12 @@ void main() {
 	vAlpha = shown * uFade;
 	vEdge = aSide;
 	mat4 vp = projectionMatrix * viewMatrix;
+#ifdef PATH_PASS
+	vec4 clipAhead = vp * vec4( next, 1.0 );
+	pathCell( 0.0, vp * vec4( here, 1.0 ), vec4( clipAhead.xy, clipAhead.w, mix( 1.0, 1.3, uDay ) ) );
+#else
 	gl_Position = ribbonPosition( vp * vec4( here, 1.0 ), vp * vec4( next, 1.0 ), aSide, mix( 1.0, 1.3, uDay ) );
+#endif
 }
 `;
 
@@ -293,11 +300,11 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1, 
 		uPixelRatio: pixelRatio,
 	};
 	const parts = [
-		{ geometry: lines(mass(READING_FILAMENTS), 200, (i) => [i, 0]), opacity: 0.03 },
-		{ geometry: lines(mass(SKY_FILAMENTS), 260, (i) => [i, 0]), opacity: 0.018 },
-		{ geometry: lines(mass(SEA_FILAMENTS), 300, (i) => [i, 0]), opacity: 0.018 },
-		{ geometry: lines(siuanLeads ? Math.round((TELLING_FILAMENTS * 4.9) / 2.5) : TELLING_FILAMENTS, 220, (i) => [i, 0]), opacity: 0.03 },
-	].map(({ geometry, opacity }, kind) => {
+		{ geometry: lines(mass(READING_FILAMENTS), 200, (i) => [i, 0]), segments: 200, opacity: 0.03 },
+		{ geometry: lines(mass(SKY_FILAMENTS), 260, (i) => [i, 0]), segments: 260, opacity: 0.018 },
+		{ geometry: lines(mass(SEA_FILAMENTS), 300, (i) => [i, 0]), segments: 300, opacity: 0.018 },
+		{ geometry: lines(siuanLeads ? Math.round((TELLING_FILAMENTS * 4.9) / 2.5) : TELLING_FILAMENTS, 220, (i) => [i, 0]), segments: 220, opacity: 0.03 },
+	].map(({ geometry, segments, opacity }, kind) => {
 		const own = {
 			uKind: { value: kind },
 			uOpacity: { value: opacity },
@@ -309,7 +316,10 @@ export function createStilling(scene: THREE.Scene, layer: number, strength = 1, 
 			uTinted: { value: 0 },
 			uHandsAt: { value: STRONGEST_HANDS },
 		};
-		const mesh = new THREE.Mesh(geometry, new THREE.ShaderMaterial({ uniforms: { ...shared, ...own }, vertexShader: vertex, fragmentShader: fragment, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+		// Each point of a filament worked out once for both its edges (ribbon-paths.ts).
+		const paths = pathsShared() ? ribbonPaths(geometry, segments + 1, vertex, { ...shared, ...own }, GUARD_PATH) : undefined;
+		const mesh = new THREE.Mesh(geometry, new THREE.ShaderMaterial({ uniforms: paths?.uniforms ?? { ...shared, ...own }, vertexShader: paths?.vertexShader ?? vertex, fragmentShader: fragment, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+		if (paths) mesh.onBeforeRender = (renderer, _scene, camera) => paths.run(renderer, camera);
 		mesh.frustumCulled = false;
 		mesh.renderOrder = WEAVE_RENDER_ORDER;
 		mesh.layers.set(layer);

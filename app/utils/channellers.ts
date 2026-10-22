@@ -36,6 +36,7 @@ import * as THREE from "three";
 import { CHANNELLERS, channelPathChunk } from "./channel-path";
 import type { GerstnerUniforms } from "./gerstner-waves";
 import { SIX_STRONGER } from "./psyche";
+import { pathPassChunk, pathsShared, ribbonPaths, THREAD_PATH } from "./ribbon-paths";
 import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RENDER_ORDER } from "./weave";
 
 // What the weaving looks like follows the owner's reference (the women channelling together in
@@ -174,6 +175,7 @@ uniform vec4 waveForm[ ${trains} ];
 uniform float waveFade[ ${trains} ];
 uniform float waveSteepness;
 uniform float waveTime;
+${pathPassChunk}
 varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
@@ -595,6 +597,9 @@ void main() {
 		vTint = vSheath = vec3( 0.0 );
 		vAlpha = vEdge = vSoft = vWhite = vShade = 0.0;
 		vWide = 1.0;
+#ifdef PATH_PASS
+		pathCell( 1.0, vec4( 0.0 ), vec4( 0.0 ) );
+#endif
 		return;
 	}
 	mat4 viewProjection = projectionMatrix * viewMatrix;
@@ -628,7 +633,11 @@ void main() {
 	// spread over so much dark could not be seen at all.)
 	// (Not by the boat, where a broad ribbon so close to the eye is a bar of light.)
 	float nightReading = atReading * ( 1.0 - uDay ) * ( 1.0 - aSoft ) * smoothstep( 0.1, 0.45, aT / 0.7 ) * ( 1.0 - fine );
+#ifdef PATH_PASS
+	pathCell( 0.0, clip, vec4( clipAhead.xy, clipAhead.w, body * vWide * aThread.w * ( 1.0 + 4.0 * lingering + 3.0 * soften * ( 1.0 - aSoft ) + 3.5 * nightReading ) ) );
+#else
 	gl_Position = ribbonPosition( clip, clipAhead, aSide, body * vWide * aThread.w * ( 1.0 + 4.0 * lingering + 3.0 * soften * ( 1.0 - aSoft ) + 3.5 * nightReading ) );
+#endif
 
 	float ahead = max( aheadAt( aT ), 0.0 );
 	float q = log( ahead + 12.0 );
@@ -1516,11 +1525,13 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		waveSteepness: sea.waveSteepness,
 		waveTime: sea.waveTime,
 	};
+	// Each point of a thread worked out once for both its edges (ribbon-paths.ts).
+	const paths = pathsShared() ? ribbonPaths(geometry, SEGMENTS + 1, vertexShader(sea.waves.value.length), uniforms, THREAD_PATH) : undefined;
 	const mesh = new THREE.Mesh(
 		geometry,
 		new THREE.ShaderMaterial({
-			uniforms,
-			vertexShader: vertexShader(sea.waves.value.length),
+			uniforms: paths?.uniforms ?? uniforms,
+			vertexShader: paths?.vertexShader ?? vertexShader(sea.waves.value.length),
 			fragmentShader,
 			transparent: true,
 			depthWrite: false,
@@ -1531,6 +1542,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	);
 	mesh.frustumCulled = false;
 	mesh.renderOrder = WEAVE_RENDER_ORDER;
+	if (paths) mesh.onBeforeRender = (renderer, _scene, camera) => paths.run(renderer, camera);
 	scene.add(mesh);
 
 	// The story. `since` is seconds into the present part of it.
