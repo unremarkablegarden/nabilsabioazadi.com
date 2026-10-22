@@ -65,6 +65,8 @@ const wrathRaised = ref(false);
 const fiveRaised = ref(false);
 // Vesal's storm (channelled-storm.ts): the day's own weather made great, the six guarding the boat.
 const vesalRaisedNow = ref(false);
+// Siuan's swells and mist (channelled-storm.ts, swells.ts).
+const siuanRaisedNow = ref(false);
 // The whales who greet it, where they were last heard (server/api/whales.get.ts).
 const whalesLine = ref<string>();
 const captionInNavigation = useState("caption-in-navigation", () => false);
@@ -164,7 +166,7 @@ const liveFigures = computed(() => {
 
 watchEffect(() => {
 	shownAt.value = dateAtBoatHour(hour.value, pretendDate.value ?? new Date()).getTime();
-	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: channelled.value ? (vesalRaisedNow.value ? VESAL_WORDS : fiveRaised.value && wrathRaised.value ? BOTH_WORDS : fiveRaised.value ? FIVE_WORDS : wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined, whales: channelled.value && fiveRaised.value ? whalesLine.value : undefined };
+	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: channelled.value ? (siuanRaisedNow.value ? SIUAN_WORDS : vesalRaisedNow.value ? VESAL_WORDS : fiveRaised.value && wrathRaised.value ? BOTH_WORDS : fiveRaised.value ? FIVE_WORDS : wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined, whales: channelled.value && fiveRaised.value ? whalesLine.value : undefined };
 });
 
 onMounted(async () => {
@@ -552,6 +554,14 @@ onMounted(async () => {
 		const since = compelledSeconds();
 		return since === undefined ? 0 : compelledShare(since);
 	};
+	// Siuan's swells (siuanSea): "siuan" in storm.json, or ?siuan for this visit from now, ?siuan=900
+	// fifteen minutes in, ?siuan=off without them.
+	const siuanAsked = query.get("siuan");
+	const siuanSeconds = () => (siuanAsked === "off" ? undefined : siuanAsked !== null ? (Number(siuanAsked) || 0) + (Date.now() - pageOpened) / 1000 : siuanSince(new Date()));
+	const siuanUp = () => {
+		const since = siuanSeconds();
+		return since === undefined ? 0 : siuanRaised(since);
+	};
 	const vesalFigures = () => {
 		const since = vesalSeconds();
 		return since !== undefined && realNow ? vesalStorm(realNow, vesalRaised(since), compelledNow()) : undefined;
@@ -579,6 +589,9 @@ onMounted(async () => {
 		vesalRaisedNow.value = !!vesal;
 		// (Worsened as any storm is, storm.json "worse": 12.66 since the owner's "worse by 1166%".)
 		if (vesal) return { ...worsened(vesal, worse), ...asPretended };
+		const siuan = siuanUp();
+		siuanRaisedNow.value = siuan > 0;
+		if (siuan > 0 && realNow) return { ...siuanSea(realNow, siuan), ...asPretended };
 		return stillDone ? {} : stormOn ? { ...worsened(bothFigures ? BOTH_STORM : fiveFigures ? FIVE_STORM : wrathFigures ? WRATH_STORM : CHANNELLED_STORM, worse), ...(noRain ? { precipitation: 0 } : {}), ...asPretended } : asPretended;
 	};
 	let pretend = pretendNow();
@@ -722,6 +735,8 @@ onMounted(async () => {
 	const compelled = createCompelled(scene, SCREEN_LAYER);
 	// Noon at night (noon.ts): "noon" in storm.json, or ?noon for this visit from now, ?noon=off.
 	const noon = createNoon(scene, SCREEN_LAYER);
+	// Siuan's haul and her mist (swells.ts).
+	const swells = createSwells(scene, SCREEN_LAYER);
 	const noonAsked = query.get("noon");
 	const noonSeconds = () => (noonAsked === "off" || calmMotion ? undefined : noonAsked !== null ? (Number(noonAsked) || 0) + (Date.now() - pageOpened) / 1000 : noonSince(new Date()));
 	const contestAsked = query.get("contest");
@@ -929,7 +944,10 @@ onMounted(async () => {
 		const raising = vesalSeconds();
 		const driving = compelledSeconds();
 		const changing = (raising !== undefined && raising < 700) || (driving !== undefined && (driving < COMPEL_BIND + 60 || (driving > COMPEL_HELD - 30 && driving < COMPEL_LENGTH + 60)));
-		if (raising !== undefined && changing && stormNow() === stormOn && measured) {
+		// (And while Siuan pulls her swells up or lets them down.)
+		const pulling = siuanSeconds();
+		const swelling = pulling !== undefined && (pulling < 700 || (pulling > siuanHours() * 3600 - 60 && pulling < siuanHours() * 3600 + 1900));
+		if (((raising !== undefined && changing) || swelling) && stormNow() === stormOn && measured) {
 			pretend = pretendNow();
 			conditions.value = { ...measured, ...pretend };
 			return;
@@ -1145,6 +1163,15 @@ onMounted(async () => {
 		// story keep September's sea, which only ever ran away from the viewer.
 		let crosswind = 0;
 		let gustiness = 0;
+		const siuanAt = calmMotion ? undefined : siuanSeconds();
+		const siuanNow = siuanAt === undefined ? 0 : siuanRaised(siuanAt);
+		const secondFrom = !liveOnly
+			? 0
+			: wrathOn
+				? turnedTowards(liveOnly.secondSwellDirection, (liveOnly.swellDirection + 40) % 360, stillShare >= 0 ? leftOf(stillShare, STILLING_STAGES.swell) : 1)
+				: siuanNow > 0
+					? turnedTowards(liveOnly.secondSwellDirection, (liveOnly.swellDirection + siuanCrossing(siuanAt!)) % 360, THREE.MathUtils.smoothstep(siuanNow, 0, 1))
+					: liveOnly.secondSwellDirection;
 		if (liveOnly) {
 			const windSpeed = liveOnly.windSpeed / 3.6;
 			useMeasuredSea(waveUniforms, {
@@ -1152,7 +1179,8 @@ onMounted(async () => {
 				// (In Peta's storm Moiraine's four hold the second swell turned 40 degrees across the
 				// first: a crossing sea, whose meeting crests heap into peaks.)
 				// (Stilled, it turns back to the measured second swell with the rest of the swell.)
-				secondSwell: { height: liveOnly.secondSwellHeight, period: liveOnly.secondSwellPeriod, from: wrathOn ? turnedTowards(liveOnly.secondSwellDirection, (liveOnly.swellDirection + 40) % 360, stillShare >= 0 ? leftOf(stillShare, STILLING_STAGES.swell) : 1) : liveOnly.secondSwellDirection },
+				// (Siuan sweeps hers slowly across the first, so that the peaked crests twist.)
+				secondSwell: { height: liveOnly.secondSwellHeight, period: liveOnly.secondSwellPeriod, from: secondFrom },
 				windSea: { height: liveOnly.windWaveHeight, period: liveOnly.windWavePeriod, from: liveOnly.windWaveDirection },
 				wind: { speed: windSpeed, from: liveOnly.windDirection },
 				facing: PLACE.bearing,
@@ -1607,6 +1635,29 @@ onMounted(async () => {
 					}
 				: undefined,
 		);
+		// Siuan's swells: her haul with the sea, and the mist she lays over it.
+		const offAhead = (from: number) => THREE.MathUtils.degToRad(((from - PLACE.bearing + 540) % 360) - 180);
+		swells.update(
+			siuanNow > 0 && liveOnly
+				? {
+						raised: siuanNow,
+						time,
+						delta,
+						boat: camera.position,
+						ahead: skyAhead,
+						wind: rainWind,
+						swells: [
+							{ from: offAhead(liveOnly.swellDirection), height: liveOnly.swellHeight, period: liveOnly.swellPeriod },
+							{ from: offAhead(secondFrom), height: liveOnly.secondSwellHeight, period: liveOnly.secondSwellPeriod },
+						],
+						heave: seaAtBoat,
+						day: daylight,
+						gain: 1.5 / steadyExposure,
+						tint: skySheath[1]!,
+						mist,
+					}
+				: undefined,
+		);
 		// The six's noon: their sun, and their ropes up into it.
 		const noonAt = noonSeconds();
 		noonByThem = noonAt === undefined ? 0 : noonShare(noonAt);
@@ -1756,6 +1807,7 @@ onMounted(async () => {
 		contest.dispose();
 		compelled.dispose();
 		noon.dispose();
+		swells.dispose();
 		stilling.dispose();
 		rainCut.dispose();
 		stopWatching();

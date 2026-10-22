@@ -428,6 +428,48 @@ export const vesalRaised = (since: number) => clamp01((since - 60) / 600);
 // How far the guard reaches round the boat (m): by the six's linked strength, as a rope's girth goes;
 // wider, as far again by a half, while the strongest drives them all (compelled).
 export const vesalGuardReach = (compelled = 0) => 300 * Math.cbrt(STILLING_STRENGTH.mighty) * (1 + 0.5 * clamp01(compelled));
+// Siuan's swells (the owner, 22 October: "Give Siuan the chance to create a new weave that will
+// produce waves that peak and twist just so that she can then channel mist at the same time as
+// pulling up immense swells"; swells.ts draws her weave). Siuan (Siuan · Fathom, the fisher's
+// daughter) pulls up two immense swells out of the day's own: the real swell, from its own bearing,
+// to some 18 m at 22 s, and a second crossing it, 12 m at 18 s. Where two swells cross their crests
+// heap into peaks; she sweeps the angle between them slowly (siuanCrossing), so that the peaked
+// crests twist as they come. Long and glassy, as swells are, no steeper than water stands (one in
+// thirty), under the day's own light wind. And at once she channels mist off them: the air thickened
+// to a sea haze (visibility 1.5 km, the air saturated), which her weave lays low over the swells.
+// `raised`: 0 the day's sea, 1 hers in full.
+export function siuanSea(real: SeaConditions, raised: number): Partial<SeaConditions> {
+	const k = ease(clamp01(raised));
+	const to = (from: number, hers: number) => from + (hers - from) * k;
+	return {
+		swellHeight: to(real.swellHeight, 18),
+		swellPeriod: to(real.swellPeriod, 22),
+		secondSwellHeight: to(real.secondSwellHeight, 12),
+		secondSwellPeriod: to(real.secondSwellPeriod, 18),
+		waveHeight: to(real.waveHeight, Math.hypot(18, 12, real.windWaveHeight)),
+		wavePeriod: to(real.wavePeriod, 21),
+		waveTrend: to(real.waveTrend, 1),
+		visibility: Math.exp(to(Math.log(Math.max(real.visibility, 1)), Math.log(1500))),
+		humidity: to(real.humidity, 100),
+	};
+}
+export const SIUAN_WORDS = "Channelled: Siuan's swells and mist";
+// The angle (degrees) the second swell runs across the first, swept slowly so the crests twist.
+export const siuanCrossing = (seconds: number) => 70 + 35 * Math.sin((2 * Math.PI * seconds) / 240);
+// Siuan's swells: storm.json "siuan": { "from": ISO time, "hours": 3 }: seconds since, and for how long.
+export function siuanSince(now: Date) {
+	const siuan = (stormSwitch as { siuan?: { from: string | null; hours?: number } }).siuan;
+	if (!siuan?.from) return undefined;
+	const since = (now.getTime() - new Date(siuan.from).getTime()) / 1000;
+	return since >= 0 ? since : undefined;
+}
+export const siuanHours = () => (stormSwitch as { siuan?: { hours?: number } }).siuan?.hours ?? 3;
+// How far her swells are up (0..1): raised over ten minutes, held, let down over thirty.
+export function siuanRaised(since: number, hours = siuanHours()) {
+	const held = hours * 3600;
+	return clamp01(since / 600) * (1 - clamp01((since - held) / 1800));
+}
+
 // Noon at night (noon.ts): storm.json "noon": { "from": ISO time }, seconds since.
 export function noonSince(now: Date) {
 	const from = (stormSwitch as { noon?: { from: string | null } }).noon?.from;

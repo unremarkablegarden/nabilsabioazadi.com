@@ -660,3 +660,28 @@ climbs; held until the real dawn comes and takes it over (it gives way as the re
 2° under the horizon to 8° over: no clock). Their ropes run from their hands up into it, each as
 many filaments as her strength carries, lost in the light at the top. `storm.json` `"noon":
 { "from": ... }`; `?noon` for one visit from now, `?noon=300` five minutes in, `?noon=off`.
+
+## 28. Siuan's swells and mist (22 October)
+
+The owner: "Give Siuan the chance to create a new weave that will produce waves that peak and twist
+just so that she can then channel mist at the same time as pulling up immense swells".
+`storm.json` `"siuan": { "from": ..., "hours": 3 }`; `?siuan` for one visit from now, `?siuan=900`
+fifteen minutes in, `?siuan=off`. Under the six's noon (§27) while it holds.
+
+- **Immense swells** (`siuanSea` in `channelled-storm.ts`): out of the day's own swell, from its own
+  bearing, to 18 m at 22 s, and a second crossing it, 12 m at 18 s; together about 21.6 m every
+  21 s. Long and glassy (no steeper than about one in forty), under the day's own light wind.
+  Raised over ten minutes, held for the hours set, let down over thirty.
+- **Peak and twist**: where the two cross their crests heap into peaks; she sweeps the angle
+  between them from 35° to 105° and back every four minutes (`siuanCrossing`, the second swell's
+  bearing turned each frame), so the peaked crests twist as they come.
+- **Mist**: the air thickened to a sea haze (visibility 1.5 km, the air saturated), and her weave
+  (`swells.ts`) lays long soft veils of mist low over the swells, lifted as they pass and drifting
+  downwind.
+- **Her haul** (`swells.ts`): two great ropes in her sea glass from her hands out low over the water
+  towards where each swell comes from, down into the sea about 2 km off, drawn tight with the
+  water's own going under the boat, twice to each swell.
+- The menu: "Channelled: Siuan's swells and mist".
+- Seen at noon (the six's) in stills: hazy light, swell faces and peaks, the veils soft; her two
+  haul ropes are hard to pick out in the haze. The mist veils follow her two swells only, not the
+  drawn sea exactly, so where the sea runs high they can sit low on it.
