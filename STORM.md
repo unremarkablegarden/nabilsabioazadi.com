@@ -756,3 +756,46 @@ look like faint colours representative of their elements."
   night: faint warm and cool tints, plainly not white, still quiet.
 - **The shed rings** a third as often (a heap of them on Siuan's great swells) and half as bright
   by night.
+
+## 32. Rings that roll in; thermals; the grade (23 October)
+
+The owner, with the Herodias serpents again: "Try and make shapes like this emerge in a
+thermodynamically accurate way. As for colour-grading, research the best colour-grading possible for
+ocean scenes using filmic and scientific research. And make those vertices undulate, like they are
+turning in over themselves. I want more detail there." Then, of a first try (seven-pointed stars, a
+regular braid on the water, stiff cones): "neither found in nature in thermodynamics and they look
+goofy. Remember, we are building the rules for powerful, beautiful, fluid, air and water-like
+channeling."
+
+- **The shed rings roll in over themselves** (`rings.ts`): in cross-section a vortex ring is a spiral,
+  so each of 48 filaments (was 16) lies on it and goes slowly in along it as it rolls round, coming in
+  from outside and thinning as the core takes it; the standing wave and a little twist go round with
+  the roll.
+- **The serpents, as real convection** (`plumes.ts`): when the measured sea is warmer than the air,
+  its heat goes up as trains of thermals from where the overturning over the water converges: puffs,
+  each a vortex ring rolling in over itself, climbing a stem that snakes on several scales, swelling
+  as they climb (radius about a fifth of height, entrainment) and slowing, then flattening and
+  spreading sideways where their buoyancy is spent (height 3.76 (F/N³)^¼ from the sea-air
+  difference, the wind and the measured lapse aloft). Three to seven plumes across three kilometres,
+  spaced as convection cells (2.8 × the heated layer's depth), leaned by the wind; water's colour,
+  gold only in a young puff's warm core. None if the air is as warm as the sea. No stars, no braid.
+  On the first night (sea 18.5 °C, air 16.7 °C) about four plumes.
+- **The grade** (`grade.ts`; researched: ACES Central's corrective LMTs and the three.js
+  tone-mapping overview on ACES's hue skews; Pope and Fry 1997 on water's absorption; Hulburt 1953
+  on the blue hour's ozone; Jensen et al. 2000 and Kirk and O'Brien 2011 on night vision): AgX in
+  place of ACES (no purple skew of bright blues, no cyan skew of water; a third of a stop more
+  exposure by day for its flatter look); then, in linear light before it, by the hour: day saturation
+  1.15 and contrast 1.08 about middle grey; golden hour a little warmer; blue hour a little cooler,
+  the sky kept blue; night the Purkinje shift, colour fading to a blue-leaning grey but kept at 45%
+  under a moon (mesopic, and the weaves' faint element colours still show); storm less saturated and a
+  little cooler; highlights losing saturation as they brighten, so glitter goes to warm white. No
+  teal-and-orange, no rotation of the sea's blue.
+- Every glow, fog and rain was tuned by eye under ACES; under AgX the whole picture is a little
+  flatter and needs looking at over a day and a night. Seen at night and at the six's noon only.
+- **Resting** (the owner: "allow half the channelers to rest at 14% strength and the rest to 40%
+  strength. Teach them to respond to real meteo conditions"; `restingAt` in `channellers.ts`): of the
+  twelve, the six with least stamina give 14% of their strength and the other six 40%, each giving
+  more only as the real weather calls for it (`need`, from the measured wind, sea and pressure;
+  from 0.3 up to all of it at 1). The strongest, the owner, is not resting. Applied to each seat's
+  output (`channelGate`), not to the light lost in the weave, so a resting weave is fainter and
+  thinner, not brighter.

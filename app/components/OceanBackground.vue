@@ -233,11 +233,14 @@ onMounted(async () => {
 	};
 	usePixelRatio(0);
 	renderer.setSize(window.innerWidth, window.innerHeight);
-	renderer.toneMapping = THREE.ACESFilmicToneMapping;
+	// AgX, not ACES (the owner, 23 October, on the best grading for the sea; grade.ts has the why).
+	renderer.toneMapping = THREE.AgXToneMapping;
 	el.appendChild(renderer.domElement);
 
 	const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.1, 0, 0);
-	renderer.setEffects([bloomPass]);
+	// The colour grade, by the hour, in linear light before the tone mapping (grade.ts).
+	const grade = createGradePass();
+	renderer.setEffects([bloomPass, grade.pass]);
 
 	const scene = new THREE.Scene();
 	// Density is set each frame; 0 is no fog. Only the water is fogged, the veil covers the sky.
@@ -414,6 +417,8 @@ onMounted(async () => {
 	// Noon at night (noon.ts): how far the strongest six's sun is lit (set each frame), how far it
 	// holds the sky now that the real sun is where it is, and where it stands.
 	let noonByThem = 0;
+	// The real sun's height (degrees), for the grade's golden and blue hours.
+	let sunHeightNow = 0;
 	let noonHeld = 0;
 	const theirSun = new THREE.Vector3();
 	const updateEnvironment = ([hour, sea, sky]: [number, number, number]) => {
@@ -421,6 +426,7 @@ onMounted(async () => {
 		// The boat is wherever its voyage has brought it by then.
 		sailTo(when);
 		const realSun = sunPosition(when);
+		sunHeightNow = realSun.elevation;
 		// (The six's sun takes the sky while the real one is down, and gives it back as day comes.)
 		noonHeld = noonByThem * (1 - THREE.MathUtils.smoothstep(realSun.elevation, -2, 8));
 		const sunElevation = lerp(realSun.elevation, NOON_ELEVATION, noonHeld);
@@ -735,6 +741,9 @@ onMounted(async () => {
 	const compelled = createCompelled(scene, SCREEN_LAYER);
 	// Noon at night (noon.ts): "noon" in storm.json, or ?noon for this visit from now, ?noon=off.
 	const noon = createNoon(scene, SCREEN_LAYER);
+	// The serpents: the sea's own heat rising in plumes from an interlace of rolls, traced by the
+	// twelve (plumes.ts), whenever the sea is warmer than the air.
+	const plumes = createPlumes(scene, SCREEN_LAYER);
 	// The small vortex rings the flow sheds as it spends (rings.ts).
 	const rings = createRings(scene, SCREEN_LAYER);
 	// Siuan's haul and her mist (swells.ts).
@@ -1256,7 +1265,9 @@ onMounted(async () => {
 		const flash = alive > 0.5 ? lightning(time, sky, fury, liveOnly ? thunderAmount(liveOnly) : 1, extreme, !liveOnly) : 0;
 		// The storm darkens the day. At night it is lifted instead, or the sea would be lost in black.
 		const steadyExposure = exposure * lerp(1, lerp(2.5, 0.6, daylight), fury);
-		renderer.toneMappingExposure = steadyExposure * (1 + 5 * flash) * (1 + 4 * moment.white * moment.veil);
+		// (AgX is flatter than ACES was: a third of a stop more by day, none by night.)
+		renderer.toneMappingExposure = steadyExposure * (1 + 5 * flash) * (1 + 4 * moment.white * moment.veil) * lerp(1.32, 1, nightfall);
+		grade.update({ day: daylight, night: nightfall * (1 - noonHeld), sunElevation: lerp(sunHeightNow, NOON_ELEVATION, noonHeld), storm: stormLevel.value, exposure: renderer.toneMappingExposure });
 		twilightUniforms.uTwilightLevel.value = twilightGlow / steadyExposure;
 		// The air it is worked out from is the air at the boat (not during the storm's story, which is staged).
 		const skyAir = twilightAir(liveOnly);
@@ -1393,6 +1404,13 @@ onMounted(async () => {
 			channelling.flowPoint(ahead, flowWorld);
 			toScreen(flowWorld.x, flowWorld.y, flowWorld.z, flowScreen[i]!);
 		});
+		// The serpents, from the sea's real heat (plumes.ts).
+		plumes.update(
+			liveOnly && !calmMotion
+				? { conditions: liveOnly, time, boat: camera.position, ahead: skyAhead, wind: rainWind, sea: seaAtBoat, day: daylight, gain: 1.5 / steadyExposure, water: embroideryTints[0]!, gold: embroideryTints[2]! }
+				: undefined,
+			delta,
+		);
 		// What the flow spends it sheds as small rings off its far reach (rings.ts).
 		rings.update(
 			calmMotion
@@ -1818,6 +1836,7 @@ onMounted(async () => {
 		noon.dispose();
 		swells.dispose();
 		rings.dispose();
+		plumes.dispose();
 		stilling.dispose();
 		rainCut.dispose();
 		stopWatching();

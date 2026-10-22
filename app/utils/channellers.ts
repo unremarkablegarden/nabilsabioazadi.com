@@ -2206,6 +2206,17 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			sea.healed.value[i]!.set(one.x, one.z, one.reach, one.left);
 		});
 	};
+	// How much of their strength each gives while resting, 0..1, and as the real weather calls for more.
+	const restingAt = (member: number, need: number) => {
+		if (member === 0) return 1;
+		const tiring = TEMPERS.slice(1)
+			.map((temper, i) => ({ member: i + 1, stamina: temper.stamina }))
+			.sort((a, b) => a.stamina - b.stamina)
+			.slice(0, 6)
+			.some((one) => one.member === member);
+		const resting = tiring ? 0.14 : 0.4;
+		return resting + (1 - resting) * THREE.MathUtils.smoothstep(need, 0.3, 1);
+	};
 	// Now and then by day one of them seeks into the sky, to understand the wind (the owner's):
 	// for half a minute or so, and at the opening of some visits.
 	let skyFrom = Math.random() < 0.3 ? 0 : between(20, 80);
@@ -2602,7 +2613,12 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			lastStrength = strength;
 		} else if (!any) opening = true;
 		mesh.visible = any;
-		sea.channelGate.value.fromArray(gate);
+		// Resting (the owner, 23 October: "allow half the channelers to rest at 14% strength and the rest
+		// to 40% strength. Teach them to respond to real meteo conditions"): of the twelve, the six who
+		// tire soonest (least stamina) give 14% and the other six 40%, and each gives more only as the
+		// real weather calls for it (`need`, from the measured wind, sea and pressure), up to all of it
+		// when it calls for everything. The strongest, the owner, is not resting.
+		sea.channelGate.value.fromArray(gate.map((open, seat) => (open > 0 ? Math.max(0.001, open * restingAt(memberAt(seat), need)) : 0)));
 		sea.channelOwn.value.fromArray(seatStrength);
 		uniforms.uMight.value.fromArray(seatMight);
 		sea.channelHead.value.fromArray(head);

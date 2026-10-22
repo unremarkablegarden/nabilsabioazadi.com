@@ -7,16 +7,21 @@
 //             and the sea and wind feed it (each ring a quantum of what it lets go);
 //   going     a vortex ring carries itself along its own axis, onward and a little up, the wind
 //             taking it too; it slowly widens and slows as it goes;
-//   its form  a glass tube closed on itself: filaments on the shell of its core, so it is bright at
-//             its rims and clear through, as a bubble ring is; a standing wave of a whole number of
-//             crests runs round it (3 to 6), as on the cosmogram's ring, and slowly turns;
+//   its form  a glass tube closed on itself, rolling in over itself as a vortex ring does (the
+//             owner, 23 October: "make those vertices undulate, like they are turning in over
+//             themselves; I want more detail there"): in cross-section a ring is a spiral, the water
+//             about it drawn round the core and wound inward, so each filament lies on that spiral
+//             and goes slowly in along it as it rolls round, thinning as the core takes it in, and
+//             new ones come in from outside; bright at its rims and clear through, as a bubble ring
+//             is; a standing wave of a whole number of crests runs round it (3 to 6), as on the
+//             cosmogram's ring, and slowly turns, and the roll twists a little as it goes round;
 //   gone      it thins and fades into the air over some ten to sixteen seconds.
 // Soft, never a hard line: nothing jagged, nothing flashing.
 import * as THREE from "three";
 import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RENDER_ORDER } from "./weave";
 
 const RINGS = 24;
-const FILAMENTS = 16;
+const FILAMENTS = 48;
 const SEGMENTS = 120;
 
 const vertex = /* glsl */ `
@@ -34,6 +39,11 @@ varying float vAlpha;
 varying float vEdge;
 ${ribbonShaderChunk}
 
+// How far in along the spiral this filament is now (0 coming in from outside, 1 taken into the core).
+float spiralAt() {
+	float k = aCell.y / ${FILAMENTS}.0;
+	return fract( k * 3.0 + uTime * 0.07 * ( 0.8 + 0.4 * fract( k * 17.0 ) ) );
+}
 vec3 ringAt( int i, float t ) {
 	vec4 ring = uRing[ i ];
 	vec3 axis = normalize( uAxis[ i ].xyz + vec3( 1e-4 ) );
@@ -47,11 +57,14 @@ vec3 ringAt( int i, float t ) {
 	// (Gently: at more than a few per cent its crests read as corners, a polygon, from far off.)
 	float r = ring.w * ( 1.0 + 0.025 * wave );
 	vec3 centreLine = ring.xyz + ( u * cos( a ) + v * sin( a ) ) * r + axis * ring.w * 0.06 * wave * mode.z;
-	// On the shell of its core, each filament at its own place round it.
-	float f = aCell.y / ${FILAMENTS}.0 * 6.28318 + a * 2.0 + uTime * 0.6;
+	// Rolling in over itself: each filament on the spiral of the ring's cross-section, going in
+	// along it as it rolls round (s: 0 coming in from outside, 1 taken into the core).
+	float k = aCell.y / ${FILAMENTS}.0;
+	float s = spiralAt();
+	float roll = k * 6.28318 + s * 12.566 + uTime * 0.9 + a * 2.0 + 0.4 * sin( mode.x * a + mode.y );
+	float core = ring.w * ( 0.26 - 0.2 * s ) * ( 1.0 + 0.08 * sin( 3.0 * a + uTime * 0.5 + k * 9.0 ) );
 	vec3 radial = u * cos( a ) + v * sin( a );
-	float core = 0.16 * ring.w;
-	return centreLine + ( radial * cos( f ) + axis * sin( f ) ) * core;
+	return centreLine + ( radial * cos( roll ) + axis * sin( roll ) ) * core;
 }
 
 void main() {
@@ -62,6 +75,9 @@ void main() {
 	float far = length( here - cameraPosition );
 	// Pinching off, then thinning away.
 	float shown = smoothstep( 0.0, 0.12, life ) * ( 1.0 - smoothstep( 0.55, 1.0, life ) );
+	// Coming in from outside, and lost into the core.
+	float s_ = spiralAt();
+	shown *= smoothstep( 0.0, 0.15, s_ ) * ( 1.0 - smoothstep( 0.8, 1.0, s_ ) );
 	shown *= life > 0.0 && life < 1.0 ? 1.0 : 0.0;
 	shown *= smoothstep( 15.0, 60.0, far ) * exp( - far / 4000.0 );
 	vAlpha = shown;
@@ -81,7 +97,7 @@ varying float vEdge;
 void main() {
 	float across = abs( vEdge );
 	float body = pow( max( 1.0 - across * across, 0.0 ), 1.5 );
-	gl_FragColor = vec4( mix( uTint * uGain, uTint * uWhite, uDay ), body * vAlpha * mix( 0.035, 0.12, uDay ) );
+	gl_FragColor = vec4( mix( uTint * uGain, uTint * uWhite, uDay ), body * vAlpha * mix( 0.02, 0.07, uDay ) );
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }
