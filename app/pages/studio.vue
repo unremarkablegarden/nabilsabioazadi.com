@@ -4,27 +4,30 @@
 // It is a page to be come upon rather than led to: it is not in the menu, though search engines
 // are told of it (the sitemap), so that the pictures of the owner in it are found, each in words
 // that say who and what it shows, named for who is in it and who made it, credited inside the file.
+// The photographer, whose own site his credit leads to (in a new tab, as the menu's links to
+// other sites do).
+const photographer = { name: "Ben Clement", url: "https://benclement.world/" };
 const pictures = [
 	{
 		src: "/studio/nabil-sabio-azadi-studio-by-ben-clement.jpg",
 		width: 1334,
 		height: 2000,
 		alt: "Nabil Sabio Azadi sitting on the floor of a temporary studio in a black T-shirt and jeans, smiling, a notebook open on one knee and open notebooks laid out on the floor before him. Above, four white pelts and a drawing of a hand hang from coat hangers.",
-		caption: "Nabil Sabio Azadi in a temporary studio, 2016, among notebooks of anthropological research, ethnographic interviews, sketches and poems. Photograph by Ben Clement",
+		caption: "Nabil Sabio Azadi in a temporary studio, 2016, among notebooks of anthropological research, ethnographic interviews, sketches and poems.",
 	},
 	{
 		src: "/studio/nabil-sabio-azadi-writing-by-ben-clement.jpg",
 		width: 1333,
 		height: 2000,
 		alt: "Nabil Sabio Azadi stretched across the studio floor, writing in one of the many notebooks laid out open around him.",
-		caption: "Nabil Sabio Azadi working across the notebooks on the floor. Photograph by Ben Clement",
+		caption: "Nabil Sabio Azadi working across the notebooks on the floor.",
 	},
 	{
 		src: "/studio/nabil-sabio-azadi-pelt-by-ben-clement.jpg",
 		width: 1334,
 		height: 2000,
 		alt: "Nabil Sabio Azadi's hands at work on a white pelt across his lap, one holding a fine wooden tool, the other parting the fur.",
-		caption: "Nabil Sabio Azadi at work on one of the white pelts. Photograph by Ben Clement",
+		caption: "Nabil Sabio Azadi at work on one of the white pelts.",
 	},
 ];
 
@@ -52,7 +55,7 @@ useHead({
 				width: picture.width,
 				height: picture.height,
 				caption: picture.alt,
-				creator: { "@type": "Person", name: "Ben Clement" },
+				creator: { "@type": "Person", name: photographer.name, url: photographer.url },
 				creditText: "Photograph by Ben Clement",
 				copyrightNotice: "© Ben Clement",
 				about: { "@id": person["@id"] },
@@ -75,7 +78,10 @@ useHead({
 		</header>
 
 		<figure class="row figure">
-			<figcaption class="key caption">{{ pictures[0]!.caption }}</figcaption>
+			<figcaption class="key caption">
+				{{ pictures[0]!.caption }} Photograph by
+				<a :href="photographer.url" target="_blank" rel="noopener" :aria-label="`${photographer.name} (opens in a new tab)`">{{ photographer.name }}</a>
+			</figcaption>
 			<img :src="pictures[0]!.src" :alt="pictures[0]!.alt" :width="pictures[0]!.width" :height="pictures[0]!.height" fetchpriority="high" />
 		</figure>
 
@@ -93,7 +99,9 @@ useHead({
 		<figure class="row figure">
 			<figcaption class="key caption">
 				{{ pictures[1]!.caption }}<br /><br />
-				{{ pictures[2]!.caption }}
+				{{ pictures[2]!.caption }}<br /><br />
+				Photographs by
+				<a :href="photographer.url" target="_blank" rel="noopener" :aria-label="`${photographer.name} (opens in a new tab)`">{{ photographer.name }}</a>
 			</figcaption>
 			<div class="pair">
 				<img v-for="picture in pictures.slice(1)" :key="picture.src" :src="picture.src" :alt="picture.alt" :width="picture.width" :height="picture.height" loading="lazy" decoding="async" />
@@ -192,6 +200,15 @@ img {
 	width: auto;
 	max-width: 100%;
 	max-height: calc(100vh - 8rem);
+}
+.caption a {
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.2em;
+}
+.caption a:focus-visible {
+	outline: 3px solid var(--ink);
+	outline-offset: 3px;
 }
 .caption {
 	letter-spacing: 0.02em;

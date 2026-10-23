@@ -89,7 +89,10 @@ const links: { label: string; href: string; title?: boolean; after?: string }[] 
 			</header>
 
 			<figure class="row">
-				<figcaption class="key">Portrait<br />Photograph by Amelia J Dowd</figcaption>
+				<figcaption class="key">
+					Portrait<br />Photograph by
+					<a class="credit" href="https://www.ameliajdowd.com/" target="_blank" rel="noopener" aria-label="Amelia J Dowd (opens in a new tab)">Amelia J Dowd</a>
+				</figcaption>
 				<!-- The owner's portrait, cropped square for the layouts that show it as a disc or a
 				     square, and upright (four to five) for the others. The files are named for who is in
 				     them and who made them, and carry the photographer's credit inside them (IPTC, which
@@ -301,6 +304,13 @@ a {
 }
 a:hover {
 	text-decoration-thickness: 2px;
+}
+/* The photographer's name in the portrait's credit is part of the label, not a link set apart. */
+a.credit {
+	display: inline;
+	min-height: 0;
+	font: inherit;
+	text-underline-offset: 0.35em;
 }
 a:focus-visible {
 	outline: 3px solid currentColor;

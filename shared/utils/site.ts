@@ -27,7 +27,7 @@ export const portrait = {
 	name: "Nabil Sabio Azadi, portrait by Amelia J Dowd",
 	caption:
 		"Nabil Sabio Azadi in black and white, seated at a table in a dark jacket, hands pressed together upright in front of the face so that one eye looks out past them. Along the edges of the hands are tattooed the words Long heal and Sun bearing.",
-	creator: { "@type": "Person", name: "Amelia J Dowd" },
+	creator: { "@type": "Person", name: "Amelia J Dowd", url: "https://www.ameliajdowd.com/" },
 	creditText: "Photograph by Amelia J Dowd",
 	copyrightNotice: "© Amelia J Dowd",
 	about: { "@id": `${SITE.url}/#person` },
