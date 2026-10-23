@@ -6,7 +6,8 @@ import prismicConfig from "../../prismic.config.json";
 export default defineEventHandler(async (event) => {
 	const client = createClient(prismicConfig.repositoryName);
 	// The studio page is not in the menu, but is listed here so that its pictures are found.
-	const fixed = ["/", "/about", "/contact", "/writing", "/studio"].map((path) => ({ path, lastmod: "" }));
+	// Writing is added below only once there is something in it.
+	const fixed = ["/", "/about", "/contact", "/studio"].map((path) => ({ path, lastmod: "" }));
 	// The pictures on a page, so that image search knows them and whose they are.
 	const images: Record<string, string[]> = {
 		"/about": ["/about/nabil-sabio-azadi-by-amelia-j-dowd.jpg", "/about/nabil-sabio-azadi-by-amelia-j-dowd-tall.jpg"],
@@ -21,6 +22,7 @@ export default defineEventHandler(async (event) => {
 		for (const article of await client.getAllByType("article")) {
 			if (article.uid) found.push({ path: `/writing/${article.uid}`, lastmod: article.last_publication_date });
 		}
+		if (found.length) found.unshift({ path: "/writing", lastmod: "" });
 	} catch {
 		// No article type yet, or Prismic could not be reached.
 	}

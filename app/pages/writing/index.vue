@@ -16,7 +16,15 @@ const { data: articles } = await useAsyncData("articles", async () => {
 });
 
 const description = "Essays and other writing by Nabil Sabio Azadi.";
-useSeoMeta({ title: "Writing | Nabil Sabio Azadi", description, ogTitle: "Writing by Nabil Sabio Azadi", ogDescription: description });
+// While nothing is published the page is a single line, and search engines are asked not to list
+// it (nor is it in the sitemap); the first article published lists it again, with nothing to change.
+useSeoMeta({
+	title: "Writing | Nabil Sabio Azadi",
+	description,
+	ogTitle: "Writing by Nabil Sabio Azadi",
+	ogDescription: description,
+	robots: () => (articles.value?.length ? undefined : "noindex, follow"),
+});
 const year = (date: string) => (date ? new Date(date).getFullYear() : "");
 </script>
 
