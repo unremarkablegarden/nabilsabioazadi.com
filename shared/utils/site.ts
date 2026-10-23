@@ -43,10 +43,18 @@ export const person = {
 	description: SITE.description,
 	jobTitle: ["Artist", "Poet", "Editor", "Anthropologist", "Human rights law researcher"],
 	knowsAbout: ["Painting", "Poetry", "Movement", "Artist books", "Anthropology", "Human rights law"],
-	homeLocation: { "@type": "Place", name: "Tāmaki Makaurau, Aotearoa New Zealand" },
+	// Born and raised there (the About page); Wikipedia has the owner based in Brisbane now, so it is
+	// given as where they are from, not where they live.
+	birthPlace: { "@type": "Place", name: "Tāmaki Makaurau, Aotearoa New Zealand" },
 	affiliation: { "@type": "Organization", name: "Tîr Aho Studio", url: "https://www.tiraho.com.au" },
-	// The owner's own accounts, as linked from the menu's Elsewhere (Signal is a way to write, not a profile).
-	sameAs: ["https://www.instagram.com/nabilsabioazadi/", "https://cyberspace.online/nsa/blog"],
+	// The owner's own accounts, as linked from the menu's Elsewhere (Signal is a way to write, not a
+	// profile), and the Wikipedia article and Wikidata item that Google's panel about them is built on.
+	sameAs: [
+		"https://www.instagram.com/nabilsabioazadi/",
+		"https://cyberspace.online/nsa/blog",
+		"https://en.wikipedia.org/wiki/Nabil_Sabio_Azadi",
+		"https://www.wikidata.org/wiki/Q16864024",
+	],
 };
 
 // Structured data goes in a script tag, so nothing in it may close that tag.
