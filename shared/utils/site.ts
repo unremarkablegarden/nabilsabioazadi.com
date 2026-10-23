@@ -27,6 +27,8 @@ export const person = {
 	knowsAbout: ["Painting", "Poetry", "Movement", "Artist books", "Anthropology", "Human rights law"],
 	homeLocation: { "@type": "Place", name: "Tāmaki Makaurau, Aotearoa New Zealand" },
 	affiliation: { "@type": "Organization", name: "Tîr Aho Studio", url: "https://www.tiraho.com.au" },
+	// The owner's own accounts, as linked from the menu's Elsewhere (Signal is a way to write, not a profile).
+	sameAs: ["https://www.instagram.com/nabilsabioazadi/", "https://cyberspace.online/nsa/blog"],
 };
 
 // Structured data goes in a script tag, so nothing in it may close that tag.

@@ -33,9 +33,10 @@
 // bar, this one has an opaque ground, because text laid straight over a moving picture cannot
 // keep a contrast ratio.
 //
-// The typeface files are licensed to the owner and are kept out of this public repository
-// (public/fonts/licensed/ is git-ignored). Where they are missing, the system's own Helvetica
-// Neue, Helvetica or Arial, and Georgia, stand in.
+// The typeface files are licensed to the owner. Each is served as WOFF2, a third of the size and
+// drawn identically (the same outlines, widths and hinting; only the unread signature table is
+// dropped), with the original after it for any browser that cannot read WOFF2. Where they are
+// missing, the system's own Helvetica Neue, Helvetica or Arial, and Georgia, stand in.
 //
 // Accessibility is as in the earlier slabs: all text is on an opaque ground (about 16:1),
 // nothing moves but the drawer's own coming and going (stilled for anyone who asks their
@@ -47,7 +48,7 @@ const route = useRoute();
 // has been read: they had come in nearly three seconds into a load, behind the sea's picture.
 // (Medium is seen only in the open menu, and is left to come when needed.)
 useHead({
-	link: ["Lt", "Roman", "Bd"].map((weight) => ({ rel: "preload", as: "font", type: "font/ttf", href: `/fonts/licensed/HelveticaNeueLTCom-${weight}.ttf`, crossorigin: "anonymous" })),
+	link: ["Lt", "Roman", "Bd"].map((weight) => ({ rel: "preload", as: "font", type: "font/woff2", href: `/fonts/licensed/HelveticaNeueLTCom-${weight}.woff2`, crossorigin: "anonymous" })),
 });
 // Shared with OceanBackground, which stops drawing while this is true.
 const paused = useState("motion-paused", () => false);
@@ -404,50 +405,50 @@ const elsewhere = [
 <style scoped>
 @font-face {
 	font-family: "Helvetica Neue LT";
-	src: url("/fonts/licensed/HelveticaNeueLTCom-Roman.ttf") format("truetype");
+	src: url("/fonts/licensed/HelveticaNeueLTCom-Roman.woff2") format("woff2"), url("/fonts/licensed/HelveticaNeueLTCom-Roman.ttf") format("truetype");
 	font-weight: 400;
 	font-display: swap;
 }
 @font-face {
 	font-family: "Helvetica Neue LT";
-	src: url("/fonts/licensed/HelveticaNeueLTCom-Md.ttf") format("truetype");
+	src: url("/fonts/licensed/HelveticaNeueLTCom-Md.woff2") format("woff2"), url("/fonts/licensed/HelveticaNeueLTCom-Md.ttf") format("truetype");
 	font-weight: 500;
 	font-display: swap;
 }
 @font-face {
 	font-family: "Helvetica Neue LT";
-	src: url("/fonts/licensed/HelveticaNeueLTCom-Bd.ttf") format("truetype");
+	src: url("/fonts/licensed/HelveticaNeueLTCom-Bd.woff2") format("woff2"), url("/fonts/licensed/HelveticaNeueLTCom-Bd.ttf") format("truetype");
 	font-weight: 700;
 	font-display: swap;
 }
 @font-face {
 	font-family: "Helvetica Neue LT";
-	src: url("/fonts/licensed/HelveticaNeueLTCom-Lt.ttf") format("truetype");
+	src: url("/fonts/licensed/HelveticaNeueLTCom-Lt.woff2") format("woff2"), url("/fonts/licensed/HelveticaNeueLTCom-Lt.ttf") format("truetype");
 	font-weight: 300;
 	font-display: swap;
 }
 @font-face {
 	font-family: "Lyon Display";
-	src: url("/fonts/licensed/LyonDisplay-Light.otf") format("opentype");
+	src: url("/fonts/licensed/LyonDisplay-Light.woff2") format("woff2"), url("/fonts/licensed/LyonDisplay-Light.otf") format("opentype");
 	font-weight: 300;
 	font-display: swap;
 }
 @font-face {
 	font-family: "Lyon Display";
-	src: url("/fonts/licensed/LyonDisplay-LightItalic.otf") format("opentype");
+	src: url("/fonts/licensed/LyonDisplay-LightItalic.woff2") format("woff2"), url("/fonts/licensed/LyonDisplay-LightItalic.otf") format("opentype");
 	font-weight: 300;
 	font-style: italic;
 	font-display: swap;
 }
 @font-face {
 	font-family: "Lyon Text";
-	src: url("/fonts/licensed/LyonText-Regular.otf") format("opentype");
+	src: url("/fonts/licensed/LyonText-Regular.woff2") format("woff2"), url("/fonts/licensed/LyonText-Regular.otf") format("opentype");
 	font-weight: 400;
 	font-display: swap;
 }
 @font-face {
 	font-family: "Lyon Text";
-	src: url("/fonts/licensed/LyonText-RegularItalic.otf") format("opentype");
+	src: url("/fonts/licensed/LyonText-RegularItalic.woff2") format("woff2"), url("/fonts/licensed/LyonText-RegularItalic.otf") format("opentype");
 	font-weight: 400;
 	font-style: italic;
 	font-display: swap;
