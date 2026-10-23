@@ -70,7 +70,7 @@
 import * as THREE from "three";
 import type { GodsBreath } from "./channelled-storm";
 import { giveMinds, mindChunk, SIX_STRONGER, TER_ANGREAL, type Minds } from "./psyche";
-import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 const SEGMENTS = 120;
 // Filaments to a measure; the four mighty carry 2.5 measures, the strongest about 4.9 (as MIGHT in
@@ -351,6 +351,8 @@ void main() {
 		vec3 colour = mix( vTint, pow( vTint, vec3( 2.6 ) ) * 0.35, uDay );
 		gl_FragColor = vec4( colour * uGain, body * vAlpha * uOpacity * mix( 1.0, 3.5, uDay ) );
 	}
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }
@@ -504,6 +506,8 @@ void main() {
 	float light = 6.0 * ( 1.0 - smoothstep( 0.006, 0.012, a ) ) + 0.6 * exp( - a / 0.05 ) + 0.3 * exp( - a / 0.45 );
 	light *= 1.0 - smoothstep( 0.8, 1.0, a / ${GLOW_ANGLE} );
 	gl_FragColor = vec4( vec3( 1.0, 0.92, 0.78 ) * light * uLevel, 1.0 );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }`,

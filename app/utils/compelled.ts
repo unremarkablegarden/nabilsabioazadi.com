@@ -19,7 +19,7 @@ import * as THREE from "three";
 import { lines } from "./embroidery";
 import { SIX_STRONGER, TEMPERS } from "./psyche";
 import { seatOf } from "./treason";
-import { pixelRatio, ribbonShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 // Seconds: bound over a minute; held for the hour; then released.
 export const COMPEL_BIND = 60;
@@ -191,6 +191,8 @@ void main() {
 	own = mix( own, vec3( dot( own, vec3( 0.3, 0.45, 0.25 ) ) ) * 0.75, 0.7 * vGrey );
 	vec3 day = vKind > 0.5 ? vec3( uWhite ) : own * ( 1.0 + 0.15 * uWhite );
 	gl_FragColor = vec4( mix( own * uGain, day, uDay ), body * vAlpha * uOpacity * mix( 1.0, 3.0, uDay ) );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

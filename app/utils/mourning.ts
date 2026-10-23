@@ -22,7 +22,7 @@
 // others mourn. Nothing in rows, every line one curve; colour tamed to the background's.
 import * as THREE from "three";
 import { GIANT_WAVES } from "./gerstner-waves";
-import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 const TRAINS = 32;
 const FIBRES = 40;
@@ -220,6 +220,8 @@ void main() {
 	float body = exp( - across * across * 3.0 ) * ( 1.0 - smoothstep( 0.8, 1.0, across ) );
 	vec3 colour = mix( vTint, pow( vTint, vec3( 2.6 ) ) * 0.35, uDay );
 	gl_FragColor = vec4( colour * uGain, body * vAlpha * 0.14 * mix( 1.0, 3.5, uDay ) );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

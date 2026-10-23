@@ -23,7 +23,7 @@ import * as THREE from "three";
 import { lines } from "./embroidery";
 import { SIX_STRONGER, TER_ANGREAL } from "./psyche";
 import { seatOf } from "./treason";
-import { pixelRatio, ribbonShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 // Siuan · Fathom, among the minds.
 const SIUAN = 2;
@@ -191,6 +191,8 @@ void main() {
 		float body = 1.0 - smoothstep( 0.7, 1.0, across );
 		gl_FragColor = vec4( mix( tint * uGain, tint * 1.2, uDay ), body * vAlpha * 0.035 * mix( 1.0, 3.0, uDay ) );
 	}
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

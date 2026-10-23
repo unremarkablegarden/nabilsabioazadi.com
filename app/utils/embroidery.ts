@@ -48,7 +48,7 @@
 //     towards the sea.
 import * as THREE from "three";
 import { calmingWork } from "./channelled-storm";
-import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 const SEA_ROWS = 70;
 const SEA_SLOTS = 90;
@@ -423,6 +423,8 @@ void main() {
 	// By day laid colour, deeper (never white on white).
 	vec3 colour = mix( vTint, pow( vTint, vec3( 2.6 ) ) * 0.4, uDay );
 	gl_FragColor = vec4( colour * uGain, body * vAlpha * uOpacity * mix( 1.0, uKind > 0.5 && uKind < 1.5 ? 1.2 : 3.5, uDay ) );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

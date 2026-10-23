@@ -66,7 +66,7 @@
 //     farewell dinner.
 import * as THREE from "three";
 import type { SeaConditions } from "./manawatawhi";
-import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 // The weather once the storm's energy has been drawn in: a light air, a smooth sea, no rain, a
 // clear sky with a little high cloud, the pressure steady. (The periods and directions are left
@@ -422,6 +422,8 @@ void main() {
 	// By day it is laid colour, deeper, never white on a white sky (the owner's).
 	colour = mix( colour, pow( colour, vec3( 2.6 ) ) * 0.35, uDay );
 	gl_FragColor = vec4( colour * uGain, body * vAlpha * uOpacity * mix( 1.0, 4.0, uDay ) );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }
@@ -486,6 +488,8 @@ void main() {
 	float alpha = mix( 0.96, 0.6, thin ) * smoothstep( 0.0, 0.1, vUV.y ) * smoothstep( 0.0, 0.06, vUV.x ) * smoothstep( 1.0, 0.94, vUV.x );
 	alpha = max( alpha, ( lipFoam + broken ) * 0.9 ) * smoothstep( 0.0, 0.15, uWaveRise + uFall );
 	gl_FragColor = vec4( colour * uGain * mix( 0.22, 0.4, uDay ), alpha );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }
@@ -522,6 +526,8 @@ varying float vAlpha;
 void main() {
 	float r = length( gl_PointCoord - 0.5 ) * 2.0;
 	gl_FragColor = vec4( vec3( 0.85, 0.93, 0.95 ) * uGain * mix( 0.5, 1.0, uDay ), ( 1.0 - smoothstep( 0.4, 1.0, r ) ) * vAlpha * mix( 0.5, 0.8, uDay ) );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

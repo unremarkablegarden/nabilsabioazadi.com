@@ -34,7 +34,7 @@
 import * as THREE from "three";
 import { lines } from "./embroidery";
 import { GUARD_PATH, pathPassChunk, pathsShared, ribbonPaths } from "./ribbon-paths";
-import { pixelRatio, ribbonShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 const SEA_FILAMENTS = 1400;
 const SKY_FILAMENTS = 900;
@@ -230,6 +230,8 @@ void main() {
 	float body = 1.0 - smoothstep( 0.7, 1.0, across );
 	vec3 night = mix( vec3( 0.93, 0.96, 1.0 ), uTint, uTinted ) * uGain;
 	gl_FragColor = vec4( mix( night, mix( vec3( uWhite ), uTint, uTinted ), uDay ), body * vAlpha * uOpacity * mix( 1.0, 3.0, uDay ) );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

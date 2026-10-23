@@ -36,7 +36,7 @@ import * as THREE from "three";
 import type { GodsBreath } from "./channelled-storm";
 import { manulaniSphere, CORE_AHEAD, MANULANI } from "./wrath";
 import { giveMinds, mindChunk, SIX_STRONGER, TER_ANGREAL, type Minds } from "./psyche";
-import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, tameShaderChunk, unplaced, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 const SEGMENTS = 120;
 // Filaments to a measure; the four mighty carry 2.5 measures, the strongest about 4.9, Manulani
@@ -261,6 +261,8 @@ void main() {
 		vec3 colour = mix( vTint, pow( vTint, vec3( 2.6 ) ) * 0.35, uDay );
 		gl_FragColor = vec4( colour * uGain, body * vAlpha * uOpacity * mix( 1.0, 3.5, uDay ) );
 	}
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

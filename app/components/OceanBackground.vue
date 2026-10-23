@@ -594,11 +594,12 @@ onMounted(async () => {
 		const vesal = vesalFigures();
 		vesalRaisedNow.value = !!vesal;
 		// (Worsened as any storm is, storm.json "worse": 12.66 since the owner's "worse by 1166%".)
-		if (vesal) return { ...worsened(vesal, worse), ...asPretended };
+		// (Every storm relaxed by half towards the measured weather: relaxed.)
+		if (vesal) return { ...relaxed(worsened(vesal, worse), realNow), ...asPretended };
 		const siuan = siuanUp();
 		siuanRaisedNow.value = siuan > 0;
-		if (siuan > 0 && realNow) return { ...siuanSea(realNow, siuan), ...asPretended };
-		return stillDone ? {} : stormOn ? { ...worsened(bothFigures ? BOTH_STORM : fiveFigures ? FIVE_STORM : wrathFigures ? WRATH_STORM : CHANNELLED_STORM, worse), ...(noRain ? { precipitation: 0 } : {}), ...asPretended } : asPretended;
+		if (siuan > 0 && realNow) return { ...relaxed(siuanSea(realNow, siuan), realNow), ...asPretended };
+		return stillDone ? {} : stormOn ? { ...relaxed(worsened(bothFigures ? BOTH_STORM : fiveFigures ? FIVE_STORM : wrathFigures ? WRATH_STORM : CHANNELLED_STORM, worse), realNow), ...(noRain ? { precipitation: 0 } : {}), ...asPretended } : asPretended;
 	};
 	let pretend = pretendNow();
 	channelled.value = Object.keys(pretend).length > 0;

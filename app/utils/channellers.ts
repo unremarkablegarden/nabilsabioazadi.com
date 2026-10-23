@@ -37,7 +37,7 @@ import { CHANNELLERS, channelPathChunk } from "./channel-path";
 import type { GerstnerUniforms } from "./gerstner-waves";
 import { SIX_STRONGER, TER_ANGREAL } from "./psyche";
 import { pathPassChunk, pathsShared, ribbonPaths, THREAD_PATH } from "./ribbon-paths";
-import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 // What the weaving looks like follows the owner's reference (the women channelling together in
 // The Wheel of Time): not a few drawn lines but a great many hair-fine filaments streaming
@@ -2685,6 +2685,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		// (And three times as much again on a night without a moon, when the picture is shown at so
 		// low an exposure that their light all but vanished.)
 		if (byDay) uniforms.uStrength.value *= (1 + 1.6 * (1 - day) * (1 - 0.6 * link)) * (1 + 1.2 * moonless * (1 - day));
+		// (Relaxed by half, WEAVE_RELAX: by its strength, since its colour is laid on premultiplied.)
+		uniforms.uStrength.value *= WEAVE_RELAX;
 		uniforms.uSoften.value = soften;
 		for (let seat = 0; seat < CHANNELLERS; seat++) {
 			// (When another takes the seat their restlessness comes on over a few seconds, not at once.)

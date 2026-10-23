@@ -14,7 +14,7 @@
 //                                                                  (lanterns, here)
 // and all of it let go together, the rain closing back in.
 import * as THREE from "three";
-import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 export const SKY_ALL_CYCLE = 160;
 const CLOUD = 230;
@@ -54,6 +54,8 @@ void main() {
 	float across = abs( vEdge );
 	float body = exp( - across * across * 3.0 ) * ( 1.0 - smoothstep( 0.8, 1.0, across ) );
 	gl_FragColor = vec4( vTint * mix( uGain, 1.0, uDay ), body * vAlpha * mix( 1.0, 2.6, uDay ) );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }
@@ -149,6 +151,8 @@ void main() {
 	float edge = 1.0 - smoothstep( 0.6, 1.0, abs( vEdge ) );
 	float a = vAlpha * edge * ( 0.012 + 0.1 * vSheen * vSheen * vSheen ) * mix( 1.0, 2.2, uDay );
 	gl_FragColor = vec4( vec3( 1.0, 0.99, 0.97 ) * mix( uGain, 1.0, uDay ), a );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }
@@ -192,6 +196,8 @@ void main() {
 	float r = length( gl_PointCoord - 0.5 ) * 2.0;
 	float glow = exp( - r * r * 4.0 ) * ( 1.0 - smoothstep( 0.8, 1.0, r ) );
 	gl_FragColor = vec4( vec3( 1.0, 0.93, 0.82 ) * mix( uGain, 1.0, uDay ), glow * vAlpha * mix( 0.35, 0.6, uDay ) );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

@@ -23,7 +23,7 @@ import * as THREE from "three";
 import { lines } from "./embroidery";
 import { NAMES, SIX_STRONGER, TEMPERS } from "./psyche";
 import { seatOf } from "./treason";
-import { pixelRatio, ribbonShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 // The six, in seed order, by their place among the minds: Manulani, the strongest, Keel, Kite,
 // Fathom, Listener; and their true strength, in an ordinary sister's (channellers.ts: the four 64
@@ -244,6 +244,8 @@ void main() {
 	// their own colour).
 	float body = 1.0 - smoothstep( 0.7, 1.0, across );
 	gl_FragColor = vec4( mix( uTint * uGain, uWhiteRope > 0.5 ? vec3( uWhite ) : uTint * ( 1.0 + 0.15 * uWhite ), uDay ), body * vAlpha * uOpacity * mix( 1.0, 3.0, uDay ) );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

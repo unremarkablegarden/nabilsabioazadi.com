@@ -18,7 +18,7 @@
 //   gone      it thins and fades into the air over some ten to sixteen seconds.
 // Soft, never a hard line: nothing jagged, nothing flashing.
 import * as THREE from "three";
-import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 const RINGS = 24;
 const FILAMENTS = 48;
@@ -98,6 +98,8 @@ void main() {
 	float across = abs( vEdge );
 	float body = pow( max( 1.0 - across * across, 0.0 ), 1.5 );
 	gl_FragColor = vec4( mix( uTint * uGain, uTint * uWhite, uDay ), body * vAlpha * mix( 0.02, 0.07, uDay ) );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

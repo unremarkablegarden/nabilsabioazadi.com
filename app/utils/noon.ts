@@ -10,7 +10,7 @@ import * as THREE from "three";
 import { lines } from "./embroidery";
 import { SIX_STRONGER } from "./psyche";
 import { seatOf } from "./treason";
-import { pixelRatio, ribbonShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 // Where they hold it: high in the sky a little right of ahead (degrees), as the noon sun stands.
 export const NOON_ELEVATION = 62;
@@ -100,6 +100,8 @@ void main() {
 	float across = abs( vEdge );
 	float body = 1.0 - smoothstep( 0.7, 1.0, across );
 	gl_FragColor = vec4( mix( vTint * uGain, vTint * 1.2, uDay ), body * vAlpha * uOpacity * mix( 1.0, 3.0, uDay ) );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

@@ -494,6 +494,24 @@ export function compelledSince(now: Date) {
 	return since >= 0 ? since : undefined;
 }
 
+// Every storm relaxed by half (the owner, 24 October: "relax the storms and weaves by at least
+// half"): each of its figures lies halfway between the weather as measured and what the storm would
+// make of it, whatever the storm. (Directions and the like are left as the storm has them.)
+export const STORM_RELAX = 0.5;
+const RELAXED: (keyof SeaConditions)[] = ["windSpeed", "windGusts", "windTrend", "pressure", "pressureTrend", "waveHeight", "wavePeriod", "swellHeight", "swellPeriod", "secondSwellHeight", "secondSwellPeriod", "windWaveHeight", "windWavePeriod", "waveTrend", "cape", "precipitation", "cloudLow", "cloudMid", "cloudHigh", "cloudCover", "visibility", "humidity"];
+export function relaxed(storm: Partial<SeaConditions>, real: SeaConditions | undefined, by = STORM_RELAX): Partial<SeaConditions> {
+	if (!real) return storm;
+	const out = { ...storm };
+	for (const key of RELAXED) {
+		const value = storm[key];
+		const measured = real[key];
+		if (typeof value !== "number" || typeof measured !== "number") continue;
+		// (Visibility goes as its logarithm, as the eye sees haze.)
+		(out as Record<string, number>)[key] = key === "visibility" ? Math.exp(Math.log(Math.max(measured, 1)) + (Math.log(Math.max(value, 1)) - Math.log(Math.max(measured, 1))) * by) : measured + (value - measured) * by;
+	}
+	return out;
+}
+
 // Whether the twelve stay Aes Sedai (Siuan's, Leane's and Moiraine's four each, with the storm's
 // graded colours) when no storm is on: "weavers": "aes-sedai" in storm.json (the owner, 16
 // October: "release the storm but keep these weavers").

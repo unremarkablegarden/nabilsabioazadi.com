@@ -19,7 +19,7 @@
 import * as THREE from "three";
 import { lines } from "./embroidery";
 import { lapseAloft, thermal, type SeaConditions } from "./manawatawhi";
-import { pixelRatio, ribbonShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 const MOST = 7;
 // Where they stand: this far ahead of the boat (m), across this breadth (m).
@@ -136,6 +136,8 @@ void main() {
 	float across = abs( vEdge );
 	float body = pow( max( 1.0 - across * across, 0.0 ), 1.5 );
 	gl_FragColor = vec4( mix( vTint * uGain, vTint * 1.1, uDay ), body * vAlpha * uShown * mix( 0.05, 0.1, uDay ) );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

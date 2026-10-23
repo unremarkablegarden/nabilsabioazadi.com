@@ -19,7 +19,7 @@
 // Nothing in it is hard or bright: fine, soft threads, fading as they climb, never a light hung
 // in the sky (the owner's standing rule), and the strongest's threads alone are white.
 import * as THREE from "three";
-import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 const GATHERING = 48;
 const LIFTING = 120;
@@ -237,6 +237,8 @@ void main() {
 	vec3 colour = vTint * mix( uGain, 1.0, uDay );
 	// (Laid colour needs more of itself to be seen than light does.)
 	gl_FragColor = vec4( colour, body * vAlpha * mix( 1.0, 2.6, uDay ) );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

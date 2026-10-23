@@ -44,7 +44,7 @@
 // ?raincut=60 shows it a minute in, ?raincut=off without it.
 import * as THREE from "three";
 import { lines } from "./embroidery";
-import { pixelRatio, ribbonShaderChunk, WEAVE_RENDER_ORDER } from "./weave";
+import { pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 import stormSwitch from "~~/storm.json";
 import { timeOf } from "./channelled-storm";
 import type { SeaConditions } from "./manawatawhi";
@@ -254,6 +254,8 @@ void main() {
 	vec3 night = vTint * uGain * ( 0.5 + 1.5 * core );
 	vec3 day = mix( pow( uSheath, vec3( 2.2 ) ) * 0.5, vTint * uGain * 1.6, core );
 	gl_FragColor = vec4( mix( night, day, uDay ), mix( glow, max( glow * 0.8, core ), uDay ) * vAlpha * uOpacity * mix( 1.0, 3.0, uDay ) );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

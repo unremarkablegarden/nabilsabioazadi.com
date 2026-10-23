@@ -799,3 +799,18 @@ channeling."
   from 0.3 up to all of it at 1). The strongest, the owner, is not resting. Applied to each seat's
   output (`channelGate`), not to the light lost in the weave, so a resting weave is fainter and
   thinner, not brighter.
+
+## 33. Relaxed by half (24 October)
+
+The owner: "Relax the storms and weaves by at least half."
+
+- **Every storm** (`relaxed`, `STORM_RELAX` 0.5, in `channelled-storm.ts`, applied in `pretendNow` to
+  the preset storms, Vesal's and Siuan's alike): each figure lies halfway between the weather as
+  measured and what the storm would make (visibility by its logarithm; directions as the storm has
+  them). Vesal's at full, compelled or not: 200 km/h gusting 292 and a 20.6 m sea, from 462 gusting
+  745 and 40 m.
+- **Every weave** (`WEAVE_RELAX` 0.5 in `weave.ts`): what each lays on the picture at half, in every
+  weave's fragment shader just before its tone mapping (the storms', the healing's, the contest's, the
+  compulsion's, the noon's, Siuan's, the rings', the thermals', the embroidery's, the mourning's, the
+  rain-cut's, the sky's, the sacred's); the everyday flow by its strength (`uStrength`), since it is
+  laid on premultiplied.

@@ -36,6 +36,9 @@ const TINTS = [0xc6dcff, 0xcdb98a, 0xffb07a, 0x8fd0ec, 0xbcc6d2, 0xfff0c4].map((
 const smooth = THREE.MathUtils.smoothstep;
 // Drawn after the fog (see fluid.ts), so the threads stay sharp.
 export const WEAVE_RENDER_ORDER = 10;
+// Every weave relaxed by half (the owner, 24 October: "relax the storms and weaves by at least
+// half"): what each weave lays on the picture, its light or its colour, at half.
+export const WEAVE_RELAX = 0.5;
 
 // How many pixels of the picture are drawn to each pixel of the page. One object, shared by
 // everything whose size is counted in pixels (the widths of threads, the sizes of stars),
@@ -102,6 +105,8 @@ void main() {
 	// A hard edge, softened by no more than it takes to stop it shimmering.
 	float edge = 1.0 - smoothstep( 0.55, 1.0, abs( vEdge ) );
 	gl_FragColor = vec4( mix( uBase, vTint, 0.4 ) * uGain, edge * vAlpha * uOpacity );
+	// (Relaxed by half: WEAVE_RELAX.)
+	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }
