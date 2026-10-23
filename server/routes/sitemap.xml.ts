@@ -5,10 +5,16 @@ import prismicConfig from "../../prismic.config.json";
 // Prismic knows it. Made afresh when asked for, and kept at the edge for an hour like the pages.
 export default defineEventHandler(async (event) => {
 	const client = createClient(prismicConfig.repositoryName);
-	const fixed = ["/", "/about", "/contact", "/writing"].map((path) => ({ path, lastmod: "" }));
+	// The studio page is not in the menu, but is listed here so that its pictures are found.
+	const fixed = ["/", "/about", "/contact", "/writing", "/studio"].map((path) => ({ path, lastmod: "" }));
 	// The pictures on a page, so that image search knows them and whose they are.
 	const images: Record<string, string[]> = {
 		"/about": ["/about/nabil-sabio-azadi-by-amelia-j-dowd.jpg", "/about/nabil-sabio-azadi-by-amelia-j-dowd-tall.jpg"],
+		"/studio": [
+			"/studio/nabil-sabio-azadi-studio-by-ben-clement.jpg",
+			"/studio/nabil-sabio-azadi-writing-by-ben-clement.jpg",
+			"/studio/nabil-sabio-azadi-pelt-by-ben-clement.jpg",
+		],
 	};
 	const found: { path: string; lastmod: string }[] = [];
 	try {
@@ -21,7 +27,7 @@ export default defineEventHandler(async (event) => {
 	try {
 		for (const page of await client.getAllByType("page")) {
 			// The homepage's Prismic page is the homepage, already listed; About and Contact are pages of their own.
-			if (page.uid && !["homepage", "about", "contact", "writing", "slice-simulator"].includes(page.uid))
+			if (page.uid && !["homepage", "about", "contact", "writing", "studio", "slice-simulator"].includes(page.uid))
 				found.push({ path: `/${page.uid}`, lastmod: page.last_publication_date });
 		}
 	} catch {
