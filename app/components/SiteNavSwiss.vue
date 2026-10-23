@@ -308,8 +308,10 @@ const elsewhere = [
 				</ol>
 			</nav>
 
-			<!-- Not on the two-column grid: the field is given the slab's whole width, and room above and below. -->
-			<form class="rule news" @submit.prevent="join">
+			<!-- Not on the two-column grid: the field is given the slab's whole width, and room above and below.
+			     It, the readouts and the credits below are marked data-nosnippet: search engines had been
+			     quoting them under the site's name in place of who the owner is. -->
+			<form class="rule news" data-nosnippet @submit.prevent="join">
 				<label for="news-email" class="key">Newsletter</label>
 				<p id="news-hint" class="reading">Your email address</p>
 				<input id="news-email" v-model="email" type="email" required autocomplete="email" aria-describedby="news-hint news-status" @focus="prepare" />
@@ -325,7 +327,7 @@ const elsewhere = [
 				</p>
 			</form>
 
-			<div class="foot">
+			<div class="foot" data-nosnippet>
 				<dl>
 					<div class="row rule">
 						<dt class="key">Place</dt>
@@ -382,7 +384,7 @@ const elsewhere = [
 			     single-colour image that takes the ink colour. It leads home. -->
 			<NuxtLink to="/" class="home" aria-label="Nabil Sabio Azadi, home"><span class="mark" /></NuxtLink>
 
-			<div class="side end">
+			<div class="side end" data-nosnippet>
 				<button type="button" class="item wide" @click="toNewsletter">Newsletter</button>
 				<!-- The pause button: the sign everyone knows, two bars; a triangle once paused. It is drawn
 				     as one more word of the bar would be: the height of its capitals, the weight of their strokes.

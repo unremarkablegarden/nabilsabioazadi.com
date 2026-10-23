@@ -1,0 +1,36 @@
+// What search engines and link previews are told about the site. The address is the one the
+// site is served from: the bare domain sends visitors on to www.
+export const SITE = {
+	url: "https://www.nabilsabioazadi.com",
+	name: "Nabil Sabio Azadi",
+	// The owner's choice (23 October 2026), under 160 characters so that search results show it
+	// whole. The name is left out: the result's title already gives it.
+	description:
+		"Persian-New Zealand artist, poet and editor from Tāmaki Makaurau, and a researcher in anthropology and human rights law. Painting, movement and artist books.",
+	// The portrait on Klein Blue, 1200 by 630, the size link previews ask for.
+	image: "/og.jpg",
+};
+
+// A full address for a path on the site, with no query: every ?type=, ?about= and the like is
+// the same page to a search engine.
+export const siteUrl = (path = "/") => SITE.url + (path === "/" ? "/" : path.replace(/\/+$/, ""));
+
+// The owner, as schema.org describes a person, for search engines' panels about them.
+export const person = {
+	"@type": "Person",
+	"@id": `${SITE.url}/#person`,
+	name: SITE.name,
+	url: SITE.url,
+	image: `${SITE.url}/about/portrait-square.jpg`,
+	description: SITE.description,
+	jobTitle: ["Artist", "Poet", "Editor", "Anthropologist", "Human rights law researcher"],
+	knowsAbout: ["Painting", "Poetry", "Movement", "Artist books", "Anthropology", "Human rights law"],
+	homeLocation: { "@type": "Place", name: "Tāmaki Makaurau, Aotearoa New Zealand" },
+	affiliation: { "@type": "Organization", name: "Tîr Aho Studio", url: "https://www.tiraho.com.au" },
+};
+
+// Structured data goes in a script tag, so nothing in it may close that tag.
+export const jsonLd = (data: object) => ({
+	type: "application/ld+json",
+	innerHTML: JSON.stringify({ "@context": "https://schema.org", ...data }).replace(/</g, "\\u003c"),
+});

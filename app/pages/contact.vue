@@ -10,7 +10,8 @@ const route = useRoute();
 const FORMS = ["letter", "panel", "signal", "klein"];
 const layout = computed(() => (FORMS.includes(route.query.contact as string) ? (route.query.contact as string) : "letter"));
 
-useSeoMeta({ title: "Contact · Nabil Sabio Azadi" });
+const description = "Write to Nabil Sabio Azadi: artist, anthropologist, editor and poet.";
+useSeoMeta({ title: "Contact · Nabil Sabio Azadi", description, ogTitle: "Contact Nabil Sabio Azadi", ogDescription: description });
 </script>
 
 <template>

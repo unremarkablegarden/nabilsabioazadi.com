@@ -50,9 +50,9 @@ const sky = computed(() => useRoute().query.sky as string | undefined);
 // Where the boat is and what time it keeps, for the almanac's page heading.
 const readout = useState<{ place?: string; time: string }>("scene-readout", () => ({ time: "" }));
 
-// The owner's own words (11 October 2026). The paragraphs carry a little HTML, for the titles of
+// The owner's own words (11 October 2026; human rights law added 23 October). The paragraphs carry a little HTML, for the titles of
 // works, which are set in italics.
-const statement = "Nabil Sabio Azadi is an artist, anthropologist, editor and poet.";
+const statement = "Nabil Sabio Azadi is an artist, anthropologist, editor, poet and human rights law researcher.";
 const paragraphs = [
 	"Nabil was born and raised in Tāmaki Makaurau, Aotearoa. He is a Persian-New Zealand artist and is Tangata Tiriti. He comes from Persian healing lineages in Yazd and Shiraz, Iran. His work moves between painting, poetry, artist books, essays and curatorial practices, with a focus on accessibility, movement and chanting.",
 	"He was Acting Editor at the Queensland Art Gallery | Gallery of Modern Art. His artist book <cite>For You The Traveller</cite> (2012) is held in Special Collections at UC Santa Cruz. From 2025–26, he was Editor of <cite>Asia Pacific Art Papers</cite>. He co-directs Tîr Aho Studio, a creative studio with a focus on accessibility, inclusion and equity.",

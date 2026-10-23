@@ -1959,7 +1959,7 @@ onBeforeUnmount(() => {
 			</dl>
 		</div>
 		<!-- On an opaque ground, so the text keeps its contrast whatever the sky is doing. -->
-		<p v-if="!captionInNavigation" class="fixed top-0 right-0 z-10 max-w-[60vw] bg-[#041318] px-3 py-2 text-right text-sm text-[#c9f6f3]">
+		<p v-if="!captionInNavigation" data-nosnippet class="fixed top-0 right-0 z-10 max-w-[60vw] bg-[#041318] px-3 py-2 text-right text-sm text-[#c9f6f3]">
 			{{ placeLabel }} · human time {{ timeLabel }}
 			<template v-if="live">· waves {{ wavesLabel }} · wind {{ windLabel }}</template>
 			<br />

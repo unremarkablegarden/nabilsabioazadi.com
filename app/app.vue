@@ -16,6 +16,26 @@ const OceanBackground = defineAsyncComponent(() => import("~/components/OceanBac
 // time and conditions before the navigation shows them (otherwise the server's menu went out
 // without them and the browser's did not match it).
 if (import.meta.server) await OceanBackground.__asyncLoader?.();
+
+// What every page tells search engines and link previews unless it says otherwise. The canonical
+// address leaves out the query, so the views above are not counted as pages of their own.
+const canonical = computed(() => siteUrl(route.path));
+useHead({
+	link: [{ rel: "canonical", href: canonical }],
+	script: [jsonLd({ "@type": "WebSite", "@id": `${SITE.url}/#website`, url: SITE.url, name: SITE.name, inLanguage: "en-GB", publisher: { "@id": person["@id"] } })],
+});
+useSeoMeta({
+	description: SITE.description,
+	ogSiteName: SITE.name,
+	ogType: "website",
+	ogLocale: "en_GB",
+	ogUrl: canonical,
+	ogTitle: SITE.name,
+	ogDescription: SITE.description,
+	ogImage: SITE.url + SITE.image,
+	twitterCard: "summary_large_image",
+	themeColor: "#002fa7",
+});
 </script>
 
 <template>

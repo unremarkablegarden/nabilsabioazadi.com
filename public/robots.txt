@@ -1,2 +1,4 @@
-User-Agent: *
-Disallow:
+User-agent: *
+Disallow: /slice-simulator
+
+Sitemap: https://www.nabilsabioazadi.com/sitemap.xml

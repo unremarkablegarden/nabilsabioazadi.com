@@ -39,6 +39,9 @@ export interface Article {
 	notes: string[];
 	keywords: string[];
 	words: number;
+	// What search engines and link previews are told, where the editor has set it in Prismic's
+	// "SEO & Metadata" tab; otherwise the title, the standfirst and the first image are used.
+	meta?: { title?: string; description?: string; image?: string };
 }
 
 interface Span {
@@ -157,6 +160,7 @@ export function articleFromPrismic(document: { uid?: string | null; data: Record
 		notes: ((data.notes ?? []) as RichNode[]).filter((node) => node.text?.trim()).map((node) => inline(node.text, node.spans)),
 		keywords: split(data.keywords),
 		words,
+		meta: { title: data.meta_title || undefined, description: data.meta_description || undefined, image: data.meta_image?.url || undefined },
 	};
 }
 

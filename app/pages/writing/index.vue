@@ -15,7 +15,8 @@ const { data: articles } = await useAsyncData("articles", async () => {
 	return all.map(({ uid, kind, title, authors, date, standfirst, words }) => ({ uid, kind, title, authors, date, standfirst, words }));
 });
 
-useSeoMeta({ title: "Writing | Nabil Sabio Azadi", description: "Essays and other writing by Nabil Sabio Azadi." });
+const description = "Essays and other writing by Nabil Sabio Azadi.";
+useSeoMeta({ title: "Writing | Nabil Sabio Azadi", description, ogTitle: "Writing by Nabil Sabio Azadi", ogDescription: description });
 const year = (date: string) => (date ? new Date(date).getFullYear() : "");
 </script>
 
