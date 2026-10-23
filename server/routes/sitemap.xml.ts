@@ -6,6 +6,10 @@ import prismicConfig from "../../prismic.config.json";
 export default defineEventHandler(async (event) => {
 	const client = createClient(prismicConfig.repositoryName);
 	const fixed = ["/", "/about", "/contact", "/writing"].map((path) => ({ path, lastmod: "" }));
+	// The pictures on a page, so that image search knows them and whose they are.
+	const images: Record<string, string[]> = {
+		"/about": ["/about/nabil-sabio-azadi-by-amelia-j-dowd.jpg", "/about/nabil-sabio-azadi-by-amelia-j-dowd-tall.jpg"],
+	};
 	const found: { path: string; lastmod: string }[] = [];
 	try {
 		for (const article of await client.getAllByType("article")) {
@@ -24,9 +28,12 @@ export default defineEventHandler(async (event) => {
 		// As above.
 	}
 	const entries = [...fixed, ...found]
-		.map(({ path, lastmod }) => `\t<url><loc>${siteUrl(path)}</loc>${lastmod ? `<lastmod>${lastmod.slice(0, 10)}</lastmod>` : ""}</url>`)
+		.map(({ path, lastmod }) => {
+			const pictures = (images[path] ?? []).map((src) => `<image:image><image:loc>${SITE.url}${src}</image:loc></image:image>`).join("");
+			return `\t<url><loc>${siteUrl(path)}</loc>${lastmod ? `<lastmod>${lastmod.slice(0, 10)}</lastmod>` : ""}${pictures}</url>`;
+		})
 		.join("\n");
 	setHeader(event, "content-type", "application/xml; charset=utf-8");
 	setHeader(event, "cache-control", "public, max-age=0, s-maxage=3600, stale-while-revalidate=3600");
-	return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries}\n</urlset>\n`;
+	return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${entries}\n</urlset>\n`;
 });

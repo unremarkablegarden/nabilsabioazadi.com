@@ -28,6 +28,8 @@ useSeoMeta({
 	ogDescription: description,
 	ogType: "article",
 	ogImage: image,
+	// The site-wide picture is the portrait; an article's own picture is described by its title.
+	ogImageAlt: image ? a.title : undefined,
 	articlePublishedTime: a.date || undefined,
 	articleAuthor: authors,
 	articleTag: a.keywords,

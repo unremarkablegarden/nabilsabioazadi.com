@@ -18,7 +18,7 @@ const layout = computed(() => (LAYOUTS.includes(route.query.about as string) ? (
 
 const description = "Persian-New Zealand artist, poet, editor, anthropologist and human rights law researcher from Tāmaki Makaurau; co-director of Tîr Aho Studio.";
 useSeoMeta({ title: "About · Nabil Sabio Azadi", description, ogTitle: "About Nabil Sabio Azadi", ogDescription: description, ogType: "profile" });
-useHead({ script: [jsonLd({ "@type": "ProfilePage", url: siteUrl("/about"), name: "About Nabil Sabio Azadi", mainEntity: person })] });
+useHead({ script: [jsonLd({ "@type": "ProfilePage", url: siteUrl("/about"), name: "About Nabil Sabio Azadi", mainEntity: person, primaryImageOfPage: { "@id": portrait["@id"] } })] });
 </script>
 
 <template>

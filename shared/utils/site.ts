@@ -15,13 +15,31 @@ export const SITE = {
 // the same page to a search engine.
 export const siteUrl = (path = "/") => SITE.url + (path === "/" ? "/" : path.replace(/\/+$/, ""));
 
+// The owner's portrait by Amelia J Dowd, the picture they would have search engines show of them:
+// named, captioned and credited (and the same credit is written inside the file).
+export const portrait = {
+	"@type": "ImageObject",
+	"@id": `${SITE.url}/#portrait`,
+	contentUrl: `${SITE.url}/about/nabil-sabio-azadi-by-amelia-j-dowd.jpg`,
+	url: `${SITE.url}/about/nabil-sabio-azadi-by-amelia-j-dowd.jpg`,
+	width: 1120,
+	height: 1120,
+	name: "Nabil Sabio Azadi, portrait by Amelia J Dowd",
+	caption:
+		"Nabil Sabio Azadi in black and white, seated at a table in a dark jacket, hands pressed together upright in front of the face so that one eye looks out past them. Along the edges of the hands are tattooed the words Long heal and Sun bearing.",
+	creator: { "@type": "Person", name: "Amelia J Dowd" },
+	creditText: "Photograph by Amelia J Dowd",
+	copyrightNotice: "© Amelia J Dowd",
+	about: { "@id": `${SITE.url}/#person` },
+};
+
 // The owner, as schema.org describes a person, for search engines' panels about them.
 export const person = {
 	"@type": "Person",
 	"@id": `${SITE.url}/#person`,
 	name: SITE.name,
 	url: SITE.url,
-	image: `${SITE.url}/about/portrait-square.jpg`,
+	image: portrait,
 	description: SITE.description,
 	jobTitle: ["Artist", "Poet", "Editor", "Anthropologist", "Human rights law researcher"],
 	knowsAbout: ["Painting", "Poetry", "Movement", "Artist books", "Anthropology", "Human rights law"],

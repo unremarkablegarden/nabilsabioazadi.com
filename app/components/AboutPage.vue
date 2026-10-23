@@ -91,12 +91,14 @@ const links: { label: string; href: string; title?: boolean; after?: string }[] 
 			<figure class="row">
 				<figcaption class="key">Portrait<br />Photograph by Amelia J Dowd</figcaption>
 				<!-- The owner's portrait, cropped square for the layouts that show it as a disc or a
-				     square, and upright (four to five) for the others. -->
+				     square, and upright (four to five) for the others. The files are named for who is in
+				     them and who made them, and carry the photographer's credit inside them (IPTC, which
+				     Google Images reads), so that searches for the owner find this picture. -->
 				<img
 					class="picture inline"
-					:src="['panel', 'klein'].includes(layout) ? '/about/portrait-square.jpg' : '/about/portrait-tall.jpg'"
-					width="900"
-					:height="['panel', 'klein'].includes(layout) ? 900 : 1125"
+					:src="['panel', 'klein'].includes(layout) ? '/about/nabil-sabio-azadi-by-amelia-j-dowd.jpg' : '/about/nabil-sabio-azadi-by-amelia-j-dowd-tall.jpg'"
+					width="1120"
+					:height="['panel', 'klein'].includes(layout) ? 1120 : 1400"
 					alt="Nabil Sabio Azadi in black and white, seated at a table in a dark jacket, hands pressed together upright in front of the face so that one eye looks out past them. Along the edges of the hands are tattooed the words Long heal and Sun bearing."
 				/>
 			</figure>
@@ -125,9 +127,9 @@ const links: { label: string; href: string; title?: boolean; after?: string }[] 
 		<img
 			v-if="layout === 'panel'"
 			class="picture disc"
-			src="/about/portrait-square.jpg"
-			width="900"
-			height="900"
+			src="/about/nabil-sabio-azadi-by-amelia-j-dowd.jpg"
+			width="1120"
+			height="1120"
 			alt="Nabil Sabio Azadi in black and white, seated at a table in a dark jacket, hands pressed together upright in front of the face so that one eye looks out past them. Along the edges of the hands are tattooed the words Long heal and Sun bearing."
 		/>
 	</main>

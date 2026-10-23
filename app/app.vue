@@ -33,6 +33,7 @@ useSeoMeta({
 	ogTitle: SITE.name,
 	ogDescription: SITE.description,
 	ogImage: SITE.url + SITE.image,
+	ogImageAlt: "Nabil Sabio Azadi, portrait by Amelia J Dowd, on Klein Blue.",
 	twitterCard: "summary_large_image",
 	themeColor: "#002fa7",
 });
