@@ -57,17 +57,26 @@ export const person = {
 	"@type": "Person",
 	"@id": `${SITE.url}/#person`,
 	name: SITE.name,
+	// The name in Persian, as the owner's Wikipedia article gives it, so that the owner is the same
+	// person to anything reading or answering in Persian.
+	alternateName: { "@value": "نبیل سابیو آزادی", "@language": "fa" },
 	url: SITE.url,
 	image: portrait,
-	description: SITE.description,
+	// Longer than the search result's, to say all three places the owner is to be linked with (their
+	// word, 24 October 2026): Tāmaki Makaurau, where they were born and raised; Meanjin/Magandjin,
+	// where they are based; and Iran, the Persian healing lineages in Yazd and Shiraz they come from.
+	description:
+		"Persian-New Zealand artist, poet, editor, anthropologist and human rights law researcher. Born and raised in Tāmaki Makaurau (Auckland), Aotearoa New Zealand; based in Meanjin/Magandjin (Brisbane), Australia; from Persian healing lineages in Yazd and Shiraz, Iran.",
 	jobTitle: ["Artist", "Poet", "Editor", "Anthropologist", "Human rights law researcher"],
-	knowsAbout: ["Painting", "Poetry", "Movement", "Artist books", "Anthropology", "Human rights law"],
-	// Born and raised there (the About page); Wikipedia has the owner based in Brisbane now, so it is
-	// given as where they are from, not where they live.
-	birthPlace: { "@type": "Place", name: "Tāmaki Makaurau, Aotearoa New Zealand" },
+	// Refugees and asylum as Crikey's author page has it: over a decade of humanitarian legal research
+	// with refugees and people seeking asylum.
+	knowsAbout: ["Painting", "Poetry", "Movement", "Artist books", "Anthropology", "Human rights law", "Humanitarian legal research", "Refugees and people seeking asylum"],
+	// Each place also by its Wikidata item, so that there is no doubt which place is meant.
+	birthPlace: { "@type": "Place", name: "Tāmaki Makaurau (Auckland), Aotearoa New Zealand", sameAs: "https://www.wikidata.org/wiki/Q37100" },
+	homeLocation: { "@type": "Place", name: "Meanjin/Magandjin (Brisbane), Queensland, Australia", sameAs: "https://www.wikidata.org/wiki/Q34932" },
 	affiliation: { "@type": "Organization", "@id": "https://www.tiraho.com.au/#organization", name: "Tîr Aho Studio", url: "https://www.tiraho.com.au" },
 	// What the biography says the owner has done, in the form search engines and AI assistants
-	// read facts from: the studio they co-direct, the editorships, and the artist book.
+	// read facts from: the studio they co-direct and the editorships.
 	memberOf: [
 		{
 			"@type": "OrganizationRole",
@@ -87,19 +96,34 @@ export const person = {
 			memberOf: { "@type": "Organization", name: "Queensland Art Gallery | Gallery of Modern Art", url: "https://www.qagoma.qld.gov.au/" },
 		},
 	],
-	workExample: {
-		"@type": "Book",
-		name: "For You The Traveller",
-		genre: "Artist book",
-		datePublished: "2012",
-		author: { "@id": `${SITE.url}/#person` },
-		description: "An artist book by Nabil Sabio Azadi, held in Special Collections at UC Santa Cruz.",
-	},
+	// The artist book, with its library record (OCLC, as Wikipedia cites it), and writing published elsewhere.
+	workExample: [
+		{
+			"@type": "Book",
+			name: "For You The Traveller",
+			genre: "Artist book",
+			datePublished: "2012",
+			author: { "@id": `${SITE.url}/#person` },
+			description: "An artist book by Nabil Sabio Azadi, held in Special Collections at UC Santa Cruz.",
+			identifier: { "@type": "PropertyValue", propertyID: "OCLC", value: "877008818" },
+			sameAs: "https://search.worldcat.org/title/877008818",
+		},
+		{
+			"@type": "NewsArticle",
+			headline: "Two photographs of Hatam Yekta tell the story of Australia",
+			url: "https://www.crikey.com.au/2026/07/15/hatam-yekta-manus-island-offshore-detention-immigration-medevac/",
+			datePublished: "2026-07-15",
+			author: { "@id": `${SITE.url}/#person` },
+			publisher: { "@type": "Organization", name: "Crikey", url: "https://www.crikey.com.au/" },
+		},
+	],
 	// The owner's own accounts, as linked from the menu's Elsewhere (Signal is a way to write, not a
-	// profile), and the Wikipedia article and Wikidata item that Google's panel about them is built on.
+	// profile), the Wikipedia article and Wikidata item that Google's panel about them is built on, and
+	// their author's page at Crikey.
 	sameAs: [
 		"https://www.instagram.com/nabilsabioazadi/",
 		"https://cyberspace.online/nsa/blog",
+		"https://www.crikey.com.au/author/nabilsabioazadi/",
 		"https://en.wikipedia.org/wiki/Nabil_Sabio_Azadi",
 		"https://www.wikidata.org/wiki/Q16864024",
 	],
