@@ -75,22 +75,28 @@ const { statement, paragraphs, links } = ABOUT;
 				</div>
 			</header>
 
+			<!-- The credit and the picture's description are marked data-nosnippet (which Google reads on
+			     spans, not on figures): its card for this page had been quoting "Portrait Photograph by
+			     Amelia J Dowd Nabil Sabio Azadi in black and white, seated at a…" after the opening line.
+			     The wrapper around the picture takes no part in the layout (display: contents). -->
 			<figure class="row">
 				<figcaption class="key">
-					Portrait<br />Photograph by
-					<a class="credit" href="https://www.ameliajdowd.com/" target="_blank" rel="noopener" aria-label="Amelia J Dowd (opens in a new tab)">Amelia J Dowd</a>
+					<span data-nosnippet>
+						Portrait<br />Photograph by
+						<a class="credit" href="https://www.ameliajdowd.com/" target="_blank" rel="noopener" aria-label="Amelia J Dowd (opens in a new tab)">Amelia J Dowd</a>
+					</span>
 				</figcaption>
 				<!-- The owner's portrait, cropped square for the layouts that show it as a disc or a
 				     square, and upright (four to five) for the others. The files are named for who is in
 				     them and who made them, and carry the photographer's credit inside them (IPTC, which
 				     Google Images reads), so that searches for the owner find this picture. -->
-				<img
+				<span data-nosnippet class="contents"><img
 					class="picture inline"
 					:src="['panel', 'klein'].includes(layout) ? '/about/nabil-sabio-azadi-by-amelia-j-dowd.jpg' : '/about/nabil-sabio-azadi-by-amelia-j-dowd-tall.jpg'"
 					width="1120"
 					:height="['panel', 'klein'].includes(layout) ? 1120 : 1400"
 					alt="Nabil Sabio Azadi in black and white, seated at a table in a dark jacket, hands pressed together upright in front of the face so that one eye looks out past them. Along the edges of the hands are tattooed the words Long heal and Sun bearing."
-				/>
+				/></span>
 			</figure>
 
 			<div class="row words">
@@ -114,14 +120,13 @@ const { statement, paragraphs, links } = ABOUT;
 		     scrolling box: inside it, some browsers (Safari) cut the picture off at the box's edge.
 		     On a wide screen this is the picture shown and the one in the text above is hidden; on a
 		     narrow screen it is the other way about, so only one is ever seen or read out. -->
-		<img
-			v-if="layout === 'panel'"
+		<span v-if="layout === 'panel'" data-nosnippet class="contents"><img
 			class="picture disc"
 			src="/about/nabil-sabio-azadi-by-amelia-j-dowd.jpg"
 			width="1120"
 			height="1120"
 			alt="Nabil Sabio Azadi in black and white, seated at a table in a dark jacket, hands pressed together upright in front of the face so that one eye looks out past them. Along the edges of the hands are tattooed the words Long heal and Sun bearing."
-		/>
+		/></span>
 	</main>
 </template>
 
