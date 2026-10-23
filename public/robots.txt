@@ -1,3 +1,5 @@
+# Search engines and AI assistants are all welcome. For AI assistants, the site in plain
+# Markdown, in the owner's own words: https://www.nabilsabioazadi.com/llms.txt
 User-agent: *
 Disallow: /slice-simulator
 
