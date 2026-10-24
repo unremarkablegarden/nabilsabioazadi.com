@@ -11,17 +11,44 @@
 // Siuan taught them, they work with the sea and never against it: each rope draws tight as the
 // swell leaves its wall and eases between. As many filaments as the strongest's strength carries.
 // Nothing jagged: every rope one continuous curve.
+//
+// After the first (the owner, 24 October: "every visitor will see the sixteen come through the
+// waygate and part the sea in Jenna's storm... after about 30 seconds and then improvise on the
+// rest of it using meteo conditions"): the gate opens for each visitor half a minute after they
+// come, and the parting is then shaped by the weather as measured (partingWeather): as wide as the
+// real swell is long, as deep as it is high, its walls rising and settling with each real swell that
+// passes under them, bent downwind by the real wind across it, spray torn off its lips by the real
+// gusts, and the swells off its walls longer and higher as the real sea is.
 import * as THREE from "three";
 import { lines } from "./embroidery";
+import type { SeaConditions } from "./manawatawhi";
 import { ropeMight, STRONGEST_MIND } from "./psyche";
 import { pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 export const PART_COUNT = 16;
-// The lane's half-width and depth (m), and its swells: their height (m, crest over the mean) and period (s).
-// (Its floor as far under the sea as its lips stand over it: walls some forty metres high.)
-export const PART_HALF_WIDTH = 45;
-export const PART_DEPTH = 20;
-export const PART_SWELL = { height: 12, period: 18 };
+// The gate opens this long after each visitor comes (s).
+export const PART_AFTER = 30;
+// The lane as the real weather shapes it: its half-width at its head and its depth (m, its floor as far
+// under the sea as its lips stand over it), its swells' height (m, crest over the mean) and period (s),
+// how far it bends downwind, how much its walls breathe with the real swell and how fast, and the spray.
+export function partingWeather(real: SeaConditions | undefined, bearing: number) {
+	const clamp = THREE.MathUtils.clamp;
+	const swellHeight = real?.swellHeight ?? 1.5;
+	const swellPeriod = real?.swellPeriod ?? 10;
+	const windSpeed = real?.windSpeed ?? 15;
+	const across = Math.sin(THREE.MathUtils.degToRad((real?.windDirection ?? bearing) + 180 - bearing)) * Math.min(1, windSpeed / 30);
+	return {
+		halfWidth: clamp(25 + 2.5 * swellPeriod, 40, 75),
+		depth: clamp(12 + 4 * swellHeight, 14, 24),
+		swellHeight: clamp(6 + 2.5 * (real?.waveHeight ?? swellHeight), 8, 14),
+		swellPeriod: clamp(1.4 * swellPeriod, 12, 20),
+		bend: 0.00004 * across,
+		breath: 0.06 + 0.06 * Math.min(1, swellHeight / 3),
+		breathRate: (2 * Math.PI) / Math.max(swellPeriod, 4),
+		spray: clamp(((real?.windGusts ?? windSpeed) - 30) / 60, 0, 1),
+	};
+}
+export type PartingWeather = ReturnType<typeof partingWeather>;
 // When each of the sixteen comes through the gate (s), and when the sea is parted between them.
 export const partArrives = (j: number) => 6 + 5 * j;
 export const partShare = (since: number) => {
@@ -43,6 +70,7 @@ uniform vec3 uAhead;
 uniform vec3 uAcross;
 uniform vec4 uShape;
 uniform vec2 uSwell;
+uniform vec4 uMore;
 uniform float uDay;
 varying float vAlpha;
 varying float vEdge;
@@ -64,7 +92,8 @@ vec3 handsOf( float j ) {
 vec3 lipAt( float j, float side, float along ) {
 	float w = ( uShape.x + 0.02 * along ) * ( 1.0 + 0.1 * sin( along * 0.0013 + 1.3 ) + 0.04 * sin( along * 0.0041 ) );
 	float wall = 25.0 + 0.035 * along;
-	return uBoat + uAhead * along + uAcross * side * ( w + 0.3 * wall ) + vec3( 0.0, uShape.y * uShape.z * exp( - 0.3 * wall / 260.0 ) + 3.0, 0.0 );
+	float held = uShape.y * ( 1.0 + uMore.y * sin( uMore.z * uTime - 0.004 * along ) );
+	return uBoat + uAhead * along + uAcross * ( side * ( w + 0.3 * wall ) + uMore.x * along * along ) + vec3( 0.0, held * uShape.z * exp( - 0.3 * wall / 260.0 ) + 3.0, 0.0 );
 }
 vec3 ropeAt( float j, float t ) {
 	float side = mod( j, 2.0 ) < 0.5 ? - 1.0 : 1.0;
@@ -138,9 +167,11 @@ export interface PartingFrame {
 	gain: number;
 	// The water's colour, which their white leans to.
 	water: THREE.Color;
+	// The lane as the real weather shapes it.
+	weather: PartingWeather;
 }
 
-export function createParting(scene: THREE.Scene, layer: number, sea: { partFront: { value: THREE.Vector4 }; partShape: { value: THREE.Vector4 }; partSwell: { value: THREE.Vector2 } }) {
+export function createParting(scene: THREE.Scene, layer: number, sea: { partFront: { value: THREE.Vector4 }; partShape: { value: THREE.Vector4 }; partSwell: { value: THREE.Vector2 }; partMore: { value: THREE.Vector4 } }) {
 	const cells: [number, number][] = [];
 	for (let j = 0; j < PART_COUNT; j++) for (let f = 0; f < FILAMENTS; f++) cells.push([j, 0]);
 	const geometry = lines(cells.length, SEGMENTS, (i) => cells[i]!);
@@ -152,6 +183,7 @@ export function createParting(scene: THREE.Scene, layer: number, sea: { partFron
 		uAcross: { value: new THREE.Vector3(1, 0, 0) },
 		uShape: { value: sea.partShape.value },
 		uSwell: { value: sea.partSwell.value },
+		uMore: { value: sea.partMore.value },
 		uDay: { value: 0 },
 		uGain: { value: 1 },
 		uTint: { value: new THREE.Color() },
@@ -166,7 +198,6 @@ export function createParting(scene: THREE.Scene, layer: number, sea: { partFron
 	scene.add(mesh);
 
 	const white = new THREE.Color(0xffffff);
-	const k = (2 * Math.PI) / (1.56 * PART_SWELL.period ** 2);
 	const update = (frame: PartingFrame | undefined) => {
 		if (!frame) {
 			mesh.visible = false;
@@ -179,8 +210,10 @@ export function createParting(scene: THREE.Scene, layer: number, sea: { partFron
 		uniforms.uAhead.value.set(frame.ahead.x, 0, frame.ahead.y);
 		uniforms.uAcross.value.set(-frame.ahead.y, 0, frame.ahead.x);
 		sea.partFront.value.set(frame.boat.x, frame.boat.z, frame.ahead.x, frame.ahead.y);
-		sea.partShape.value.set(PART_HALF_WIDTH, PART_DEPTH, frame.share, PART_SWELL.height * frame.share);
-		sea.partSwell.value.set(k, (2 * Math.PI) / PART_SWELL.period);
+		const w = frame.weather;
+		sea.partShape.value.set(w.halfWidth, w.depth, frame.share, w.swellHeight * frame.share);
+		sea.partSwell.value.set((2 * Math.PI) / (1.56 * w.swellPeriod ** 2), (2 * Math.PI) / w.swellPeriod);
+		sea.partMore.value.set(w.bend * frame.share, w.breath, w.breathRate, w.spray);
 		uniforms.uDay.value = frame.day;
 		uniforms.uGain.value = frame.gain;
 		uniforms.uTint.value.copy(white).lerp(frame.water, 0.3);

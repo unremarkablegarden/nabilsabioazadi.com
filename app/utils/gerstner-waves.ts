@@ -454,6 +454,10 @@ export interface GerstnerUniforms {
 	partFront: THREE.IUniform<THREE.Vector4>;
 	partShape: THREE.IUniform<THREE.Vector4>;
 	partSwell: THREE.IUniform<THREE.Vector2>;
+	// And as the real weather has it (parting.ts, partingWeather): how far the lane bends downwind
+	// (m across for each m² along), how much its walls rise and settle with the real swell and how
+	// fast, and 0..1 how much spray the real gusts tear off their lips.
+	partMore: THREE.IUniform<THREE.Vector4>;
 }
 
 const pressedChunk = /* glsl */ `
@@ -526,6 +530,7 @@ const partChunk = /* glsl */ `
 uniform vec4 partFront;
 uniform vec4 partShape;
 uniform vec2 partSwell;
+uniform vec4 partMore;
 float partedSea( vec2 p, out float lane, out float lip, out float swell, out vec2 away ) {
 	lane = 0.0;
 	lip = 0.0;
@@ -535,7 +540,8 @@ float partedSea( vec2 p, out float lane, out float lip, out float swell, out vec
 	vec2 ahead = partFront.zw;
 	float along = dot( rel, ahead );
 	vec2 side = vec2( - ahead.y, ahead.x );
-	float across = dot( rel, side );
+	// (Bent downwind as it goes, as the real wind blows across it.)
+	float across = dot( rel, side ) - partMore.x * max( along, 0.0 ) * max( along, 0.0 );
 	away = across < 0.0 ? - side : side;
 	// (Its walls run a little in and out along their length.)
 	// (Opening off the bow and widening as it goes.)
@@ -548,7 +554,9 @@ float partedSea( vec2 p, out float lane, out float lip, out float swell, out vec
 	float s = smoothstep( - wall, 0.0, d );
 	lane = amount * ( 1.0 - s );
 	lip = amount * s * exp( - max( d, 0.0 ) / 260.0 );
-	float h = - partShape.y * lane + partShape.y * lip;
+	// (Its walls rising and settling a little with each real swell that passes under them.)
+	float held = partShape.y * ( 1.0 + partMore.y * sin( partMore.z * waveTime - 0.004 * along ) );
+	float h = - held * lane + held * lip;
 	// The swells, running out from each wall.
 	float out_ = max( d, 0.0 );
 	float f = partSwell.x * out_ - partSwell.y * waveTime;
@@ -819,7 +827,7 @@ vec3 gerstner( vec3 p, out vec3 normal, out float crest, out float gust ) {
 			tangent.y += ( hx - h ) / 2.0;
 			binormal.y += ( hz - h ) / 2.0;
 			// (Foam where the put-aside water stands at the lip, and on the swells' crests.)
-			crest += 0.9 * lip * lip + 0.5 * partShape.w * partSwell.x * max( swell, 0.0 );
+			crest += ( 0.9 + 1.5 * partMore.w ) * lip * lip + 0.5 * partShape.w * partSwell.x * max( swell, 0.0 );
 		}
 	}
 	normal = normalize( cross( binormal, tangent ) );
@@ -1240,6 +1248,7 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		partFront: { value: new THREE.Vector4(0, 0, 0, -1) },
 		partShape: { value: new THREE.Vector4(0, 0, 0, 0) },
 		partSwell: { value: new THREE.Vector2(0.0124, 0.35) },
+		partMore: { value: new THREE.Vector4() },
 	};
 	useDialSea(uniforms);
 	Object.assign(material.uniforms, uniforms, { giantWaves: { value: GIANT_WAVES } });

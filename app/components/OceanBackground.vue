@@ -623,10 +623,18 @@ onMounted(async () => {
 		const since = jennaSeconds();
 		return since === undefined ? 0 : jennaRaised(since);
 	};
-	// The parting of the sea in it (parting.ts): "parting" in storm.json, or ?parting for this visit
-	// from now, ?parting=300 five minutes in, ?parting=off without it. It closes as Jenna's storm is let down.
+	// The parting of the sea in it (parting.ts): "parting" in storm.json, the gate opening for each
+	// visitor half a minute after they come; or ?parting for this visit from now, ?parting=300 five
+	// minutes in, ?parting=off without it. It closes as Jenna's storm is let down.
 	const partingAsked = query.get("parting");
-	const partingSeconds = () => (partingAsked === "off" ? undefined : partingAsked !== null ? (Number(partingAsked) || 0) + (Date.now() - pageOpened) / 1000 : partingSince(new Date()));
+	const partingSeconds = () => {
+		const here = (Date.now() - pageOpened) / 1000;
+		if (partingAsked === "off") return undefined;
+		if (partingAsked !== null) return (Number(partingAsked) || 0) + here;
+		const byClock = partingSince(new Date());
+		const since = byClock === undefined ? undefined : Math.min(byClock, here - PART_AFTER);
+		return since !== undefined && since >= 0 ? since : undefined;
+	};
 	const vesalFigures = () => {
 		const since = vesalSeconds();
 		return since !== undefined && realNow ? vesalStorm(realNow, vesalRaised(since), compelledNow()) : undefined;
@@ -1786,7 +1794,7 @@ onMounted(async () => {
 		const partAt = calmMotion ? undefined : partingSeconds();
 		parting.update(
 			partAt !== undefined && liveOnly && (jennaSeconds() === undefined || jennaNow > 0)
-				? { since: partAt, share: partShare(partAt) * (jennaSeconds() === undefined ? 1 : jennaNow), time, boat: camera.position, ahead: skyAhead, day: daylight, gain: 1.5 / steadyExposure, water: skySheath[1]! }
+				? { since: partAt, share: partShare(partAt) * (jennaSeconds() === undefined ? 1 : jennaNow), time, boat: camera.position, ahead: skyAhead, day: daylight, gain: 1.5 / steadyExposure, water: skySheath[1]!, weather: partingWeather(measured, PLACE.bearing) }
 				: undefined,
 		);
 		// The six's noon: their sun, and their ropes up into it.

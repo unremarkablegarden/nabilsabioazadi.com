@@ -861,3 +861,13 @@ strength. Together, they part the sea whilst creating huge swells around the par
 - Seen by day in stills: clear on a clear day (`weaves-reference/2026-10-24-parting-clear-day.jpg`),
   mostly lost in the storm's rain; the edge where the sea falls into it is a hard line; the steep wall
   faces streak.
+- **For each visitor, then the weather** (the owner: "every visitor will see the sixteen come through
+  the waygate and part the sea... after about 30 seconds and then improvise on the rest of it using
+  meteo conditions"): the gate opens half a minute after each visitor comes (`PART_AFTER`, or at
+  storm.json's time if that is later), so every visitor sees the sixteen arrive and the sea parted
+  (about six minutes in all). Then `partingWeather`, from the measured weather (not the storm's): the
+  lane's half-width at its head 25 + 2.5 × the real swell's period (40 to 75 m); its depth and lips
+  12 + 4 × the real swell's height (14 to 24 m); the swells off its walls 6 + 2.5 × the real wave
+  height (8 to 14 m) at 1.4 × the real period (12 to 20 s); the lane bent downwind by the real wind
+  across it (some 160 m at 2 km in a fresh crosswind); its walls rising and settling 6 to 12% with each
+  real swell, the rise running along them; spray off the lips from the real gusts over 30 km/h.
