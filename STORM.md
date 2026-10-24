@@ -814,3 +814,30 @@ The owner: "Relax the storms and weaves by at least half."
   compulsion's, the noon's, Siuan's, the rings', the thermals', the embroidery's, the mourning's, the
   rain-cut's, the sky's, the sacred's); the everyday flow by its strength (`uStrength`), since it is
   laid on premultiplied.
+
+## 34. Jenna's storm (24 October)
+
+The owner: "We are doing a new storm in honour of Jenna, the channellers are now channeling lightning
+that has water and air weaves along with it that then cause swells of waters and waves".
+`storm.json` `"jenna": { "from": ..., "hours": 24 }`; `?jenna` for one visit from now, `?jenna=900`
+fifteen minutes in, `?jenna=off`; `__jenna()` in the console says who holds each bolt.
+
+- **The weather** (`jennaStorm` in `channelled-storm.ts`): a thunderstorm from the day's own weather,
+  the real wind raised to a strong gale (60 + 2 × the real km/h, at most 95) with gusts half as strong
+  again, the cloud to a full sky, rain, the air given 2500 J/kg, thunder; raised over ten minutes,
+  relaxed by half as every storm is. The menu: "Channelled, in honour of Jenna".
+- **The bolts** (`lightning` in `OceanBackground.vue`): whenever one of them is free, the sea is ready
+  for another swell and the air has charged again (40 / (0.5 + CAPE / 2000) s: about 35 s on the first
+  day), the next bolt is theirs, called 2.5 s ahead and struck to a place 0.5 to 2.2 km off ahead.
+  The strongest draws the first; then whoever is free, by (air × water)² × strength.
+- **The weave** (`jenna.ts`): the reach (her air and water wound at one twist, out low over the sea
+  and up from it to meet the leader, as a real upward streamer does); the air wound round the bolt's
+  channel, its kinks smoothed away, let go from the top to roll down into the sea and spread over it
+  as a rolling ring (a downburst's outflow); the water riding out on her swell at its group speed.
+  By day it is lifted with the storm's lowered exposure and against the sky, or it read as dark lines.
+- **The swells** (`strikeRing` in `gerstner-waves.ts`, in the water shader and in the height the boat
+  rides): Cauchy–Poisson ring waves from a 60 m hollow, chiefly 200 m long, as high as 2 + 0.9 × her
+  rope's might (at most 9 m), lowering as 1/√(r·t), no steeper than 0.12, gone in five minutes; eight
+  at most at once.
+- Seen by day in stills only: the reach reads violet with sea green where it rises; the air tube and
+  the swells were not caught clearly in stills, and nothing was looked at by night.

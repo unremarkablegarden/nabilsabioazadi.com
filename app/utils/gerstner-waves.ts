@@ -222,6 +222,34 @@ export function lensWaveHeight(uniforms: GerstnerUniforms, x: number, z: number,
 	return height;
 }
 
+// Jenna's swells (jenna.ts). Where a channelled bolt meets the sea the water weave presses a hollow
+// into it, and the sea answers as deep water answers any sudden blow (Cauchy and Poisson's problem):
+// a ring of waves runs out from it, sorted by length as it goes, for on deep water the long waves
+// outrun the short. At a distance r after a time t the waves passing are those whose group speed is
+// r / t: their wavenumber g t² / 4r², their phase g t² / 4r. The hollow is some sixty metres across,
+// so it sends out chiefly waves of about two hundred metres (a swell of eleven seconds), little
+// that is much longer or shorter. Their energy spreads round an ever wider ring and through an ever
+// longer train, so they lower as one over the root of each; no steeper than water stands. Each ring
+// is gone in about five minutes. (The same in the water shader, strikeRing.)
+export const STRIKE_RINGS = 8;
+const RING_HOLLOW = 60;
+const RING_LENGTH = 200;
+export function strikeRing(q: THREE.Vector4, x: number, z: number, time: number) {
+	const t = time - q.z;
+	if (q.w <= 0 || t <= 0 || t > 300) return undefined;
+	const rx = x - q.x;
+	const rz = z - q.y;
+	const r = Math.hypot(rx, rz);
+	const reach = Math.hypot(r, RING_HOLLOW);
+	const k = (9.8 * t * t) / (4 * reach * reach);
+	const length = (2 * Math.PI) / k;
+	const sorted = Math.exp(-((Math.log(length / RING_LENGTH) / 0.55) ** 2));
+	const a = Math.min(((q.w * sorted) / Math.sqrt((1 + r / 300) * (1 + t / 60))) * THREE.MathUtils.smoothstep(t, 0, 3) * (1 - THREE.MathUtils.smoothstep(t, 200, 300)), 0.12 / k);
+	// (Going outward: the phase grows with r, as a wave train's does along its way.)
+	const f = (3 * Math.PI) / 4 - (9.8 * t * t) / (4 * reach);
+	return { a, f, k, dirX: r > 1 ? rx / r : 0, dirZ: r > 1 ? rz / r : 0 };
+}
+
 // How much of the waves' sideways sway can be kept without any crest folding over itself. A
 // Gerstner surface loops where the steepnesses of the waves meeting at a point sum past 1; here
 // the sum is taken at its worst (every train in step, the gusts at their strongest, Leane's
@@ -232,6 +260,8 @@ export function crestLimitFor(uniforms: GerstnerUniforms) {
 	uniforms.waves.value.forEach((train, i) => (sum += train.z * uniforms.waveSteepness.value * (1 + 0.5 * uniforms.gustiness.value * uniforms.waveWind.value[i]!)));
 	for (const wave of GIANT_WAVES) sum += wave.z * uniforms.surge.value;
 	for (const w of uniforms.lensWaves.value) sum += 0.5 * w.z * uniforms.lensAmount.value * ((2 * Math.PI) / w.w);
+	// (Jenna's rings, at their steepest, each with its sway at 0.6.)
+	for (const q of uniforms.strikeRings.value) if (q.w > 0) sum += 0.6 * 0.12;
 	sum *= 1 + 0.5 * uniforms.lensCurrent.value.w;
 	return Math.min(1, 0.8 / Math.max(sum, 1e-6));
 }
@@ -263,6 +293,13 @@ export function seaSurfaceAt(uniforms: GerstnerUniforms, x: number, z: number, t
 			add(wave.x, wave.y, k, (uniforms.surge.value * wave.z) / k, 1);
 		}
 		if (uniforms.lensAmount.value > 0) for (const w of uniforms.lensWaves.value) add(w.x, w.y, (2 * Math.PI) / w.w, w.z * uniforms.lensAmount.value, 0.5);
+		for (const q of uniforms.strikeRings.value) {
+			const ring = strikeRing(q, px, pz, time);
+			if (!ring) continue;
+			dx += ring.dirX * ring.a * 0.6 * Math.cos(ring.f);
+			dz += ring.dirZ * ring.a * 0.6 * Math.cos(ring.f);
+			h += ring.a * Math.sin(ring.f);
+		}
 		return { dx: dx * limit, dz: dz * limit, h };
 	};
 	let px = x;
@@ -408,6 +445,9 @@ export interface GerstnerUniforms {
 	manuLight: THREE.IUniform<THREE.Vector4>;
 	// 0..1 how much of the waves' sideways sway is kept (crestLimitFor): 1 in any ordinary sea.
 	crestLimit: THREE.IUniform<number>;
+	// Jenna's storm (jenna.ts): the swells running out from where each channelled bolt met the sea
+	// (world x, z, the moment the water weave pressed it, in waveTime, and its height in metres).
+	strikeRings: THREE.IUniform<THREE.Vector4[]>;
 }
 
 const pressedChunk = /* glsl */ `
@@ -517,6 +557,26 @@ float waveNoise( vec2 p ) {
 
 // A place on the sea as the wind sees it: x across the wind, y against it. September's wind
 // always blew away from the viewer (-z), where this is the place unchanged.
+// Jenna's swells, as strikeRing in gerstner-waves.ts.
+uniform vec4 strikeRings[ ${STRIKE_RINGS} ];
+void strikeRing( vec4 q, vec2 p, inout vec3 offset, inout vec3 tangent, inout vec3 binormal, inout float crest ) {
+	float t = waveTime - q.z;
+	if ( q.w <= 0.0 || t <= 0.0 || t > 300.0 ) return;
+	vec2 rel = p - q.xy;
+	float r = length( rel );
+	float reach = sqrt( r * r + ${(RING_HOLLOW * RING_HOLLOW).toFixed(1)} );
+	float k = 9.8 * t * t / ( 4.0 * reach * reach );
+	float sorted = exp( - pow( log( 6.28318 / k / ${RING_LENGTH.toFixed(1)} ) / 0.55, 2.0 ) );
+	float a = min( q.w * sorted * inversesqrt( ( 1.0 + r / 300.0 ) * ( 1.0 + t / 60.0 ) ) * smoothstep( 0.0, 3.0, t ) * ( 1.0 - smoothstep( 200.0, 300.0, t ) ), 0.12 / k );
+	if ( a < 0.002 ) return;
+	float f = 2.35619 - 9.8 * t * t / ( 4.0 * reach );
+	vec2 d = r > 1.0 ? rel / r : vec2( 0.0 );
+	float s = a * k;
+	offset += vec3( 0.6 * d.x * a * cos( f ), a * sin( f ), 0.6 * d.y * a * cos( f ) );
+	tangent += vec3( - 0.6 * d.x * d.x * s * sin( f ), d.x * s * cos( f ), - 0.6 * d.x * d.y * s * sin( f ) );
+	binormal += vec3( - 0.6 * d.x * d.y * s * sin( f ), d.y * s * cos( f ), - 0.6 * d.y * d.y * s * sin( f ) );
+	crest += 0.5 * s * sin( f );
+}
 vec2 windFrame( vec2 p ) {
 	return vec2( - windHeading.y * p.x + windHeading.x * p.y, - dot( windHeading, p ) );
 }
@@ -628,6 +688,8 @@ vec3 gerstner( vec3 p, out vec3 normal, out float crest, out float gust ) {
 			crest += 0.2 * s * sin( f );
 		}
 	}
+	// Jenna's swells, running out from where each channelled bolt met the sea.
+	for ( int i = 0; i < ${STRIKE_RINGS}; i ++ ) strikeRing( strikeRings[ i ], p.xz, offset, tangent, binormal, crest );
 	// And Leane's four drive a current against the swell there: waves meeting a current shorten
 	// and stand up (as off the Agulhas), so the sea about the place grows taller and sheerer, and
 	// breaks. (Never at the boat.)
@@ -1105,6 +1167,7 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		lensCurrent: { value: new THREE.Vector4() },
 		manuLight: { value: new THREE.Vector4() },
 		crestLimit: { value: 1 },
+		strikeRings: { value: Array.from({ length: STRIKE_RINGS }, () => new THREE.Vector4(0, 0, 0, 0)) },
 	};
 	useDialSea(uniforms);
 	Object.assign(material.uniforms, uniforms, { giantWaves: { value: GIANT_WAVES } });

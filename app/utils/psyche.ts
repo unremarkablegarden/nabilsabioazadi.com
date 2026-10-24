@@ -79,6 +79,8 @@ export const SIX_STRONGER = 3.6;
 export const TER_ANGREAL = TEMPERS.map((temper, i) => (i === 2 || i >= 12 ? 1 : 1 + 8 * (temper.water / 0.95) ** 2));
 // Strength as their ropes' measures (MIGHT in channellers.ts): the four mighty, the strongest, Manulani.
 const MIGHT = [2.5, 2.5, 2.5, 1, 1, 2.5, 1, 1, 1, 1, 1, 1, 4.9, 5.1].map((might, i) => (might > 2 ? might * Math.cbrt(SIX_STRONGER) : might) * Math.cbrt(TER_ANGREAL[i]!));
+// (For the weaves that draw one channeller at a time by her strength: jenna.ts.)
+export const ropeMight = (who: number) => MIGHT[who]!;
 export const STRONGEST_MIND = 12;
 // The strongest channellers, who try the others: the four mighty, the strongest, Manulani.
 // (Named, not read off their might: with the ter'angreal some of the others are nearly as strong.)

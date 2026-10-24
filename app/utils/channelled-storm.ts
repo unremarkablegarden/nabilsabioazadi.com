@@ -472,6 +472,58 @@ export function siuanRaised(since: number, hours = siuanHours()) {
 	return clamp01(since / 600) * (1 - clamp01((since - held) / 1800));
 }
 
+// Jenna's storm (the owner, 24 October: "We are doing a new storm in honour of Jenna, the
+// channellers are now channeling lightning that has water and air weaves along with it that then
+// cause swells of waters and waves"; jenna.ts draws the weaves, gerstner-waves.ts strikeRing the
+// swells). A thunderstorm out of the day's own weather: the real cloud drawn on to a full sky and
+// rain from it, the air given the energy a thunderstorm needs, the real wind from where it really
+// blows raised to a strong gale with a thunderstorm's gusts (half as strong again), and the swell
+// and the wind's sea with it. The swells that matter most are not here: they run out from where
+// each bolt the channellers draw down meets the sea. `raised`: 0 the day as it is, 1 the storm in full.
+export function jennaStorm(real: SeaConditions, raised: number): Partial<SeaConditions> {
+	const k = ease(clamp01(raised));
+	const to = (from: number, storm: number) => from + (storm - from) * k;
+	const wind = Math.max(real.windSpeed, Math.min(95, 60 + 2 * real.windSpeed));
+	const windSea = 0.048 * wind;
+	const swell = Math.max(real.swellHeight, Math.min(6, 2 * real.swellHeight));
+	const sky = (cover: number) => to(cover, Math.max(cover, 95));
+	return {
+		windSpeed: to(real.windSpeed, wind),
+		windGusts: to(real.windGusts, 1.6 * wind),
+		windTrend: to(real.windTrend, 15),
+		pressure: to(real.pressure, real.pressure - 12),
+		pressureTrend: to(real.pressureTrend, -4),
+		swellHeight: to(real.swellHeight, swell),
+		windWaveHeight: to(real.windWaveHeight, windSea),
+		windWavePeriod: to(real.windWavePeriod, 3.3 * Math.sqrt(windSea)),
+		windWaveDirection: real.windDirection,
+		waveHeight: to(real.waveHeight, Math.hypot(swell, windSea)),
+		waveTrend: to(real.waveTrend, 1),
+		cloudLow: sky(real.cloudLow),
+		cloudMid: sky(real.cloudMid),
+		cloudHigh: to(real.cloudHigh, Math.max(real.cloudHigh, 80)),
+		cloudCover: sky(real.cloudCover),
+		precipitation: to(real.precipitation, 6 + 2 * real.precipitation),
+		cape: to(real.cape, Math.max(real.cape, 2500)),
+		weatherCode: k > 0.5 ? 95 : real.weatherCode,
+		visibility: Math.exp(to(Math.log(Math.max(real.visibility, 1)), Math.log(Math.min(real.visibility, 5000)))),
+		humidity: to(real.humidity, Math.max(real.humidity, 95)),
+	};
+}
+export const JENNA_WORDS = "Channelled, in honour of Jenna";
+// Jenna's storm: storm.json "jenna": { "from": ISO time, "hours": 24 }: seconds since, and for how long.
+export function jennaSince(now: Date) {
+	const from = (stormSwitch as { jenna?: { from: string | null } }).jenna?.from;
+	if (!from) return undefined;
+	const since = (now.getTime() - timeOf(from)) / 1000;
+	return since >= 0 ? since : undefined;
+}
+export const jennaHours = () => (stormSwitch as { jenna?: { hours?: number } }).jenna?.hours ?? 24;
+// How far it is raised (0..1): over ten minutes, held, let down over thirty.
+export function jennaRaised(since: number, hours = jennaHours()) {
+	return clamp01(since / 600) * (1 - clamp01((since - hours * 3600) / 1800));
+}
+
 // Noon at night (noon.ts): storm.json "noon": { "from": ISO time, "until": ISO time }, seconds
 // since it began, and since they let it go (undefined until then).
 export function noonSince(now: Date) {

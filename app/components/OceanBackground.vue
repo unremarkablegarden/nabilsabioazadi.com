@@ -67,6 +67,8 @@ const fiveRaised = ref(false);
 const vesalRaisedNow = ref(false);
 // Siuan's swells and mist (channelled-storm.ts, swells.ts).
 const siuanRaisedNow = ref(false);
+// Jenna's storm (channelled-storm.ts, jenna.ts).
+const jennaRaisedNow = ref(false);
 // The whales who greet it, where they were last heard (server/api/whales.get.ts).
 const whalesLine = ref<string>();
 const captionInNavigation = useState("caption-in-navigation", () => false);
@@ -166,7 +168,7 @@ const liveFigures = computed(() => {
 
 watchEffect(() => {
 	shownAt.value = dateAtBoatHour(hour.value, pretendDate.value ?? new Date()).getTime();
-	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: channelled.value ? (siuanRaisedNow.value ? SIUAN_WORDS : vesalRaisedNow.value ? VESAL_WORDS : fiveRaised.value && wrathRaised.value ? BOTH_WORDS : fiveRaised.value ? FIVE_WORDS : wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined, whales: channelled.value && fiveRaised.value ? whalesLine.value : undefined };
+	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: channelled.value ? (jennaRaisedNow.value ? JENNA_WORDS : siuanRaisedNow.value ? SIUAN_WORDS : vesalRaisedNow.value ? VESAL_WORDS : fiveRaised.value && wrathRaised.value ? BOTH_WORDS : fiveRaised.value ? FIVE_WORDS : wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined, whales: channelled.value && fiveRaised.value ? whalesLine.value : undefined };
 });
 
 onMounted(async () => {
@@ -568,6 +570,14 @@ onMounted(async () => {
 		const since = siuanSeconds();
 		return since === undefined ? 0 : siuanRaised(since);
 	};
+	// Jenna's storm (jennaStorm): "jenna" in storm.json, or ?jenna for this visit from now, ?jenna=900
+	// fifteen minutes in, ?jenna=off without it.
+	const jennaAsked = query.get("jenna");
+	const jennaSeconds = () => (jennaAsked === "off" ? undefined : jennaAsked !== null ? (Number(jennaAsked) || 0) + (Date.now() - pageOpened) / 1000 : jennaSince(new Date()));
+	const jennaUp = () => {
+		const since = jennaSeconds();
+		return since === undefined ? 0 : jennaRaised(since);
+	};
 	const vesalFigures = () => {
 		const since = vesalSeconds();
 		return since !== undefined && realNow ? vesalStorm(realNow, vesalRaised(since), compelledNow()) : undefined;
@@ -596,6 +606,9 @@ onMounted(async () => {
 		// (Worsened as any storm is, storm.json "worse": 12.66 since the owner's "worse by 1166%".)
 		// (Every storm relaxed by half towards the measured weather: relaxed.)
 		if (vesal) return { ...relaxed(worsened(vesal, worse), realNow), ...asPretended };
+		const jenna = jennaUp();
+		jennaRaisedNow.value = jenna > 0 && !!realNow;
+		if (jenna > 0 && realNow) return { ...relaxed(jennaStorm(realNow, jenna), realNow), ...asPretended };
 		const siuan = siuanUp();
 		siuanRaisedNow.value = siuan > 0;
 		if (siuan > 0 && realNow) return { ...relaxed(siuanSea(realNow, siuan), realNow), ...asPretended };
@@ -749,6 +762,9 @@ onMounted(async () => {
 	const rings = createRings(scene, SCREEN_LAYER);
 	// Siuan's haul and her mist (swells.ts).
 	const swells = createSwells(scene, SCREEN_LAYER);
+	// Jenna's storm: the bolts the channellers draw down, their air and water, and the swells they make.
+	const jenna = createJenna(scene, SCREEN_LAYER, waveUniforms.strikeRings.value);
+	(window as unknown as { __jenna?: () => string[] }).__jenna = jenna.describe;
 	const noonAsked = query.get("noon");
 	const noonSeconds = () => (noonAsked === "off" || calmMotion ? undefined : noonAsked !== null ? (Number(noonAsked) || 0) + (Date.now() - pageOpened) / 1000 : noonSince(new Date()));
 	const contestAsked = query.get("contest");
@@ -888,13 +904,36 @@ onMounted(async () => {
 	let struck = 0;
 	let inCloud = false;
 	let nearness = 1;
-	const lightning = (time: number, sky: number, fury: number, thunder: number, extreme: number, staged: boolean) => {
+	// In Jenna's storm the channellers draw some of the bolts down to the sea where they mean them to
+	// strike (jenna.ts): whenever one of them is free and the sea is ready for its swell, the next
+	// bolt is theirs, called a little before it comes so that their reach can rise to meet it.
+	let drawnDown = false;
+	const jennaFoot = new THREE.Vector3();
+	const jennaTop = new THREE.Vector3();
+	const lightning = (time: number, sky: number, fury: number, thunder: number, extreme: number, staged: boolean, channelling = false, cape = 0) => {
 		if (calmMotion || !showThunder.value || sky < 0.5 || thunder <= 0) return 0;
-		if (time > strikeAt + 1) strikeAt = time + lerp(lerp(14, 5, sky), lerp(1.8, 1.1, extreme), fury) * lerp(0.75, 1.4, Math.random());
+		if (time > strikeAt + 1) {
+			strikeAt = time + lerp(lerp(14, 5, sky), lerp(1.8, 1.1, extreme), fury) * lerp(0.75, 1.4, Math.random());
+			drawnDown = false;
+			if (channelling && !staged && jenna.ready(time, cape)) {
+				strikeAt = Math.max(strikeAt, time + 2.5);
+				// From half a kilometre to a little over two ahead, where its swell can be seen coming.
+				const distance = lerp(500, 2200, Math.random() ** 1.2);
+				const bearing = spread(1.2);
+				jennaFoot.set(camera.position.x + Math.sin(bearing) * distance, 0, camera.position.z - Math.cos(bearing) * distance);
+				jennaTop.set(jennaFoot.x + spread(500), 750 + Math.random() * 350, jennaFoot.z + spread(500));
+				drawnDown = jenna.call(jennaTop, jennaFoot, time, strikeAt);
+			}
+		}
 		if (time < strikeAt) return 0;
 		if (struck !== strikeAt) {
 			struck = strikeAt;
-			if (staged) {
+			if (drawnDown) {
+				inCloud = false;
+				nearness = lerp(1, 0.55, (jennaFoot.distanceTo(camera.position) - 500) / 1700);
+				bolts.strike(jennaTop, jennaFoot, time, false, nearness);
+				jenna.struck(jennaFoot, (i) => bolts.pathPoint(i, 4)!);
+			} else if (staged) {
 				// The story's: down from the knot once it has formed. Until then the weave under the
 				// sea breaks out upward: the bolt rises from the water into the cloud.
 				inCloud = false;
@@ -959,7 +998,10 @@ onMounted(async () => {
 		// (And while Siuan pulls her swells up or lets them down.)
 		const pulling = siuanSeconds();
 		const swelling = pulling !== undefined && (pulling < 700 || (pulling > siuanHours() * 3600 - 60 && pulling < siuanHours() * 3600 + 1900));
-		if (((raising !== undefined && changing) || swelling) && stormNow() === stormOn && measured) {
+		// (And while Jenna's storm is raised or let down.)
+		const thundering = jennaSeconds();
+		const gathering = thundering !== undefined && (thundering < 700 || (thundering > jennaHours() * 3600 - 60 && thundering < jennaHours() * 3600 + 1900));
+		if (((raising !== undefined && changing) || swelling || gathering) && stormNow() === stormOn && measured) {
 			pretend = pretendNow();
 			conditions.value = { ...measured, ...pretend };
 			return;
@@ -1263,7 +1305,8 @@ onMounted(async () => {
 		camera.rotation.y += (-lookAcross(aim.x) - camera.rotation.y) * 0.03;
 		camera.rotation.x += (-lookUp(aim.y) + pitch - camera.rotation.x) * 0.03;
 
-		const flash = alive > 0.5 ? lightning(time, sky, fury, liveOnly ? thunderAmount(liveOnly) : 1, extreme, !liveOnly) : 0;
+		const jennaNow = calmMotion ? 0 : jennaUp();
+		const flash = alive > 0.5 ? lightning(time, sky, fury, liveOnly ? thunderAmount(liveOnly) : 1, extreme, !liveOnly, jennaNow > 0.3, liveOnly?.cape) : 0;
 		// The storm darkens the day. At night it is lifted instead, or the sea would be lost in black.
 		const steadyExposure = exposure * lerp(1, lerp(2.5, 0.6, daylight), fury);
 		// (AgX is flatter than ACES was: a third of a stop more by day, none by night.)
@@ -1686,6 +1729,8 @@ onMounted(async () => {
 					}
 				: undefined,
 		);
+		// Jenna's storm: the bolts they draw down, and the air and water that go with them.
+		jenna.update(liveOnly ? { time, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, air: skySheath[0]!, water: skySheath[1]! } : undefined);
 		// The six's noon: their sun, and their ropes up into it.
 		const noonAt = noonSeconds();
 		noonByThem = noonAt === undefined ? 0 : noonShare(noonAt, noonAsked !== null ? undefined : noonLetGo(new Date()));
@@ -1836,6 +1881,7 @@ onMounted(async () => {
 		compelled.dispose();
 		noon.dispose();
 		swells.dispose();
+		jenna.dispose();
 		rings.dispose();
 		plumes.dispose();
 		stilling.dispose();
