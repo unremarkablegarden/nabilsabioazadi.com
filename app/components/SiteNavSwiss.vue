@@ -537,8 +537,8 @@ const elsewhere = [
 	fill: var(--ink);
 	overflow: visible;
 }
-/* Hover and focus mark it as they mark the bar's words: with a line beneath. */
-.control:hover svg,
+/* Only keyboard focus marks it, as it marks the bar's words: with a line beneath. Pressing it
+   leaves the sign bare (a hover line stays on after a tap, and read as the sign being selected). */
 .control:focus-visible svg {
 	border-bottom: 1px solid var(--ink);
 	padding-bottom: 0.4rem;
