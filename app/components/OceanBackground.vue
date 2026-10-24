@@ -273,11 +273,56 @@ onMounted(async () => {
 	// (/?reach=1.5, or another speed, tries it by feel.)
 	const REACH = Number(query.get("reach")) > 0 ? Number(query.get("reach")) : 1.5;
 	let onControl = false;
+	const CONTROLS = "header.site, a, button, input, select, textarea, label, summary, [role='button']";
 	const onPointerMove = (event: PointerEvent) => {
+		// A finger has no hover to wander with; it drags the view instead (below).
+		if (event.pointerType === "touch") return;
 		pointer.set((event.clientX / window.innerWidth) * 2 - 1, (event.clientY / window.innerHeight) * 2 - 1);
-		onControl = event.target instanceof Element && !!event.target.closest("header.site, a, button, input, select, textarea, label, summary, [role='button']");
+		onControl = event.target instanceof Element && !!event.target.closest(CONTROLS);
 	};
 	window.addEventListener("pointermove", onPointerMove);
+	// On a phone the view is taken in hand: a finger dragged across the screen carries the sea and
+	// sky with it, from wherever the view already is, and leaves it there when lifted (the owner,
+	// October: following the finger's place made it jump and ignore a quick swipe). Sideways drags
+	// turn the view; up and down tilts it, unless the page is long enough to scroll, when up and
+	// down is left to the scrolling. Touch events, not pointer events, since the browser cancels
+	// a pointer once it decides the finger is scrolling.
+	let touchStart: { x: number; y: number; axis: "" | "x" | "y"; tilt: boolean } | null = null;
+	// A drag the width of the screen turns the view by this much of its range to one side.
+	const DRAG = 1.1;
+	// Once a finger has dragged it, the view stays where it was left rather than easing to a pointer.
+	let dragged = false;
+	const onTouchStart = (event: TouchEvent) => {
+		const touch = event.touches[0];
+		if (event.touches.length !== 1 || !touch || menuOpen.value || (event.target instanceof Element && event.target.closest(CONTROLS))) {
+			touchStart = null;
+			return;
+		}
+		const page = document.scrollingElement ?? document.documentElement;
+		touchStart = { x: touch.clientX, y: touch.clientY, axis: "", tilt: page.scrollHeight <= window.innerHeight + 1 };
+	};
+	const onTouchMove = (event: TouchEvent) => {
+		const touch = event.touches[0];
+		if (!touchStart || !touch || event.touches.length !== 1) return;
+		const dx = touch.clientX - touchStart.x;
+		const dy = touch.clientY - touchStart.y;
+		if (!touchStart.axis) {
+			if (Math.hypot(dx, dy) < 8) return;
+			touchStart.axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
+		}
+		dragged = true;
+		if (touchStart.axis === "x" || touchStart.tilt) aim.x = THREE.MathUtils.clamp(aim.x - (dx / window.innerWidth) * DRAG, -1, 1);
+		if (touchStart.tilt) aim.y = THREE.MathUtils.clamp(aim.y - (dy / window.innerHeight) * DRAG, -1, 1);
+		touchStart.x = touch.clientX;
+		touchStart.y = touch.clientY;
+	};
+	const onTouchEnd = () => {
+		touchStart = null;
+	};
+	window.addEventListener("touchstart", onTouchStart, { passive: true });
+	window.addEventListener("touchmove", onTouchMove, { passive: true });
+	window.addEventListener("touchend", onTouchEnd, { passive: true });
+	window.addEventListener("touchcancel", onTouchEnd, { passive: true });
 	// How far the view turns with the pointer (the owner's, October: "viewing higher than we do
 	// and wider than we do, at least 180 degrees wide"). To either side 95°, so 190° from the far
 	// left of the screen to the far right; up 62°, to see what is sent into the sky; down 6°, as
@@ -1298,7 +1343,7 @@ onMounted(async () => {
 			pointerSpeed += (speedNow - pointerSpeed) * Math.min(1, delta / (speedNow > pointerSpeed ? 0.05 : 0.4));
 		}
 		lastPointer.copy(pointer);
-		if (!onControl && !menuOpen.value) {
+		if (!dragged && !onControl && !menuOpen.value) {
 			const wandering = 1 / (1 + (pointerSpeed / REACH) ** 4);
 			aim.lerp(pointer, follow((1 - Math.exp(-delta / 0.08)) * wandering));
 		}
@@ -1863,6 +1908,10 @@ onMounted(async () => {
 		drawnInto.dispose();
 		window.removeEventListener("resize", onResize);
 		window.removeEventListener("pointermove", onPointerMove);
+		window.removeEventListener("touchstart", onTouchStart);
+		window.removeEventListener("touchmove", onTouchMove);
+		window.removeEventListener("touchend", onTouchEnd);
+		window.removeEventListener("touchcancel", onTouchEnd);
 		clearInterval(clockInterval);
 		clearInterval(conditionsInterval);
 		clearInterval(stormInterval);
