@@ -841,3 +841,23 @@ fifteen minutes in, `?jenna=off`; `__jenna()` in the console says who holds each
   at most at once.
 - Seen by day in stills only: the reach reads violet with sea green where it rises; the air tube and
   the swells were not caught clearly in stills, and nothing was looked at by night.
+
+## 35. The parting of the sea (24 October)
+
+The owner: "Jenna's storm has used a waygate on the boat to summon in 16 more chanellers of my
+strength. Together, they part the sea whilst creating huge swells around the part". `storm.json`
+`"parting": { "from": ... }`; `?parting` for one visit from now, `?parting=400` with it fully parted,
+`?parting=off`; it closes as Jenna's storm is let down.
+
+- **The sixteen** (`parting.ts`): through the waygate aft, behind the eye (not drawn), five seconds
+  apart, each the strongest's strength (`ropeMight(STRONGEST_MIND)` filaments); two rows of eight on the
+  after rail; each rope low over the sea to one wall's lip, eight to each, from 140 m to 2.5 km off,
+  and along it; tight as the swell leaves the wall.
+- **The lane** (`partedSea` in `gerstner-waves.ts`): from 25 m off the bow to the horizon, 45 m half-width
+  widening by 2 m in each 100; the floor 20 m down and still, the put-aside water heaped 20 m up at each
+  wall and falling away outside; walls softened with distance as the sea's grid widens; swells 12 m at
+  18 s running out from each wall. Set further off (150 m to a few km) it read only as a notch on the
+  horizon: everything beyond 100 m lies within three degrees of it.
+- Seen by day in stills: clear on a clear day (`weaves-reference/2026-10-24-parting-clear-day.jpg`),
+  mostly lost in the storm's rain; the edge where the sea falls into it is a hard line; the steep wall
+  faces streak.

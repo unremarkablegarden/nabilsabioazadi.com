@@ -524,6 +524,15 @@ export function jennaRaised(since: number, hours = jennaHours()) {
 	return clamp01(since / 600) * (1 - clamp01((since - hours * 3600) / 1800));
 }
 
+// The parting of the sea in Jenna's storm (parting.ts): storm.json "parting": { "from": ISO time },
+// seconds since the waygate opened.
+export function partingSince(now: Date) {
+	const from = (stormSwitch as { parting?: { from: string | null } }).parting?.from;
+	if (!from) return undefined;
+	const since = (now.getTime() - timeOf(from)) / 1000;
+	return since >= 0 ? since : undefined;
+}
+
 // Noon at night (noon.ts): storm.json "noon": { "from": ISO time, "until": ISO time }, seconds
 // since it began, and since they let it go (undefined until then).
 export function noonSince(now: Date) {

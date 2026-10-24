@@ -623,6 +623,10 @@ onMounted(async () => {
 		const since = jennaSeconds();
 		return since === undefined ? 0 : jennaRaised(since);
 	};
+	// The parting of the sea in it (parting.ts): "parting" in storm.json, or ?parting for this visit
+	// from now, ?parting=300 five minutes in, ?parting=off without it. It closes as Jenna's storm is let down.
+	const partingAsked = query.get("parting");
+	const partingSeconds = () => (partingAsked === "off" ? undefined : partingAsked !== null ? (Number(partingAsked) || 0) + (Date.now() - pageOpened) / 1000 : partingSince(new Date()));
 	const vesalFigures = () => {
 		const since = vesalSeconds();
 		return since !== undefined && realNow ? vesalStorm(realNow, vesalRaised(since), compelledNow()) : undefined;
@@ -810,6 +814,8 @@ onMounted(async () => {
 	// Jenna's storm: the bolts the channellers draw down, their air and water, and the swells they make.
 	const jenna = createJenna(scene, SCREEN_LAYER, waveUniforms.strikeRings.value);
 	(window as unknown as { __jenna?: () => string[] }).__jenna = jenna.describe;
+	// The sixteen come through the waygate and part the sea.
+	const parting = createParting(scene, SCREEN_LAYER, waveUniforms);
 	const noonAsked = query.get("noon");
 	const noonSeconds = () => (noonAsked === "off" || calmMotion ? undefined : noonAsked !== null ? (Number(noonAsked) || 0) + (Date.now() - pageOpened) / 1000 : noonSince(new Date()));
 	const contestAsked = query.get("contest");
@@ -1776,6 +1782,13 @@ onMounted(async () => {
 		);
 		// Jenna's storm: the bolts they draw down, and the air and water that go with them.
 		jenna.update(liveOnly ? { time, boat: camera.position, ahead: skyAhead, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, air: skySheath[0]!, water: skySheath[1]! } : undefined);
+		// The sixteen, through the waygate, parting the sea.
+		const partAt = calmMotion ? undefined : partingSeconds();
+		parting.update(
+			partAt !== undefined && liveOnly && (jennaSeconds() === undefined || jennaNow > 0)
+				? { since: partAt, share: partShare(partAt) * (jennaSeconds() === undefined ? 1 : jennaNow), time, boat: camera.position, ahead: skyAhead, day: daylight, gain: 1.5 / steadyExposure, water: skySheath[1]! }
+				: undefined,
+		);
 		// The six's noon: their sun, and their ropes up into it.
 		const noonAt = noonSeconds();
 		noonByThem = noonAt === undefined ? 0 : noonShare(noonAt, noonAsked !== null ? undefined : noonLetGo(new Date()));
@@ -1931,6 +1944,7 @@ onMounted(async () => {
 		noon.dispose();
 		swells.dispose();
 		jenna.dispose();
+		parting.dispose();
 		rings.dispose();
 		plumes.dispose();
 		stilling.dispose();

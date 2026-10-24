@@ -448,6 +448,12 @@ export interface GerstnerUniforms {
 	// Jenna's storm (jenna.ts): the swells running out from where each channelled bolt met the sea
 	// (world x, z, the moment the water weave pressed it, in waveTime, and its height in metres).
 	strikeRings: THREE.IUniform<THREE.Vector4[]>;
+	// The parting (parting.ts): the boat (x, z) and the way ahead (x, z); the lane's half-width and
+	// depth (m), 0..1 how far it is parted, and the height of the swells off its walls (m); and their
+	// wavenumber and angular frequency.
+	partFront: THREE.IUniform<THREE.Vector4>;
+	partShape: THREE.IUniform<THREE.Vector4>;
+	partSwell: THREE.IUniform<THREE.Vector2>;
 }
 
 const pressedChunk = /* glsl */ `
@@ -511,6 +517,46 @@ float stillOutside( vec2 p, out float rim ) {
 }
 `;
 
+// The parting of the sea (parting.ts): the sixteen hold a lane of the sea open ahead of the boat,
+// from a few hundred metres off to the horizon; within it the water is pressed down to a still
+// floor between two walls, heaped at their lips where the water they have put aside stands; and
+// off each wall huge swells run out, away from the lane, as the sea answers being held. (The boat
+// sits at its head, on the sea as it is, and the lane opens off its bow.) The walls soften with distance, as the sea's grid widens.
+const partChunk = /* glsl */ `
+uniform vec4 partFront;
+uniform vec4 partShape;
+uniform vec2 partSwell;
+float partedSea( vec2 p, out float lane, out float lip, out float swell, out vec2 away ) {
+	lane = 0.0;
+	lip = 0.0;
+	swell = 0.0;
+	away = vec2( 0.0 );
+	vec2 rel = p - partFront.xy;
+	vec2 ahead = partFront.zw;
+	float along = dot( rel, ahead );
+	vec2 side = vec2( - ahead.y, ahead.x );
+	float across = dot( rel, side );
+	away = across < 0.0 ? - side : side;
+	// (Its walls run a little in and out along their length.)
+	// (Opening off the bow and widening as it goes.)
+	float w = ( partShape.x + 0.02 * max( along, 0.0 ) ) * ( 1.0 + 0.1 * sin( along * 0.0013 + 1.3 ) + 0.04 * sin( along * 0.0041 ) );
+	float wall = 25.0 + 0.035 * max( along, 0.0 );
+	float d = abs( across ) - w;
+	float amount = partShape.z * smoothstep( 25.0, 140.0, along ) * ( 1.0 - smoothstep( 7000.0, 9500.0, along ) );
+	if ( amount <= 0.0 ) return 0.0;
+	// Pressed down within, and the water put aside heaped as high at each wall, falling away outside.
+	float s = smoothstep( - wall, 0.0, d );
+	lane = amount * ( 1.0 - s );
+	lip = amount * s * exp( - max( d, 0.0 ) / 260.0 );
+	float h = - partShape.y * lane + partShape.y * lip;
+	// The swells, running out from each wall.
+	float out_ = max( d, 0.0 );
+	float f = partSwell.x * out_ - partSwell.y * waveTime;
+	swell = amount * smoothstep( 0.0, 1.5 * wall, d ) * exp( - out_ / 2600.0 ) * sin( f );
+	return h + partShape.w * swell;
+}
+`;
+
 const vertexPars = /* glsl */ `
 uniform float crestLimit;
 uniform vec4 lensWaves[ 12 ];
@@ -536,6 +582,7 @@ ${channelPathChunk}
 uniform vec4 giantWaves[${GIANT_WAVES.length}];
 ${pressedChunk}
 ${stillChunk}
+${partChunk}
 varying vec3 vWaveNormal;
 varying float vCrest;
 varying float vGust;
@@ -753,6 +800,28 @@ vec3 gerstner( vec3 p, out vec3 normal, out float crest, out float gust ) {
 	stillRim *= 1.0 - smoothstep( 2500.0, 5000.0, distanceToEye );
 	crest = crest * mix( 1.0, min( lift, 1.6 ), beyond ) + 1.4 * stillRim;
 	offset.y += 5.0 * stillRim;
+	// The parting: within the lane the sea held still and pressed down, its walls and swells beyond.
+	if ( partShape.z > 0.0 ) {
+		float lane, lip, swell;
+		vec2 away;
+		float h = partedSea( p.xz, lane, lip, swell, away );
+		if ( lane > 0.0 || lip > 0.001 || swell != 0.0 ) {
+			float l2, p2, s2;
+			vec2 a2;
+			float hx = partedSea( p.xz + vec2( 2.0, 0.0 ), l2, p2, s2, a2 );
+			float hz = partedSea( p.xz + vec2( 0.0, 2.0 ), l2, p2, s2, a2 );
+			float keep = 1.0 - lane;
+			offset *= keep;
+			tangent = mix( vec3( 1.0, 0.0, 0.0 ), tangent, keep );
+			binormal = mix( vec3( 0.0, 0.0, 1.0 ), binormal, keep );
+			crest *= keep;
+			offset.y += h;
+			tangent.y += ( hx - h ) / 2.0;
+			binormal.y += ( hz - h ) / 2.0;
+			// (Foam where the put-aside water stands at the lip, and on the swells' crests.)
+			crest += 0.9 * lip * lip + 0.5 * partShape.w * partSwell.x * max( swell, 0.0 );
+		}
+	}
 	normal = normalize( cross( binormal, tangent ) );
 	return p + offset;
 }
@@ -1168,6 +1237,9 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		manuLight: { value: new THREE.Vector4() },
 		crestLimit: { value: 1 },
 		strikeRings: { value: Array.from({ length: STRIKE_RINGS }, () => new THREE.Vector4(0, 0, 0, 0)) },
+		partFront: { value: new THREE.Vector4(0, 0, 0, -1) },
+		partShape: { value: new THREE.Vector4(0, 0, 0, 0) },
+		partSwell: { value: new THREE.Vector2(0.0124, 0.35) },
 	};
 	useDialSea(uniforms);
 	Object.assign(material.uniforms, uniforms, { giantWaves: { value: GIANT_WAVES } });
