@@ -2,12 +2,8 @@
 // (365685777); the Measurement ID below is the one the owner's earlier site already carried.
 // It is public: every page that uses it shows it.
 const MEASUREMENT_ID = "G-20Q8W806FV";
-// Whether visitors are counted with cookies. The owner has not yet said how visitors are to be
-// asked, and in the EU and the UK they must be asked first, so this is false: visits are sent to
-// Google without cookies and without anything that identifies a visitor from one visit to the
-// next (Google's "consent mode", storage denied). The reports are thinner for it. Set it to true
-// only once there is a consent banner, or the owner decides to do without one.
-const WITH_COOKIES = false;
+// Every visitor is counted with cookies, at the owner's word (25 October 2026), as on the owner's
+// studio site: no consent banner. Google's advertising uses stay off.
 
 export default defineNuxtPlugin(() => {
 	// Not while developing, so that the owner's own work is not counted as visits.
@@ -19,10 +15,11 @@ export default defineNuxtPlugin(() => {
 		// eslint-disable-next-line prefer-rest-params
 		w.dataLayer.push(arguments);
 	}
-	const storage = WITH_COOKIES ? "granted" : "denied";
-	gtag("consent", "default", { analytics_storage: storage, ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
+	gtag("consent", "default", { analytics_storage: "granted", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
 	gtag("js", new Date());
-	gtag("config", MEASUREMENT_ID);
+	// Google's own page view is turned off: the router below counts every page, the first among
+	// them, and with both each visit was counted twice.
+	gtag("config", MEASUREMENT_ID, { send_page_view: false });
 	// Google's script is fetched and run only once the sea is up (or after ten seconds, for a
 	// browser that cannot draw it): run while the picture was being set up, it took the same
 	// seconds from a slow machine. Nothing is lost: what is counted before it arrives waits in
