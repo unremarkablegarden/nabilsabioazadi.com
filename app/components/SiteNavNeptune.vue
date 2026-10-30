@@ -144,6 +144,7 @@ const links = [
 					</div>
 				</dl>
 				<p><a class="credit" href="https://open-meteo.com/">Weather: Open-Meteo</a></p>
+				<p><a class="credit" href="https://registry.opendata.aws/terrain-tiles/">Elevation: Terrain Tiles</a></p>
 				<button type="button" class="plain" :aria-pressed="paused" @click="paused = !paused">
 					{{ paused ? "Play the moving background" : "Pause the moving background" }}
 				</button>
