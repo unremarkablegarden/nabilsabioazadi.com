@@ -363,6 +363,10 @@ const elsewhere = [
 					<span class="key">Data</span>
 					<a class="reading link" href="https://open-meteo.com/">Open-Meteo</a>
 				</div>
+				<div v-if="$route.query.island !== undefined && $route.query.island !== 'off'" class="row rule">
+					<span class="key">Islands</span>
+					<span class="reading"><a class="link" href="https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/collections-description/COP-DEM">Copernicus DEM (© DLR, Airbus)</a>, <a class="link" href="https://www.gebco.net/">GEBCO</a></span>
+				</div>
 				<div class="row rule">
 					<span class="key">Sky</span>
 					<span class="reading">Milky Way: NASA/Goddard Space Flight Center Scientific Visualization Studio, ESA/Gaia/DPAC</span>

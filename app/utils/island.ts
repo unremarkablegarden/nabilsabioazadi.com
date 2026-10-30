@@ -1,12 +1,13 @@
-// The islands of Manawatāwhi, where the voyage began, in view from the boat (the owner's, 31 October, on seeing an island of real
-// elevation data made in a game engine; then "make it geographically accurate": the place itself to be true, kept in view). The boat
-// is drawn as if at a real place in open water among them, 34.1778°S 172.1158°E, though it is really hundreds of kilometres on: that
-// alone is placed for the picture. From there each island stands at its true distance and direction: Great Island, Manawatāwhi, ahead
-// and to starboard; Oromaki behind it; Moekawa, the Princes Islands and Ōhau off to port, abeam and beyond what the view shows until it
-// is turned. North is true north, so the real sun falls on the real faces, and the live sun, moon, cloud, mist and swell are the sea's
-// own. Shapes, heights and depths are in scripts/bake-manawatawhi.mjs. What grows is from the botanists' records (kind: 0 Great Island's
-// kānuka, 1 the broadleaf forest of the islands the goats never reached, 2 the near-bare Princes), and goes where height, steepness and
-// nearness to the water would put it. ?island=off leaves them out.
+// The islands of Manawatāwhi, where the voyage began, as a preview only: /?island (the owner's, 31 October: first in view for everyone,
+// then "make it geographically accurate", then, told that the boat is really far past them, "true place"). In the true place they are
+// not to be seen: the boat left them on 10 October, and a summit of 295 m shows at most about 70 km off, which it passed within days and
+// never comes back to. So the live sea is open water, and nothing here is fetched or drawn. The preview draws the boat as if at a real
+// place in open water among them, 34.1778°S 172.1158°E, which it is not. From there each island stands at its true distance and direction:
+// Great Island, Manawatāwhi, ahead and to starboard; Oromaki behind it; Moekawa, the Princes Islands and Ōhau off to port, abeam and beyond
+// what the view shows until it is turned. North is true north, so the real sun falls on the real faces, and the live sun, moon, cloud,
+// mist and swell are the sea's own. Shapes, heights and depths are in scripts/bake-manawatawhi.mjs. What grows is from the botanists'
+// records (kind: 0 Great Island's kānuka, 1 the broadleaf forest of the islands the goats never reached, 2 the near-bare Princes), and goes
+// where height, steepness and nearness to the water would put it.
 import * as THREE from "three";
 import type { GerstnerUniforms } from "./gerstner-waves";
 
@@ -181,7 +182,7 @@ export interface IslandFrame {
 	bearing: number;
 }
 
-export function createIsland(scene: THREE.Scene, sea: GerstnerUniforms, boat: THREE.Vector3, shown = true) {
+export function createIsland(scene: THREE.Scene, sea: GerstnerUniforms, boat: THREE.Vector3, shown = false) {
 	const group = new THREE.Group();
 	group.visible = false;
 	// Everything is laid out east and south of the boat, and turns about it to true north.
