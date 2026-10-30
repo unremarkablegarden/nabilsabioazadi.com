@@ -1,140 +1,170 @@
-// node scripts/bake-manawatawhi.mjs <tile folder> <out>: makes public/textures/manawatawhi.bin, Great Island of Manawatāwhi
-// as it is drawn (island.ts), from Mapzen's Terrarium elevation tiles (zoom 14, x 16024-16028, y 9846-9849; open data on AWS,
-// credited on the page). The shape is real to about 30 m, which is what the survey behind the tiles can see. What is finer is
-// worked out from that shape: rain run down it to cut the gullies, then the coast steepened. Nothing is placed by hand.
+// node scripts/bake-manawatawhi.mjs <survey.f32> <gebco.json> <out>: makes public/textures/manawatawhi.bin, the islands of
+// Manawatāwhi as they are drawn (island.ts). The land is the Copernicus GLO-30 survey (tile Copernicus_DSM_COG_10_S35_00_E172_00_DEM,
+// 1 arc second, about 30 m; the window below read out to 32-bit floats, north row first). The coast is the survey's own. Its narrow
+// summits read low, so each island's top is brought up to its recorded height, the ground near the sea left where it is. Between the
+// survey's cells only one thing is worked out rather than measured: rain run down the land to cut the gullies. The islands stand where
+// they are, seen from a real place in open water (BOAT). The seabed is GEBCO 2020, about 450 m a cell (sampled through api.opentopodata.org as a 64 by 44 grid over the same
+// window): it says how deep the bank is, not how the rock falls in the last hundreds of metres, so there the depth is held to a
+// steep slope from the shore.
 import { readFileSync, writeFileSync } from "node:fs";
-import { inflateSync } from "node:zlib";
 
-const [folder, out] = process.argv.slice(2);
-const X0 = 16024, Y0 = 9846, ACROSS = 5, DOWN = 4, TILE = 256;
-const METRES = (40075016 * Math.cos((34.16 * Math.PI) / 180)) / 2 ** 14 / TILE;
+const [surveyPath, gebcoPath, out] = process.argv.slice(2);
+const WEST = 171.98, NORTH = -34.08, WIDE = 864, TALL = 576, ARC = 1 / 3600;
+const BOAT = { latitude: -34.1778, longitude: 172.1158 };
+const TO_EAST = 111320 * Math.cos((34.16 * Math.PI) / 180), TO_SOUTH = 110950;
+const CELL = 8;
+const eastOf = (longitude) => (longitude - BOAT.longitude) * TO_EAST;
+const southOf = (latitude) => (BOAT.latitude - latitude) * TO_SOUTH;
 
-function readTile(path) {
-	const bytes = readFileSync(path);
-	let at = 8, width, height, parts = [];
-	while (at < bytes.length) {
-		const length = bytes.readUInt32BE(at), kind = bytes.toString("latin1", at + 4, at + 8), body = bytes.subarray(at + 8, at + 8 + length);
-		if (kind === "IHDR") [width, height] = [body.readUInt32BE(0), body.readUInt32BE(4)];
-		if (kind === "IDAT") parts.push(body);
-		at += 12 + length;
+// Names and heights from the records; `kind` says what grows there (island.ts).
+const ISLANDS = [
+	{ name: "Manawatāwhi, Great Island", latitude: -34.1564, longitude: 172.139, top: 295, kind: 0 },
+	{ name: "Moekawa, South West Island", latitude: -34.1768, longitude: 172.0725, top: 207, kind: 1 },
+	{ name: "Ōhau, West Island", latitude: -34.1855, longitude: 172.034, top: 177, kind: 1 },
+	{ name: "Oromaki, North East Island", latitude: -34.1323, longitude: 172.1675, top: 111, kind: 1 },
+	{ name: "the Princes Islands", latitude: -34.1775, longitude: 172.048, top: 106, kind: 2 },
+];
+
+const survey = new Float32Array(readFileSync(surveyPath).buffer.slice(0));
+const pieces = new Int32Array(WIDE * TALL).fill(-1);
+const found = [];
+for (let start = 0; start < WIDE * TALL; start++) {
+	if (survey[start] <= 0 || pieces[start] >= 0) continue;
+	const piece = found.length, stack = [start];
+	pieces[start] = piece;
+	let cells = 0, top = 0, sumX = 0, sumY = 0;
+	while (stack.length) {
+		const i = stack.pop();
+		cells++; top = Math.max(top, survey[i]); sumX += i % WIDE; sumY += (i / WIDE) | 0;
+		for (const next of [i - 1, i + 1, i - WIDE, i + WIDE]) if (next >= 0 && next < WIDE * TALL && survey[next] > 0 && pieces[next] < 0) { pieces[next] = piece; stack.push(next); }
 	}
-	const raw = inflateSync(Buffer.concat(parts)), stride = width * 3, pixels = new Uint8Array(height * stride);
-	for (let y = 0; y < height; y++) {
-		const filter = raw[y * (stride + 1)];
-		for (let i = 0; i < stride; i++) {
-			const value = raw[y * (stride + 1) + 1 + i], a = i >= 3 ? pixels[y * stride + i - 3] : 0, b = y ? pixels[(y - 1) * stride + i] : 0, c = i >= 3 && y ? pixels[(y - 1) * stride + i - 3] : 0;
-			const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
-			pixels[y * stride + i] = value + [0, a, b, (a + b) >> 1, pa <= pb && pa <= pc ? a : pb <= pc ? b : c][filter];
-		}
+	const [latitude, longitude] = [NORTH - (sumY / cells) * ARC, WEST + (sumX / cells) * ARC];
+	// (Speckle of the survey at sea level left out; rocks that stand three metres clear kept.)
+	const owner = top < 3 ? -1 : ISLANDS.map((island, n) => [Math.hypot(eastOf(island.longitude) - eastOf(longitude), southOf(island.latitude) - southOf(latitude)), n]).sort((a, b) => a[0] - b[0])[0][1];
+	found.push({ owner, top, cells });
+}
+
+function bicubic(values, x, y) {
+	const cubic = (a, b, c, d, t) => b + 0.5 * t * (c - a + t * (2 * a - 5 * b + 4 * c - d + t * (3 * (b - c) + d - a)));
+	const i = Math.floor(x), j = Math.floor(y), row = [];
+	for (let dy = -1; dy <= 2; dy++) {
+		const v = (dx) => values(i + dx, j + dy);
+		row.push(cubic(v(-1), v(0), v(1), v(2), x - i));
 	}
-	return pixels;
+	return cubic(row[0], row[1], row[2], row[3], y - j);
 }
 
-// The island alone, the sea-level speckle of the survey and the other islands left out.
-const WIDE = ACROSS * TILE, TALL = DOWN * TILE, whole = new Float32Array(WIDE * TALL);
-for (let i = 0; i < ACROSS; i++) for (let j = 0; j < DOWN; j++) {
-	const pixels = readTile(`${folder}/t_14_${X0 + i}_${Y0 + j}.png`);
-	for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
-		const p = (y * TILE + x) * 3;
-		whole[(j * TILE + y) * WIDE + i * TILE + x] = pixels[p] * 256 + pixels[p + 1] + pixels[p + 2] / 256 - 32768;
-	}
-}
-// The survey's coast is smeared outwards over 30 m of sea; its true area (about 4 km²) comes back with the waterline here.
-const SHORE = 11;
-let top = 0, topAt = 0;
-whole.forEach((value, i) => { if (value > top) [top, topAt] = [value, i]; });
-const island = new Uint8Array(WIDE * TALL), stack = [topAt];
-island[topAt] = 1;
-while (stack.length) {
-	const i = stack.pop();
-	for (const next of [i - 1, i + 1, i - WIDE, i + WIDE]) if (next >= 0 && next < WIDE * TALL && !island[next] && whole[next] > SHORE) { island[next] = 1; stack.push(next); }
-}
-
-// A square about the island, 7 km across, one in four kept for the sea's distance from shore at 16 m a texel.
-const SIZE = 880, cx = 563, cy = 449, left = cx - SIZE / 2 | 0, up = cy - SIZE / 2 | 0;
-const field = new Float32Array(SIZE * SIZE);
-for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
-	const X = x + left, Y = y + up, inside = X >= 0 && Y >= 0 && X < WIDE && Y < TALL;
-	field[y * SIZE + x] = inside && island[Y * WIDE + X] ? (whole[Y * WIDE + X] - SHORE) * (top / (top - SHORE)) : -1;
-}
-const at = (x, y) => field[Math.max(0, Math.min(SIZE - 1, y)) * SIZE + Math.max(0, Math.min(SIZE - 1, x))];
-
-// Smoothed once, as the tiles are 30 m cells enlarged and show their stairs.
-{
-	const copy = field.slice();
-	for (let pass = 0; pass < 2; pass++) {
-		const from = copy.slice();
-		for (let y = 1; y < SIZE - 1; y++) for (let x = 1; x < SIZE - 1; x++) {
-			if (from[y * SIZE + x] < 0) continue;
-			let sum = 0, n = 0;
-			for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) { const v = from[(y + dy) * SIZE + x + dx]; if (v >= 0) { sum += v; n++; } }
-			copy[y * SIZE + x] = sum / n;
-		}
-	}
-	field.set(copy);
-}
-
-// Rain: each drop runs downhill from where it fell, taking soil where it goes fast and leaving it where it slows.
 let seed = 11;
 const random = () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-function slopeAt(x, y) {
-	const i = Math.floor(x), j = Math.floor(y), u = x - i, v = y - j;
-	const a = at(i, j), b = at(i + 1, j), c = at(i, j + 1), d = at(i + 1, j + 1);
-	return { height: a * (1 - u) * (1 - v) + b * u * (1 - v) + c * (1 - u) * v + d * u * v, gx: (b - a) * (1 - v) + (d - c) * v, gy: (c - a) * (1 - u) + (d - b) * u };
-}
-const DROPS = 500_000;
-for (let drop = 0; drop < DROPS; drop++) {
-	let x = 1 + random() * (SIZE - 3), y = 1 + random() * (SIZE - 3), dx = 0, dy = 0, speed = 1, water = 1, soil = 0;
-	if (at(x | 0, y | 0) <= 0) continue;
-	for (let step = 0; step < 60; step++) {
-		const i = Math.floor(x), j = Math.floor(y), u = x - i, v = y - j;
-		const here = slopeAt(x, y);
-		dx = dx * 0.25 - here.gx * 0.75; dy = dy * 0.25 - here.gy * 0.75;
-		const length = Math.hypot(dx, dy);
-		if (length < 1e-4) break;
-		dx /= length; dy /= length; x += dx; y += dy;
-		if (x < 1 || y < 1 || x > SIZE - 3 || y > SIZE - 3) break;
-		const fall = here.height - slopeAt(x, y).height;
-		if (slopeAt(x, y).height <= 0) break;
-		const room = Math.max(fall, 0.02) * speed * water * 4;
-		// Positive leaves soil here, negative takes it.
-		const change = fall < 0 ? Math.min(-fall, soil) : soil > room ? (soil - room) * 0.3 : -Math.min((room - soil) * 0.3, fall);
-		soil -= change;
-		const w = [(1 - u) * (1 - v), u * (1 - v), (1 - u) * v, u * v], cells = [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]];
-		cells.forEach(([cellX, cellY], k) => { const p = cellY * SIZE + cellX; if (field[p] > 0) field[p] = Math.max(0.05, field[p] + change * w[k]); });
-		speed = Math.sqrt(Math.max(0.01, speed * speed + fall * 4));
-		water *= 0.98;
+
+const patches = ISLANDS.map((island, n) => {
+	let x0 = WIDE, x1 = 0, y0 = TALL, y1 = 0;
+	for (let i = 0; i < WIDE * TALL; i++) if (pieces[i] >= 0 && found[pieces[i]].owner === n) { const x = i % WIDE, y = (i / WIDE) | 0; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+	const margin = 240;
+	const east0 = eastOf(WEST + x0 * ARC) - margin, east1 = eastOf(WEST + x1 * ARC) + margin, south0 = southOf(NORTH - y0 * ARC) - margin, south1 = southOf(NORTH - y1 * ARC) + margin;
+	const across = Math.ceil((east1 - east0) / CELL), down = Math.ceil((south1 - south0) / CELL);
+	const here = (x, y) => {
+		const cx = Math.max(0, Math.min(WIDE - 1, x)), cy = Math.max(0, Math.min(TALL - 1, y)), i = cy * WIDE + cx;
+		// The sea a little under nought, so that the coast between cells is a curve and not the survey's stairs.
+		return pieces[i] >= 0 && found[pieces[i]].owner === n ? survey[i] : -8;
+	};
+	const field = new Float32Array(across * down);
+	for (let y = 0; y < down; y++) for (let x = 0; x < across; x++) {
+		const longitude = BOAT.longitude + (east0 + x * CELL) / TO_EAST, latitude = BOAT.latitude - (south0 + y * CELL) / TO_SOUTH;
+		field[y * across + x] = bicubic(here, (longitude - WEST) / ARC, (NORTH - latitude) / ARC);
 	}
-}
-
-// How far each place is from the shore, by sweeping, in metres: positive on the water, negative ashore.
-function distanceFromShore(isOn) {
-	const far = 1e9, d = new Float32Array(SIZE * SIZE).fill(far);
-	for (let i = 0; i < SIZE * SIZE; i++) if (isOn(i)) d[i] = 0;
-	const STRAIGHT = 1, SLANT = Math.SQRT2;
-	for (let round = 0; round < 2; round++) {
-		for (let y = 1; y < SIZE - 1; y++) for (let x = 1; x < SIZE - 1; x++) { const i = y * SIZE + x; d[i] = Math.min(d[i], d[i - 1] + STRAIGHT, d[i - SIZE] + STRAIGHT, d[i - SIZE - 1] + SLANT, d[i - SIZE + 1] + SLANT); }
-		for (let y = SIZE - 2; y > 0; y--) for (let x = SIZE - 2; x > 0; x--) { const i = y * SIZE + x; d[i] = Math.min(d[i], d[i + 1] + STRAIGHT, d[i + SIZE] + STRAIGHT, d[i + SIZE + 1] + SLANT, d[i + SIZE - 1] + SLANT); }
+	const at = (x, y) => field[Math.max(0, Math.min(down - 1, y)) * across + Math.max(0, Math.min(across - 1, x))];
+	const slopeAt = (x, y) => {
+		const i = Math.floor(x), j = Math.floor(y), u = x - i, v = y - j, a = at(i, j), b = at(i + 1, j), c = at(i, j + 1), d = at(i + 1, j + 1);
+		return { height: a * (1 - u) * (1 - v) + b * u * (1 - v) + c * (1 - u) * v + d * u * v, gx: (b - a) * (1 - v) + (d - c) * v, gy: (c - a) * (1 - u) + (d - b) * u };
+	};
+	// Smoothed, as bicubic enlargement still shows the survey's cells, and rain would cut along them.
+	for (let pass = 0; pass < 4; pass++) {
+		const from = field.slice();
+		for (let y = 1; y < down - 1; y++) for (let x = 1; x < across - 1; x++) {
+			const i = y * across + x;
+			if (from[i] > 4) field[i] = (from[i] * 2 + from[i - 1] + from[i + 1] + from[i - across] + from[i + across]) / 6;
+		}
 	}
-	return d;
-}
-const fromLand = distanceFromShore((i) => field[i] > 0), fromSea = distanceFromShore((i) => field[i] <= 0);
+	// Rain: each drop runs downhill from where it fell, taking soil where it goes fast and leaving it where it slows.
+	const drops = Math.round(across * down * 1.2);
+	for (let drop = 0; drop < drops; drop++) {
+		let x = 1 + random() * (across - 3), y = 1 + random() * (down - 3), dx = 0, dy = 0, speed = 1, water = 1, soil = 0;
+		if (at(x | 0, y | 0) <= 2) continue;
+		for (let step = 0; step < 60; step++) {
+			const i = Math.floor(x), j = Math.floor(y), u = x - i, v = y - j, was = slopeAt(x, y);
+			dx = dx * 0.25 - was.gx * 0.75; dy = dy * 0.25 - was.gy * 0.75;
+			const length = Math.hypot(dx, dy);
+			if (length < 1e-4) break;
+			dx /= length; dy /= length; x += dx; y += dy;
+			if (x < 1 || y < 1 || x > across - 3 || y > down - 3) break;
+			const now = slopeAt(x, y).height, fall = was.height - now;
+			if (now <= 1) break;
+			const room = Math.max(fall, 0.02) * speed * water * 4;
+			// Positive leaves soil here, negative takes it.
+			const change = fall < 0 ? Math.min(-fall, soil) : soil > room ? (soil - room) * 0.3 : -Math.min((room - soil) * 0.06, fall * 0.5);
+			soil -= change;
+			[[i, j, (1 - u) * (1 - v)], [i + 1, j, u * (1 - v)], [i, j + 1, (1 - u) * v], [i + 1, j + 1, u * v]].forEach(([cx, cy, w]) => { const p = cy * across + cx; if (field[p] > 1) field[p] = Math.max(1, field[p] + change * w); });
+			speed = Math.sqrt(Math.max(0.01, speed * speed + fall * 4));
+			water *= 0.98;
+		}
+	}
+	// Up to the recorded height, the more the higher: the coast stays where the survey has it.
+	let high = 0;
+	for (const value of field) high = Math.max(high, value);
+	const more = island.top / high - 1;
+	for (let i = 0; i < field.length; i++) if (field[i] > 0) field[i] *= 1 + more * (field[i] / high) ** 2;
+	// Under the water, the rock falling away, for what shows in the troughs of a swell.
+	for (let i = 0; i < field.length; i++) if (field[i] <= 0) field[i] = Math.max(-45, field[i] * 3);
+	return { island, east0, south0, across, down, field, surveyTop: high };
+});
 
-// The coast of an island in a great ocean is cut back to cliffs: the land within 70 m of the sea lifts sharply off the water.
-// And the sea bed falls away from the shore, for the rock showing in the troughs of the swell.
-for (let i = 0; i < SIZE * SIZE; i++) {
-	if (field[i] > 0) {
-		const lift = Math.min(1, (fromSea[i] * METRES) / 70);
-		field[i] += 26 * lift * lift * (3 - 2 * lift) * (1 - Math.min(1, field[i] / 120));
-	} else field[i] = -Math.min(45, 1 + fromLand[i] * METRES * 0.25);
+// The seabed, and the sea's distance from the nearest shore, over the whole group at 16 m.
+const gebco = JSON.parse(readFileSync(gebcoPath, "utf8"));
+function seabedAt(latitude, longitude) {
+	const x = Math.max(0, Math.min(gebco.nx - 1.001, ((longitude - gebco.lo0) / (gebco.lo1 - gebco.lo0)) * (gebco.nx - 1))), y = Math.max(0, Math.min(gebco.ny - 1.001, ((latitude - gebco.la0) / (gebco.la1 - gebco.la0)) * (gebco.ny - 1)));
+	const i = Math.floor(x), j = Math.floor(y), u = x - i, v = y - j, cell = (a, b) => gebco.elev[b * gebco.nx + a];
+	return cell(i, j) * (1 - u) * (1 - v) + cell(i + 1, j) * u * (1 - v) + cell(i, j + 1) * (1 - u) * v + cell(i + 1, j + 1) * u * v;
 }
+const eastMin = Math.min(...patches.map((p) => p.east0)) - 1000, eastMax = Math.max(...patches.map((p) => p.east0 + p.across * CELL)) + 1000;
+const southMin = Math.min(...patches.map((p) => p.south0)) - 1000, southMax = Math.max(...patches.map((p) => p.south0 + p.down * CELL)) + 1000;
+const SHORE_CELL = 16, shoreWide = Math.ceil((eastMax - eastMin) / SHORE_CELL), shoreTall = Math.ceil((southMax - southMin) / SHORE_CELL);
+const distance = new Float32Array(shoreWide * shoreTall).fill(1e9), depths = [];
+for (const { east0, south0, across, down, field } of patches) for (let y = 0; y < down; y += 2) for (let x = 0; x < across; x += 2) {
+	if (field[y * across + x] <= 0) continue;
+	const cx = Math.floor((east0 + x * CELL - eastMin) / SHORE_CELL), cy = Math.floor((south0 + y * CELL - southMin) / SHORE_CELL);
+	distance[cy * shoreWide + cx] = 0;
+}
+for (let round = 0; round < 2; round++) {
+	for (let y = 1; y < shoreTall - 1; y++) for (let x = 1; x < shoreWide - 1; x++) { const i = y * shoreWide + x; distance[i] = Math.min(distance[i], distance[i - 1] + 1, distance[i - shoreWide] + 1, distance[i - shoreWide - 1] + Math.SQRT2, distance[i - shoreWide + 1] + Math.SQRT2); }
+	for (let y = shoreTall - 2; y > 0; y--) for (let x = shoreWide - 2; x > 0; x--) { const i = y * shoreWide + x; distance[i] = Math.min(distance[i], distance[i + 1] + 1, distance[i + shoreWide] + 1, distance[i + shoreWide + 1] + Math.SQRT2, distance[i + shoreWide - 1] + Math.SQRT2); }
+}
+const shore = new Uint8Array(shoreWide * shoreTall * 2);
+for (let y = 0; y < shoreTall; y++) for (let x = 0; x < shoreWide; x++) {
+	const i = y * shoreWide + x, metres = distance[i] * SHORE_CELL;
+	shore[i * 2] = Math.min(255, metres / 4);
+	const longitude = BOAT.longitude + (eastMin + x * SHORE_CELL) / TO_EAST, latitude = BOAT.latitude - (southMin + y * SHORE_CELL) / TO_SOUTH;
+	// (The chart's cells over the land read as hills, and nearest the shore it knows nothing; a steep-to coast falls 3 m in 10.)
+	const depth = Math.min(Math.max(0, -seabedAt(latitude, longitude)) || 500, metres * 0.3);
+	if (metres > 0 && metres < 1000) depths.push(depth);
+	shore[i * 2 + 1] = Math.min(255, depth / 2);
+}
+depths.sort((a, b) => a - b);
+console.log("seabed within 1 km of shore, m:", { min: depths[0], p10: depths[depths.length * 0.1 | 0], median: depths[depths.length >> 1], p90: depths[depths.length * 0.9 | 0], max: depths.at(-1) });
 
-// Half a metre in a grid of 16 bits, then the sea's distance from shore, a quarter the size, 8 bits, 4 m a step.
-const COARSE = 220, heights = new Int16Array(SIZE * SIZE), shore = new Uint8Array(COARSE * COARSE);
-for (let i = 0; i < SIZE * SIZE; i++) heights[i] = Math.round(field[i] * 50);
-for (let y = 0; y < COARSE; y++) for (let x = 0; x < COARSE; x++) shore[y * COARSE + x] = Math.min(255, (fromLand[y * 4 * SIZE + x * 4] * METRES) / 4);
-const head = new Float32Array([SIZE, COARSE, METRES, 0]);
-writeFileSync(out, Buffer.concat([Buffer.from(head.buffer), Buffer.from(heights.buffer), Buffer.from(shore.buffer)]));
-let high = 0, land = 0;
-for (const value of field) { if (value > high) high = value; if (value > 0) land++; }
-console.log({ metres: METRES, top: high, landKm2: (land * METRES * METRES) / 1e6, kb: Math.round((16 + heights.byteLength + shore.byteLength) / 1024) });
+const head = [patches.length, shoreWide, shoreTall, SHORE_CELL, eastMin, southMin, CELL, 0];
+for (const p of patches) head.push(p.across, p.down, p.east0, p.south0, p.island.kind, 0, 0, 0);
+const parts = [Buffer.from(new Float32Array(head).buffer)];
+for (const p of patches) {
+	const stored = new Int16Array(p.field.length);
+	for (let i = 0; i < stored.length; i++) stored[i] = Math.round(p.field[i] * 50);
+	parts.push(Buffer.from(stored.buffer));
+	let land = 0, high = 0;
+	for (const value of p.field) { if (value > 0) land++; high = Math.max(high, value); }
+	const [dE, dS] = [p.east0 + (p.across * CELL) / 2, p.south0 + (p.down * CELL) / 2];
+	console.log(p.island.name, { hectares: +((land * CELL * CELL) / 1e4).toFixed(1), top: +high.toFixed(0), surveyTop: +p.surveyTop.toFixed(0), km: +(Math.hypot(dE, dS) / 1000).toFixed(1), bearing: Math.round(((Math.atan2(dE, -dS) * 180) / Math.PI + 360) % 360), grid: `${p.across}x${p.down}` });
+}
+parts.push(Buffer.from(shore));
+const whole = Buffer.concat(parts);
+writeFileSync(out, whole);
+console.log({ boatOver: seabedAt(BOAT.latitude, BOAT.longitude), kb: Math.round(whole.length / 1024), shore: `${shoreWide}x${shoreTall}` });

@@ -109,7 +109,7 @@ const links = [
 					</div>
 				</dl>
 				<p class="credit small"><a href="https://open-meteo.com/">Weather data by Open-Meteo</a></p>
-				<p class="credit small"><a href="https://registry.opendata.aws/terrain-tiles/">Elevation data: Terrain Tiles</a></p>
+				<p class="credit small"><a href="https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/collections-description/COP-DEM">Elevation: Copernicus DEM (© DLR, Airbus)</a>, <a href="https://www.gebco.net/">seabed: GEBCO</a></p>
 				<button type="button" class="quiet small" :aria-pressed="paused" @click="paused = !paused">
 					{{ paused ? "Play the moving background" : "Pause the moving background" }}
 				</button>

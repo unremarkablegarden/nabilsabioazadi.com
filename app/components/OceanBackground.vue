@@ -824,7 +824,7 @@ onMounted(async () => {
 	(window as unknown as { __jenna?: () => string[] }).__jenna = jenna.describe;
 	// The sixteen come through the waygate and part the sea.
 	const parting = createParting(scene, SCREEN_LAYER, waveUniforms);
-	const island = createIsland(scene, waveUniforms, query.get("island") !== "off");
+	const island = createIsland(scene, waveUniforms, camera.position, query.get("island") !== "off");
 	const noonAsked = query.get("noon");
 	const noonSeconds = () => (noonAsked === "off" || calmMotion ? undefined : noonAsked !== null ? (Number(noonAsked) || 0) + (Date.now() - pageOpened) / 1000 : noonSince(new Date()));
 	const contestAsked = query.get("contest");
@@ -2095,7 +2095,7 @@ onBeforeUnmount(() => {
 			{{ placeLabel }} · human time {{ timeLabel }}
 			<template v-if="live">· waves {{ wavesLabel }} · wind {{ windLabel }}</template>
 			<br />
-			<a href="https://open-meteo.com/" class="underline">Weather data by Open-Meteo</a> · <a href="https://registry.opendata.aws/terrain-tiles/" class="underline">Elevation: Terrain Tiles</a>
+			<a href="https://open-meteo.com/" class="underline">Weather data by Open-Meteo</a> · <a href="https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/collections-description/COP-DEM" class="underline">Elevation: Copernicus DEM (© DLR, Airbus)</a> · <a href="https://www.gebco.net/" class="underline">Seabed: GEBCO</a>
 			· Milky Way: NASA/Goddard Space Flight Center Scientific Visualization Studio, ESA/Gaia/DPAC
 		</p>
 	</ClientOnly>

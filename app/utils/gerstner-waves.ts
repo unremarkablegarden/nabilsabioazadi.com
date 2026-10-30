@@ -339,10 +339,12 @@ export function giantWaveHeight(x: number, z: number, time: number, surge: numbe
 }
 
 export interface GerstnerUniforms {
-	// Great Island (island.ts): how far the sea is from its shore, in 4 m steps, where it lies (x, z), how wide the map is,
-	// and whether it is there; the map's turn to true north; and how much the swell is breaking.
+	// The islands of Manawatāwhi (island.ts): how far the sea is from the shore, in 4 m steps, and its depth, in 2 m steps; where the
+	// boat is (x, z) and whether they are there; the map's corner east and south of the boat and its size; its turn to true north; and
+	// how much the swell is breaking.
 	shoreMap: THREE.IUniform<THREE.Texture | null>;
 	shoreAt: THREE.IUniform<THREE.Vector4>;
+	shoreRect: THREE.IUniform<THREE.Vector4>;
 	shoreTurn: THREE.IUniform<THREE.Vector2>;
 	shoreSurf: THREE.IUniform<number>;
 	waveTime: THREE.IUniform<number>;
@@ -864,6 +866,7 @@ const vertexMain = /* glsl */ `
 const fragmentPars = /* glsl */ `
 uniform sampler2D shoreMap;
 uniform vec4 shoreAt;
+uniform vec4 shoreRect;
 uniform vec2 shoreTurn;
 uniform float shoreSurf;
 uniform float foam;
@@ -996,18 +999,19 @@ const fragmentFoam = /* glsl */ `
 	// Against the strongest's weave the storm's sea breaks white, in a broken line, and dies.
 	foamMask = max( foamMask, stillRim * smoothstep( 0.25, 0.65, 0.5 + 0.5 * noise.x + 0.3 * sin( worldPosition.x * 0.05 - worldPosition.z * 0.06 + waveTime * 0.5 ) ) );
 
-	// Off Great Island's shore (island.ts) the bottom comes up through the blue, and the swell breaks.
+	// Off the islands' shores (island.ts): clear water over rock, only where it is really shallow, for they rise steeply off a bank
+	// some eighty metres deep; and the swell, with nowhere to shoal, heaves up and washes white against the rock.
 	if ( shoreAt.w > 0.0 ) {
-		vec2 fromIsland = worldPosition.xz - shoreAt.xy;
-		vec2 onMap = vec2( fromIsland.x * shoreTurn.x - fromIsland.y * shoreTurn.y, fromIsland.x * shoreTurn.y + fromIsland.y * shoreTurn.x ) / shoreAt.z + 0.5;
+		vec2 fromBoat = worldPosition.xz - shoreAt.xy;
+		vec2 onMap = ( vec2( fromBoat.x * shoreTurn.x - fromBoat.y * shoreTurn.y, fromBoat.x * shoreTurn.y + fromBoat.y * shoreTurn.x ) - shoreRect.xy ) / shoreRect.zw;
 		if ( onMap.x > 0.0 && onMap.x < 1.0 && onMap.y > 0.0 && onMap.y < 1.0 ) {
-			float offshore = texture2D( shoreMap, onMap ).r * 1020.0 + ( noise.x + noise.y ) * 9.0;
-			float shallows = exp( - offshore / 80.0 ) * ( 1.0 - 0.75 * reflectance );
+			vec2 sounding = texture2D( shoreMap, onMap ).rg;
+			float offshore = sounding.r * 1020.0 + ( noise.x + noise.y ) * 5.0;
+			float shallows = exp( - sounding.g * 510.0 / 16.0 ) * ( 1.0 - 0.75 * reflectance );
 			outgoingLight = mix( outgoingLight, vec3( 0.03, 0.34, 0.33 ) * length( waterColor ) * sunColor.g, 0.85 * shallows );
-			// Each swell breaking as it comes in, and the white wash against the rock.
-			float swellIn = 0.5 + 0.5 * sin( offshore * 0.11 + waveTime * 0.75 + 1.3 * sin( place.x * 0.006 ) + 1.7 * sin( place.y * 0.0047 ) );
-			float breakers = smoothstep( 0.62, 0.95, swellIn + 0.3 * noise.z ) * ( 1.0 - smoothstep( 16.0, 30.0 + 45.0 * shoreSurf, offshore ) );
-			float wash = 1.0 - smoothstep( 2.0, 7.0 + 14.0 * shoreSurf, offshore + 6.0 * noise.x );
+			float swellIn = 0.5 + 0.5 * sin( offshore * 0.2 + waveTime * 0.75 + 1.3 * sin( place.x * 0.006 ) + 1.7 * sin( place.y * 0.0047 ) );
+			float breakers = smoothstep( 0.62, 0.95, swellIn + 0.3 * noise.z ) * ( 1.0 - smoothstep( 6.0, 12.0 + 22.0 * shoreSurf, offshore ) );
+			float wash = 1.0 - smoothstep( 2.0, 6.0 + 12.0 * shoreSurf, offshore + 6.0 * noise.x );
 			foamMask = max( foamMask, max( breakers * ( 0.35 + 0.65 * shoreSurf ), wash * ( 0.45 + 0.55 * shoreSurf ) ) );
 		}
 	}
@@ -1211,6 +1215,7 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 	const uniforms: GerstnerUniforms = {
 		shoreMap: { value: null },
 		shoreAt: { value: new THREE.Vector4() },
+		shoreRect: { value: new THREE.Vector4(0, 0, 1, 1) },
 		shoreTurn: { value: new THREE.Vector2(1, 0) },
 		shoreSurf: { value: 0 },
 		waveTime: { value: 0 },
