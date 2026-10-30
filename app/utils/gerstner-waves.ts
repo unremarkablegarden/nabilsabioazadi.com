@@ -339,6 +339,10 @@ export function giantWaveHeight(x: number, z: number, time: number, surge: numbe
 }
 
 export interface GerstnerUniforms {
+	// 1 draws the sky's reflection along the true angle of the water, and carries the ripples on it (0 at ?water=old). And the
+	// mean square slope of the water's small roughness at this wind (Cox and Munk, 1954, from photographs of the sun's glitter).
+	trueWater: THREE.IUniform<number>;
+	seaSlope: THREE.IUniform<number>;
 	// The islands of Manawatāwhi (island.ts): how far the sea is from the shore, in 4 m steps, and its depth, in 2 m steps; where the
 	// boat is (x, z) and whether they are there; the map's corner east and south of the boat and its size; its turn to true north; and
 	// how much the swell is breaking.
@@ -599,6 +603,7 @@ uniform vec4 giantWaves[${GIANT_WAVES.length}];
 ${pressedChunk}
 ${stillChunk}
 ${partChunk}
+varying vec2 vRest;
 varying vec3 vWaveNormal;
 varying float vCrest;
 varying float vGust;
@@ -849,6 +854,7 @@ const vertexMain = /* glsl */ `
 	// at any moment. Water well outside the picture is left flat: the waves are only worked out
 	// where they can be seen (with room to spare, for a wave shifts the water it lifts, and far
 	// out one triangle of the grid is wide).
+	vRest = worldPosition.xz;
 	vec4 flatSea = projectionMatrix * viewMatrix * worldPosition;
 	float room = 100.0 + 0.25 * abs( flatSea.w );
 	if ( flatSea.w < - room || abs( flatSea.x ) > flatSea.w + room || abs( flatSea.y ) > flatSea.w + room ) {
@@ -864,6 +870,9 @@ const vertexMain = /* glsl */ `
 `;
 
 const fragmentPars = /* glsl */ `
+uniform float trueWater;
+uniform float seaSlope;
+uniform mat4 textureMatrix;
 uniform sampler2D shoreMap;
 uniform vec4 shoreAt;
 uniform vec4 shoreRect;
@@ -892,6 +901,7 @@ uniform vec4 manuLight;
 uniform float deepWeave;
 uniform float deepMaster;
 ${channelPathChunk}
+varying vec2 vRest;
 varying vec3 vWaveNormal;
 varying float vCrest;
 varying float vGust;
@@ -934,7 +944,11 @@ const fragmentNormal = /* glsl */ `
 	float slick = smoothstep( 0.55, 0.95, 0.5 + 0.5 * sin( place.x * 0.011 + place.y * 0.021 - waveTime * 0.22 ) );
 	float rippled = 1.5 * ripple * mix( 1.0, mix( 0.4, 2.0, vGust ), gustiness ) * ( 1.0 - 0.5 * internalWaves * slick );
 	// The place as the wind sees it (x across the wind, y against it), for what the wind carries.
-	vec2 downwind = vec2( - windHeading.y * place.x + windHeading.x * place.y, - dot( windHeading, place ) );
+	// (The ripples lie on the water where it came from, before the waves moved it, so each swell carries them
+	// round and back as it passes; and they gather on the face a wave turns to the wind and at its crest, and thin behind it.)
+	vec2 carried = trueWater > 0.5 ? vRest : place;
+	if ( trueWater > 0.5 ) rippled *= clamp( 1.0 - 6.0 * dot( vWaveNormal.xz / vWaveNormal.y, windHeading ) + 0.5 * vCrest, 0.45, 1.9 );
+	vec2 downwind = vec2( - windHeading.y * carried.x + windHeading.x * carried.y, - dot( windHeading, carried ) );
 	float nearness = 1.0 - smoothstep( 120.0, 700.0, fromEye );
 	if ( nearness > 0.0 ) {
 		vec2 fine = texture2D( normalSampler, downwind / 31.0 + vec2( time / 23.0, time / 7.0 ) ).xy
@@ -966,6 +980,26 @@ const fragmentNormal = /* glsl */ `
 		1.0,
 		surfaceNormal.z / surfaceNormal.y + vWaveNormal.z / vWaveNormal.y
 	) );
+`;
+
+// The sky in the water. The stock shader moves the mirror's picture a little by the ripples, on the screen. Here the ray from
+// the eye bounces off the water at its true angle, swell and ripple together, and is followed up into the same picture; a rough patch
+// spans more of it, so the picture's own smaller copies blur it as real roughness does, drawn out towards the viewer. The ripples'
+// slopes are scaled to what the wind really gives (seaSlope); the larger ones the rest of the shader uses are too steep to bounce light.
+const fragmentMirror = /* glsl */ `
+	vec3 reflectionSample = vec3( texture2D( mirrorSampler, mirrorCoord.xy / mirrorCoord.w + distortion ) );
+	vec3 mirrorNormal = surfaceNormal;
+	if ( trueWater > 0.5 ) {
+		vec2 slopes = noise.xy * sqrt( seaSlope ) * 5.0 * rippled / 1.5 + vWaveNormal.xz / vWaveNormal.y;
+		// From low down the far faces of the small waves are hidden behind the near ones, so what is seen leans towards the viewer,
+		// the more the lower the view (the masking of Saunders, 1967), and looks higher up the sky, and less like a mirror.
+		slopes += normalize( worldToEye.xz ) * sqrt( seaSlope ) * 1.1 * ( 1.0 - smoothstep( 0.0, 0.5, eyeDirection.y ) );
+		mirrorNormal = normalize( vec3( slopes.x, 1.0, slopes.y ) );
+		vec3 bounced = reflect( - eyeDirection, mirrorNormal );
+		bounced.y = max( bounced.y, 0.004 );
+		vec4 skyward = textureMatrix * vec4( worldPosition.xyz + normalize( bounced ) * 3000.0, 1.0 );
+		reflectionSample = texture2D( mirrorSampler, clamp( skyward.xy / skyward.w, 0.002, 0.998 ), - 1.5 ).rgb;
+	}
 `;
 
 // Foam takes its brightness from the reflected sky plus sunlight, so it follows the time of day.
@@ -1213,6 +1247,8 @@ export function replaceOrThrow(source: string, search: string, replacement: stri
 export function addGerstnerWaves(water: Water): GerstnerUniforms {
 	const material = water.material;
 	const uniforms: GerstnerUniforms = {
+		trueWater: { value: 0 },
+		seaSlope: { value: 0.03 },
 		shoreMap: { value: null },
 		shoreAt: { value: new THREE.Vector4() },
 		shoreRect: { value: new THREE.Vector4(0, 0, 1, 1) },
@@ -1294,6 +1330,10 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 
 	let fragment = material.fragmentShader;
 	fragment = replaceOrThrow(fragment, "#include <common>", `#include <common>\n${fragmentPars}`);
+	fragment = replaceOrThrow(fragment, "vec4 noise = getNoise( worldPosition.xz * size );", "vec4 noise = getNoise( ( trueWater > 0.5 ? vRest : worldPosition.xz ) * size );");
+	fragment = replaceOrThrow(fragment, "vec3 reflectionSample = vec3( texture2D( mirrorSampler, mirrorCoord.xy / mirrorCoord.w + distortion ) );", fragmentMirror);
+	fragment = replaceOrThrow(fragment, "float theta = max( dot( eyeDirection, surfaceNormal ), 0.0 );", "float theta = max( dot( eyeDirection, mirrorNormal ), 0.0 );");
+	fragment = replaceOrThrow(fragment, "vec3 scatter = max( 0.0, dot( surfaceNormal, eyeDirection ) ) * waterColor;", "vec3 scatter = max( 0.0, dot( mirrorNormal, eyeDirection ) ) * waterColor;");
 	fragment = replaceOrThrow(fragment, "vec3 surfaceNormal = normalize( noise.xzy * vec3( 1.5, 1.0, 1.5 ) );", fragmentNormal);
 	// The stock single highlight is replaced by a broad one and a tight, bright one: sheen and glitter.
 	fragment = replaceOrThrow(

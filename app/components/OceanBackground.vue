@@ -334,9 +334,11 @@ onMounted(async () => {
 	const lookAcross = (x: number) => x * (20 / 95 + (1 - 20 / 95) * x * x) * maxYaw;
 	const lookUp = (y: number) => (y > 0 ? y * maxDown : y * (6 / 62 + (1 - 6 / 62) * y * y) * maxUp);
 
+	// The sky's reflection along the water's true angle, the ripples carried on it (the owner's, 31 October). ?water=old is the sea before.
+	const trueWater = query.get("water") !== "old";
 	const water = new Water(createFocusedPlane(10000, 512), {
-		textureWidth: 512,
-		textureHeight: 512,
+		textureWidth: trueWater ? 1536 : 512,
+		textureHeight: trueWater ? 1536 : 512,
 		waterNormals: new THREE.TextureLoader().load("/textures/waternormals.jpg", (texture) => {
 			texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
 		}),
@@ -349,6 +351,25 @@ onMounted(async () => {
 	scene.add(water);
 	const waterUniforms = water.material.uniforms;
 	const waveUniforms = addGerstnerWaves(water);
+	if (trueWater) {
+		waveUniforms.trueWater.value = 1;
+		// A tilted wave looks further up the sky than the screen does, so the mirror's picture takes in more than the view.
+		const WIDER = 1.7;
+		const mirrored = waterUniforms.mirrorSampler.value as THREE.Texture;
+		mirrored.generateMipmaps = true;
+		mirrored.minFilter = THREE.LinearMipmapLinearFilter;
+		mirrored.anisotropy = renderer.capabilities.getMaxAnisotropy();
+		const stock = water.onBeforeRender;
+		water.onBeforeRender = (...args) => {
+			const view = args[2] as THREE.PerspectiveCamera;
+			const [across, up] = [view.projectionMatrix.elements[0], view.projectionMatrix.elements[5]];
+			view.projectionMatrix.elements[0] = across / WIDER;
+			view.projectionMatrix.elements[5] = up / WIDER;
+			stock.apply(water, args);
+			view.projectionMatrix.elements[0] = across;
+			view.projectionMatrix.elements[5] = up;
+		};
+	}
 
 	const sky = new Sky();
 	sky.scale.setScalar(10000);
@@ -1300,6 +1321,7 @@ onMounted(async () => {
 				facing: PLACE.bearing,
 			}, time);
 			waveUniforms.foam.value = whitecaps(windSpeed);
+			waveUniforms.seaSlope.value = 0.003 + 0.00512 * windSpeed;
 			steepness = 1;
 			crosswind = Math.sin(THREE.MathUtils.degToRad(liveOnly.windDirection + 180 - PLACE.bearing)) * Math.min(1, windSpeed / 15);
 			gustiness = THREE.MathUtils.clamp((liveOnly.windGusts / Math.max(liveOnly.windSpeed, 1) - 1) * 2, 0, 1);
