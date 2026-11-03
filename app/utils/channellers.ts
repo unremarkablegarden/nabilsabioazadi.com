@@ -1425,6 +1425,10 @@ export interface ChannellerState {
 	thermal: number;
 	// 0..1 how much they are at work: 0 while the sun or moon lights the sea.
 	strength: number;
+	// 0..1 how far they have dropped all of it at once for something else (the rogue's tsunami): every
+	// weave of theirs fades with it and is then not drawn at all. (Cut, a weave lingers broad and soft
+	// for half a minute, and so many broad filaments took half of every frame to draw.)
+	dropped?: number;
 	// Multiplies the light so it holds its brightness at any exposure.
 	gain: number;
 }
@@ -2490,7 +2494,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		return target.set(camera.position.x + side, 1.3 + rise, camera.position.z - ahead);
 	};
 
-	const update = ({ time, delta, energy, waveHeight, need, hold: slowing, current, control, scout, showMasters, showSoundings, showOnly, hands, gathering, soften, tending, day, pressure, wind, heave, swellFrom, white, unusual, below, aloft, slowToRise, thermal, strength, gain }: ChannellerState) => {
+	const update = ({ time, delta, energy, waveHeight, need, hold: slowing, current, control, scout, showMasters, showSoundings, showOnly, hands, gathering, soften, tending, day, pressure, wind, heave, swellFrom, white, unusual, below, aloft, slowToRise, thermal, strength, gain, dropped = 0 }: ChannellerState) => {
 		// (`byDay` is from when this was only done by day. It is now every hour but dawn and dusk.)
 		const byDay = tending > 0.5 && control <= 0.05;
 		// (As it comes in, `strength` is how far it is one of the nights without a moon.)
@@ -2612,7 +2616,10 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			opening = false;
 			lastStrength = strength;
 		} else if (!any) opening = true;
-		mesh.visible = any;
+		mesh.visible = any && dropped < 1;
+		(scoutMesh.material as THREE.ShaderMaterial).uniforms.uStrength!.value *= 1 - dropped;
+		(soundingMesh.material as THREE.ShaderMaterial).uniforms.uStrength!.value = 1 - dropped;
+		if (dropped >= 1) scoutMesh.visible = soundingMesh.visible = false;
 		// Resting (the owner, 23 October: "allow half the channelers to rest at 14% strength and the rest
 		// to 40% strength. Teach them to respond to real meteo conditions"): of the twelve, the six who
 		// tire soonest (least stamina) give 14% and the other six 40%, and each gives more only as the
@@ -2686,7 +2693,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		// low an exposure that their light all but vanished.)
 		if (byDay) uniforms.uStrength.value *= (1 + 1.6 * (1 - day) * (1 - 0.6 * link)) * (1 + 1.2 * moonless * (1 - day));
 		// (Relaxed by half, WEAVE_RELAX: by its strength, since its colour is laid on premultiplied.)
-		uniforms.uStrength.value *= WEAVE_RELAX;
+		uniforms.uStrength.value *= WEAVE_RELAX * (1 - dropped);
 		uniforms.uSoften.value = soften;
 		for (let seat = 0; seat < CHANNELLERS; seat++) {
 			// (When another takes the seat their restlessness comes on over a few seconds, not at once.)

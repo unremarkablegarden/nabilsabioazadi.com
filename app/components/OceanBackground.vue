@@ -1559,6 +1559,8 @@ onMounted(async () => {
 			// More light by day, when it has a bright sea to show against.
 			// (And more under a moon, whose light on the sea would otherwise drown it.)
 			gain: (0.3 + 0.6 * daylight + 0.6 * nightfall * (1 - darkness)) / steadyExposure,
+			// (Everything dropped at once for the rogue's wave: let go, not left to linger.)
+			dropped: tsunamiBusyNow,
 		});
 		if (showControls.value && Math.floor(time) !== toldAt) {
 			toldAt = Math.floor(time);

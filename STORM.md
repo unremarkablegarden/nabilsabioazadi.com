@@ -899,7 +899,10 @@ channelling credit for Ben"; Ben's relation to the owner was not said).
   down; white along the crest only where it still stands high; torn white where a part is drawn off.
 - **Emergency** (`tsunamiBusy`): every other channeller drops what she is doing at once (the everyday
   flow, the dawn link as Manulani's light passes through a dawn, the thermals and the shed rings all
-  stand aside) and comes back to it over the minute after. The strongest is first (3.5 s) and takes the
+  stand aside) and comes back to it over the minute after. Their everyday weaves fade out over the three
+  seconds they take to turn to it and are then not drawn (`dropped` in `channellers.ts`): left to the
+  ordinary cut, they lingered broad and soft for half a minute, two of them still white across the
+  wave, and so many broad filaments doubled the time of every frame at a Retina screen's density. The strongest is first (3.5 s) and takes the
   heart, the 1 km bearing on the boat; then the others as quickly as each is eager, each the part before
   her own side of the boat, the mightiest nearest the middle, their ropes laid along the crest in their
   thirds' colours. Each draws in pulls with the real swell under the boat (Siuan's way): a first great
@@ -915,5 +918,7 @@ channelling credit for Ben"; Ben's relation to the owner was not said).
   (`NOON_ELEVATION`/`NOON_AZIMUTH`); the sky is drawn from it (`lightByHer` beside `noonByThem` in
   `OceanBackground.vue`), lit from 5 s to 22 s, held a minute after the wave is gone, given back over two.
 - Seen in stills by her light only (the boat's night, 3 November); never by real day, never in motion,
-  never on a phone. About 12% slower while it runs (14 against 16 frames a second, headless Brave). The
+  never on a phone. At a Retina laptop's density (headless Brave, 2880 by 1800) a frame takes 30 to 38 ms
+  while it runs, against about 50 ms for the ordinary sea (it was 52 to 108 ms before the weaves were let
+  go). The
   ropes' ends lying along the crest read close up as brushed fans; the last seconds are hazy with spray.

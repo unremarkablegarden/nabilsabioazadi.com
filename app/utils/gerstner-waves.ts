@@ -665,11 +665,13 @@ float tsunamiSea( vec2 p, float far, out float top, out float churn, out float s
 		float seam = 120.0 + 0.06 * abs( edge );
 		float next = k < ${TSUNAMI_PARTS - 1} ? smoothstep( edge - seam, edge + seam, x ) : 0.0;
 		float w = past - next;
+		past = next;
+		// (Only the one or two parts a point lies in add anything.)
+		if ( w <= 0.0 ) continue;
 		vec2 part = tsuRemain[ k ];
 		left += w * pow( part.x, 1.0 + 0.7 * ( 0.5 * sin( x * 0.0042 + float( k ) * 1.7 ) + 0.3 * sin( x * 0.011 + float( k ) * 4.1 ) ) );
 		spent += w * ( 1.0 - part.x );
 		churn += w * part.y;
-		past = next;
 	}
 	float along = ( 1.0 - smoothstep( 7800.0, 9600.0, abs( x ) ) ) * ( 0.9 + 0.07 * sin( x * 0.0009 + 1.1 ) + 0.04 * sin( x * 0.0027 + 0.3 ) );
 	standing = tsuShape.y * along * left;
