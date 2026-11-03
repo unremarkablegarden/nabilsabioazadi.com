@@ -18,15 +18,13 @@ export const ABOUT = {
 	statement: "Nabil Sabio Azadi is an artist, anthropologist, editor, poet and human rights law researcher.",
 	paragraphs: [
 		"Nabil was born and raised in Tāmaki Makaurau, Aotearoa. He is a Persian-New Zealand artist and is Tangata Tiriti. He comes from Persian healing lineages in Yazd and Shiraz, Iran. His work moves between painting, poetry, artist books, essays and curatorial practices, with a focus on accessibility, movement and chanting.",
-		"He was Acting Editor at the Queensland Art Gallery | Gallery of Modern Art. His artist book <cite>For You The Traveller</cite> (2012) is held in Special Collections at UC Santa Cruz. From 2025–26, he was Editor of <cite>Asia Pacific Art Papers</cite>. He co-directs Tîr Aho Studio, a creative studio with a focus on accessibility, inclusion and equity.",
+		"He was Acting Editor at the Queensland Art Gallery | Gallery of Modern Art (QAGOMA). His artist book <cite>For You The Traveller</cite> (2012) is held in Special Collections at UC Santa Cruz. From 2025–26, he was Editor of <cite>Asia Pacific Art Papers</cite>. He co-directs Tîr Aho Studio, a creative studio with a focus on accessibility, inclusion and equity.",
 	],
 	// `title` marks a label that is the title of a work, set in italics; `after` is plain words
 	// that follow it in the same entry.
-	// The Asia Pacific Art Papers address is Claude's best finding and could not be opened to
-	// check (the site refuses automated visitors): the owner should confirm it.
 	links: [
 		{ label: "Tîr Aho Studio", href: "https://www.tiraho.com.au" },
-		{ label: "Asia Pacific Art Papers", href: "https://apap.qagoma.qld.gov.au/", title: true, after: ", Queensland Art Gallery | Gallery of Modern Art" },
+		{ label: "Asia Pacific Art Papers", href: "https://apap.qagoma.qld.gov.au/", title: true, after: ", Queensland Art Gallery | Gallery of Modern Art (QAGOMA)" },
 	] as { label: string; href: string; title?: boolean; after?: string }[],
 };
 
@@ -50,6 +48,31 @@ export const portrait = {
 	creditText: "Photograph by Amelia J Dowd",
 	copyrightNotice: "© Amelia J Dowd",
 	about: { "@id": `${SITE.url}/#person` },
+};
+
+// The gallery the owner was Acting Editor at, by its Wikidata item and Wikipedia article, so that
+// search engines and AI assistants take it for the gallery they already know, under either name.
+export const qagoma = {
+	"@type": "Museum",
+	"@id": `${SITE.url}/#qagoma`,
+	name: "Queensland Art Gallery | Gallery of Modern Art",
+	alternateName: "QAGOMA",
+	url: "https://www.qagoma.qld.gov.au/",
+	sameAs: ["https://www.wikidata.org/wiki/Q19917343", "https://en.wikipedia.org/wiki/QAGOMA"],
+};
+
+// The journal the owner edited: its Editor from 2025 to 2026, while their post at the gallery was
+// Acting Editor (their word, 24 October 2026). Published by QAGOMA for its
+// Australian Centre of Asia Pacific Art since 2021 (https://apap.qagoma.qld.gov.au/acknowledgements/).
+export const asiaPacificArtPapers = {
+	"@type": "Periodical",
+	"@id": `${SITE.url}/#asia-pacific-art-papers`,
+	name: "Asia Pacific Art Papers",
+	alternateName: "Asia Pacific Art Papers: Contemporary Contexts, Practices, Ideas",
+	url: "https://apap.qagoma.qld.gov.au/",
+	startDate: "2021",
+	publisher: { "@id": qagoma["@id"] },
+	editor: { "@type": "Role", roleName: "Editor", startDate: "2025", endDate: "2026", editor: { "@id": `${SITE.url}/#person` } },
 };
 
 // The owner, as schema.org describes a person, for search engines' panels about them.
@@ -76,7 +99,9 @@ export const person = {
 	homeLocation: { "@type": "Place", name: "Meanjin/Magandjin (Brisbane), Queensland, Australia", sameAs: "https://www.wikidata.org/wiki/Q34932" },
 	affiliation: { "@type": "Organization", "@id": "https://www.tiraho.com.au/#organization", name: "Tîr Aho Studio", url: "https://www.tiraho.com.au" },
 	// What the biography says the owner has done, in the form search engines and AI assistants
-	// read facts from: the studio they co-direct and the editorships.
+	// read facts from: the studio they co-direct, and the gallery they were Acting Editor at, with
+	// the dates its acknowledgements give (September 2025 to March 2026). The editorship of Asia
+	// Pacific Art Papers is on the journal, below.
 	memberOf: [
 		{
 			"@type": "OrganizationRole",
@@ -85,19 +110,16 @@ export const person = {
 		},
 		{
 			"@type": "OrganizationRole",
-			roleName: "Editor, Asia Pacific Art Papers",
-			startDate: "2025",
-			endDate: "2026",
-			memberOf: { "@type": "Organization", name: "Queensland Art Gallery | Gallery of Modern Art", url: "https://www.qagoma.qld.gov.au/" },
-		},
-		{
-			"@type": "OrganizationRole",
 			roleName: "Acting Editor",
-			memberOf: { "@type": "Organization", name: "Queensland Art Gallery | Gallery of Modern Art", url: "https://www.qagoma.qld.gov.au/" },
+			startDate: "2025-09",
+			endDate: "2026-03",
+			memberOf: qagoma,
 		},
 	],
-	// The artist book, with its library record (OCLC, as Wikipedia cites it), and writing published elsewhere.
+	// The journal they edited, the artist book, with its library record (OCLC, as Wikipedia cites
+	// it), and writing published elsewhere: Crikey, and Anthropology Now by its DOI.
 	workExample: [
+		asiaPacificArtPapers,
 		{
 			"@type": "Book",
 			name: "For You The Traveller",
@@ -116,13 +138,28 @@ export const person = {
 			author: { "@id": `${SITE.url}/#person` },
 			publisher: { "@type": "Organization", name: "Crikey", url: "https://www.crikey.com.au/" },
 		},
+		{
+			"@type": "ScholarlyArticle",
+			headline: "The Meditation on Rasanblaj Questionnaire #11",
+			alternativeHeadline: "Rasanblaj: Catalyst. Keyword. Method. Practice. Project.",
+			url: "https://doi.org/10.1080/19428200.2026.2716576",
+			identifier: { "@type": "PropertyValue", propertyID: "DOI", value: "10.1080/19428200.2026.2716576" },
+			datePublished: "2026-10-23",
+			author: [{ "@id": `${SITE.url}/#person` }, { "@type": "Person", name: "Gina Athena Ulysse" }],
+			isPartOf: { "@type": "Periodical", name: "Anthropology Now", issn: ["1942-8200", "1949-2901"] },
+			publisher: { "@type": "Organization", name: "Taylor & Francis" },
+		},
 	],
+	// The ORCID record, as an identifier as well as a page.
+	identifier: { "@type": "PropertyValue", propertyID: "ORCID", value: "0009-0000-0173-6886" },
 	// The owner's own accounts, as linked from the menu's Elsewhere (Signal is a way to write, not a
-	// profile), the Wikipedia article and Wikidata item that Google's panel about them is built on, and
-	// their author's page at Crikey.
+	// profile), the Wikipedia article and Wikidata item that Google's panel about them is built on,
+	// their ORCID record, and their author's pages at Asia Pacific Art Papers and Crikey.
 	sameAs: [
 		"https://www.instagram.com/nabilsabioazadi/",
 		"https://cyberspace.online/nsa/blog",
+		"https://orcid.org/0009-0000-0173-6886",
+		"https://apap.qagoma.qld.gov.au/author/nabilsabio-azadiqagoma-qld-gov-au/",
 		"https://www.crikey.com.au/author/nabilsabioazadi/",
 		"https://en.wikipedia.org/wiki/Nabil_Sabio_Azadi",
 		"https://www.wikidata.org/wiki/Q16864024",
