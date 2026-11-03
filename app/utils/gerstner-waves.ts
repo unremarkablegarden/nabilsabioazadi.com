@@ -250,6 +250,50 @@ export function strikeRing(q: THREE.Vector4, x: number, z: number, time: number)
 	return { a, f, k, dirX: r > 1 ? rx / r : 0, dirZ: r > 1 ? rz / r : 0 };
 }
 
+// The rogue's tsunami (tsunami.ts). A wall of water raised by the rogue some kilometres off and
+// running at the boat, drawn as a height on the sea (nothing in it folds over): its crest a long arc
+// about a centre far beyond it, so that it lies near straight across the view and curves away at its
+// ends; a steep front a few hundred metres from foot to crest and a long back, each the shape of a
+// solitary wave (sech²), and before it the sea drawn down a little, as the sea draws back before a
+// tsunami. Along its length it is in twelve parts, one to each channeller who breaks it, each as high
+// as she has left it, a little unevenly; where two parts meet the one runs into the other. Far off,
+// where the sea's grid is coarse, its faces are drawn less steep. (The same in the water shader,
+// tsunamiSea.)
+export const TSUNAMI_PARTS = 12;
+export const TSUNAMI_ARC = 25000;
+const sech2 = (u: number) => {
+	const e = Math.exp(-2 * Math.abs(u));
+	return (4 * e) / (1 + e) ** 2;
+};
+const tsunamiSeam = (edge: number) => 120 + 0.06 * Math.abs(edge);
+export function tsunamiHeight(uniforms: GerstnerUniforms, px: number, pz: number, far = 0) {
+	const shape = uniforms.tsuShape.value;
+	if (shape.y <= 0) return 0;
+	const front = uniforms.tsuFront.value;
+	const rx = px - front.x - front.z * (shape.x + TSUNAMI_ARC);
+	const rz = pz - front.y - front.w * (shape.x + TSUNAMI_ARC);
+	const s = Math.hypot(rx, rz) - TSUNAMI_ARC;
+	const x = TSUNAMI_ARC * Math.atan2(-front.w * rx + front.z * rz, -(rx * front.z + rz * front.w));
+	if (s < -6000 || s > 3000 || Math.abs(x) > 9800) return 0;
+	const soft = 350 * (far / 10000) ** 0.667;
+	const steep = Math.max(shape.z, soft);
+	const back = Math.max(shape.w, soft);
+	const profile = sech2(s / (s > 0 ? steep : back));
+	const drawn = 0.1 * Math.exp(-(((s - 2.5 * steep - 150) / (2 * steep + 250)) ** 2));
+	const edges = uniforms.tsuEdges.value;
+	const parts = uniforms.tsuRemain.value;
+	let left = 0;
+	let past = 1;
+	for (let k = 0; k < TSUNAMI_PARTS; k++) {
+		const edge = edges[k]!;
+		const next = k < TSUNAMI_PARTS - 1 ? THREE.MathUtils.smoothstep(x, edge - tsunamiSeam(edge), edge + tsunamiSeam(edge)) : 0;
+		left += (past - next) * parts[k]!.x ** (1 + 0.7 * (0.5 * Math.sin(x * 0.0042 + k * 1.7) + 0.3 * Math.sin(x * 0.011 + k * 4.1)));
+		past = next;
+	}
+	const along = (1 - THREE.MathUtils.smoothstep(Math.abs(x), 7800, 9600)) * (0.9 + 0.07 * Math.sin(x * 0.0009 + 1.1) + 0.04 * Math.sin(x * 0.0027 + 0.3));
+	return shape.y * along * left * (profile - drawn);
+}
+
 // How much of the waves' sideways sway can be kept without any crest folding over itself. A
 // Gerstner surface loops where the steepnesses of the waves meeting at a point sum past 1; here
 // the sum is taken at its worst (every train in step, the gusts at their strongest, Leane's
@@ -300,6 +344,7 @@ export function seaSurfaceAt(uniforms: GerstnerUniforms, x: number, z: number, t
 			dz += ring.dirZ * ring.a * 0.6 * Math.cos(ring.f);
 			h += ring.a * Math.sin(ring.f);
 		}
+		h += tsunamiHeight(uniforms, px, pz);
 		return { dx: dx * limit, dz: dz * limit, h };
 	};
 	let px = x;
@@ -470,6 +515,14 @@ export interface GerstnerUniforms {
 	// (m across for each m² along), how much its walls rise and settle with the real swell and how
 	// fast, and 0..1 how much spray the real gusts tear off their lips.
 	partMore: THREE.IUniform<THREE.Vector4>;
+	// The rogue's tsunami (tsunami.ts, tsunamiHeight): the boat (x, z) and the way the wave comes
+	// from (x, z); its crest's distance from the boat, its height, and the widths of its front and back
+	// (m); where its parts meet along it (m across, from the left), and for each part, from the left,
+	// how much of it is left (0..1) and how hard it is being drawn off just now.
+	tsuFront: THREE.IUniform<THREE.Vector4>;
+	tsuShape: THREE.IUniform<THREE.Vector4>;
+	tsuEdges: THREE.IUniform<number[]>;
+	tsuRemain: THREE.IUniform<THREE.Vector2[]>;
 }
 
 const pressedChunk = /* glsl */ `
@@ -577,6 +630,56 @@ float partedSea( vec2 p, out float lane, out float lip, out float swell, out vec
 }
 `;
 
+// The rogue's tsunami, as tsunamiHeight. In top how near a point is to the crest of what is left of
+// it, where that still stands high; in churn how torn the water is there, where they draw a part off
+// and where the broken water of a part they have taken is carried on.
+const tsunamiChunk = /* glsl */ `
+uniform vec4 tsuFront;
+uniform vec4 tsuShape;
+uniform float tsuEdges[ ${TSUNAMI_PARTS} ];
+uniform vec2 tsuRemain[ ${TSUNAMI_PARTS} ];
+varying vec4 vTsunami;
+float tsuSech2( float u ) {
+	float e = exp( - 2.0 * abs( u ) );
+	return 4.0 * e / ( ( 1.0 + e ) * ( 1.0 + e ) );
+}
+float tsunamiSea( vec2 p, float far, out float top, out float churn, out float standing ) {
+	top = 0.0;
+	churn = 0.0;
+	standing = 0.0;
+	vec2 n = tsuFront.zw;
+	vec2 r = p - tsuFront.xy - n * ( tsuShape.x + ${TSUNAMI_ARC.toFixed(1)} );
+	float s = length( r ) - ${TSUNAMI_ARC.toFixed(1)};
+	float x = ${TSUNAMI_ARC.toFixed(1)} * atan( - n.y * r.x + n.x * r.y, - dot( r, n ) );
+	if ( s < - 6000.0 || s > 3000.0 || abs( x ) > 9800.0 ) return 0.0;
+	float soft = 350.0 * pow( far / 10000.0, 0.667 );
+	float steep = max( tsuShape.z, soft );
+	float back = max( tsuShape.w, soft );
+	float profile = tsuSech2( s / ( s > 0.0 ? steep : back ) );
+	float drawn = 0.1 * exp( - pow( ( s - 2.5 * steep - 150.0 ) / ( 2.0 * steep + 250.0 ), 2.0 ) );
+	float left = 0.0;
+	float spent = 0.0;
+	float past = 1.0;
+	for ( int k = 0; k < ${TSUNAMI_PARTS}; k ++ ) {
+		float edge = tsuEdges[ k ];
+		float seam = 120.0 + 0.06 * abs( edge );
+		float next = k < ${TSUNAMI_PARTS - 1} ? smoothstep( edge - seam, edge + seam, x ) : 0.0;
+		float w = past - next;
+		vec2 part = tsuRemain[ k ];
+		left += w * pow( part.x, 1.0 + 0.7 * ( 0.5 * sin( x * 0.0042 + float( k ) * 1.7 ) + 0.3 * sin( x * 0.011 + float( k ) * 4.1 ) ) );
+		spent += w * ( 1.0 - part.x );
+		churn += w * part.y;
+		past = next;
+	}
+	float along = ( 1.0 - smoothstep( 7800.0, 9600.0, abs( x ) ) ) * ( 0.9 + 0.07 * sin( x * 0.0009 + 1.1 ) + 0.04 * sin( x * 0.0027 + 0.3 ) );
+	standing = tsuShape.y * along * left;
+	top = along * left * profile * min( 1.0, standing / 40.0 );
+	float band = exp( - s * s / ( 0.5 * steep * steep ) );
+	churn = along * band * ( min( churn, 1.5 ) * ( 0.4 + 0.6 * left ) + 0.5 * spent * smoothstep( 150.0, 900.0, tsuShape.x ) );
+	return standing * ( profile - drawn );
+}
+`;
+
 const vertexPars = /* glsl */ `
 uniform float crestLimit;
 uniform vec4 lensWaves[ 12 ];
@@ -603,6 +706,7 @@ uniform vec4 giantWaves[${GIANT_WAVES.length}];
 ${pressedChunk}
 ${stillChunk}
 ${partChunk}
+${tsunamiChunk}
 varying vec2 vRest;
 varying vec3 vWaveNormal;
 varying float vCrest;
@@ -843,6 +947,29 @@ vec3 gerstner( vec3 p, out vec3 normal, out float crest, out float gust ) {
 			crest += ( 0.9 + 1.5 * partMore.w ) * lip * lip + 0.5 * partShape.w * partSwell.x * max( swell, 0.0 );
 		}
 	}
+	// The rogue's tsunami, as far as the channellers have left it.
+	vTsunami = vec4( 0.0 );
+	if ( tsuShape.y > 0.0 ) {
+		float top, churn, standing, top2, churn2, standing2;
+		float h = tsunamiSea( p.xz, distanceToEye, top, churn, standing );
+		if ( abs( h ) > 0.01 || churn > 0.001 ) {
+			float hx = tsunamiSea( p.xz + vec2( 2.0, 0.0 ), distanceToEye, top2, churn2, standing2 );
+			float hz = tsunamiSea( p.xz + vec2( 0.0, 2.0 ), distanceToEye, top2, churn2, standing2 );
+			// On its faces the sea's own waves are drawn out smooth by its rise, and its water streams down
+			// them in streaks. (Ridden in step, they striped its face.)
+			float face = smoothstep( 0.02, 0.15, length( vec2( hx - h, hz - h ) ) / 2.0 );
+			float keep = 1.0 - 0.95 * face;
+			offset *= keep;
+			tangent = mix( vec3( 1.0, 0.0, 0.0 ), tangent, keep );
+			binormal = mix( vec3( 0.0, 0.0, 1.0 ), binormal, keep );
+			crest *= keep;
+			// (Its slope is not added to the normal here but for each point of the picture: tsunamiSlope.)
+			offset.y += h;
+			// (Light comes through its thin top, as through any crest.)
+			crest += 0.6 * top * top;
+			vTsunami = vec4( top, churn, face, standing );
+		}
+	}
 	normal = normalize( cross( binormal, tangent ) );
 	return p + offset;
 }
@@ -861,6 +988,7 @@ const vertexMain = /* glsl */ `
 		vWaveNormal = vec3( 0.0, 1.0, 0.0 );
 		vCrest = 0.0;
 		vGust = 0.0;
+		vTsunami = vec4( 0.0 );
 	} else {
 		worldPosition.xyz = gerstner( worldPosition.xyz, vWaveNormal, vCrest, vGust );
 	}
@@ -905,6 +1033,27 @@ varying vec2 vRest;
 varying vec3 vWaveNormal;
 varying float vCrest;
 varying float vGust;
+varying vec4 vTsunami;
+uniform vec4 tsuFront;
+uniform vec4 tsuShape;
+// The rogue's tsunami's slope, worked out at each point of the picture from its smooth profile (as
+// tsunamiSea, which gives only how high it stands here): on its steep face the sea's grid is too
+// coarse to carry it, and the grid's corners showed through as stripes and diamonds.
+vec2 tsunamiSlope( vec2 p, float standing, float far ) {
+	if ( standing <= 0.0 ) return vec2( 0.0 );
+	vec2 r = p - tsuFront.xy - tsuFront.zw * ( tsuShape.x + ${TSUNAMI_ARC.toFixed(1)} );
+	float q = length( r );
+	float s = q - ${TSUNAMI_ARC.toFixed(1)};
+	float soft = 350.0 * pow( far / 10000.0, 0.667 );
+	float steep = max( tsuShape.z, soft );
+	float wide = s > 0.0 ? steep : max( tsuShape.w, soft );
+	float e = exp( - 2.0 * abs( s / wide ) );
+	float profile = - 2.0 * ( 4.0 * e / ( ( 1.0 + e ) * ( 1.0 + e ) ) ) * sign( s ) * ( 1.0 - e ) / ( 1.0 + e ) / wide;
+	float c = 2.5 * steep + 150.0;
+	float w = 2.0 * steep + 250.0;
+	float drawn = - 0.2 * ( s - c ) / ( w * w ) * exp( - pow( ( s - c ) / w, 2.0 ) );
+	return standing * ( profile - drawn ) * r / max( q, 1.0 );
+}
 `;
 
 // Combines the wave normal with the normal-map detail (whiteout blend).
@@ -924,6 +1073,8 @@ varying float vGust;
 const fragmentNormal = /* glsl */ `
 	vec2 place = worldPosition.xz;
 	float fromEye = length( eye - worldPosition.xyz );
+	// The swell's slopes here, and the rogue's tsunami's.
+	vec2 waveSlope = vWaveNormal.xz / vWaveNormal.y + tsunamiSlope( vRest, vTsunami.w, length( vRest - cameraPosition.xz ) );
 	float bendA = 0.004 * place.y + waveTime * 0.05;
 	float bendB = 0.011 * place.y - waveTime * 0.08;
 	float midstream = 70.0 * sin( bendA ) + 35.0 * sin( bendB );
@@ -947,7 +1098,7 @@ const fragmentNormal = /* glsl */ `
 	// (The ripples lie on the water where it came from, before the waves moved it, so each swell carries them
 	// round and back as it passes; and they gather on the face a wave turns to the wind and at its crest, and thin behind it.)
 	vec2 carried = trueWater > 0.5 ? vRest : place;
-	if ( trueWater > 0.5 ) rippled *= clamp( 1.0 - 6.0 * dot( vWaveNormal.xz / vWaveNormal.y, windHeading ) + 0.5 * vCrest, 0.45, 1.9 );
+	if ( trueWater > 0.5 ) rippled *= clamp( 1.0 - 6.0 * dot( waveSlope, windHeading ) + 0.5 * vCrest, 0.45, 1.9 );
 	vec2 downwind = vec2( - windHeading.y * carried.x + windHeading.x * carried.y, - dot( windHeading, carried ) );
 	float nearness = 1.0 - smoothstep( 120.0, 700.0, fromEye );
 	if ( nearness > 0.0 ) {
@@ -976,9 +1127,9 @@ const fragmentNormal = /* glsl */ `
 	rippled *= mix( 0.04, 1.0, pressCalm );
 	vec3 surfaceNormal = normalize( noise.xzy * vec3( rippled, 1.0, rippled ) );
 	surfaceNormal = normalize( vec3(
-		surfaceNormal.x / surfaceNormal.y + vWaveNormal.x / vWaveNormal.y,
+		surfaceNormal.x / surfaceNormal.y + waveSlope.x,
 		1.0,
-		surfaceNormal.z / surfaceNormal.y + vWaveNormal.z / vWaveNormal.y
+		surfaceNormal.z / surfaceNormal.y + waveSlope.y
 	) );
 `;
 
@@ -990,7 +1141,7 @@ const fragmentMirror = /* glsl */ `
 	vec3 reflectionSample = vec3( texture2D( mirrorSampler, mirrorCoord.xy / mirrorCoord.w + distortion ) );
 	vec3 mirrorNormal = surfaceNormal;
 	if ( trueWater > 0.5 ) {
-		vec2 slopes = noise.xy * sqrt( seaSlope ) * 5.0 * rippled / 1.5 + vWaveNormal.xz / vWaveNormal.y;
+		vec2 slopes = noise.xy * sqrt( seaSlope ) * 5.0 * rippled / 1.5 + waveSlope;
 		// From low down the far faces of the small waves are hidden behind the near ones, so what is seen leans towards the viewer,
 		// the more the lower the view (the masking of Saunders, 1967), and looks higher up the sky, and less like a mirror.
 		slopes += normalize( worldToEye.xz ) * sqrt( seaSlope ) * 1.1 * ( 1.0 - smoothstep( 0.0, 0.5, eyeDirection.y ) );
@@ -1032,6 +1183,11 @@ const fragmentFoam = /* glsl */ `
 	foamMask = max( foamMask, pressRim * smoothstep( 0.2, 0.6, 0.5 + 0.5 * noise.x + 0.3 * sin( worldPosition.x * 0.07 + worldPosition.z * 0.05 + waveTime * 0.6 ) ) );
 	// Against the strongest's weave the storm's sea breaks white, in a broken line, and dies.
 	foamMask = max( foamMask, stillRim * smoothstep( 0.25, 0.65, 0.5 + 0.5 * noise.x + 0.3 * sin( worldPosition.x * 0.05 - worldPosition.z * 0.06 + waveTime * 0.5 ) ) );
+	// The rogue's wave: white along its crest where it still stands high, torn white where they draw a
+	// part off, and the broken water of a part they have taken carried on with it.
+	foamMask = max( foamMask, smoothstep( 0.9, 1.0, vTsunami.x + 0.08 * noise.x ) );
+	foamMask = max( foamMask, min( 1.0, vTsunami.y ) * smoothstep( 0.25, 0.7, 0.5 + 0.5 * noise.x + 0.3 * sin( worldPosition.x * 0.031 + worldPosition.z * 0.043 + waveTime * 0.8 ) ) );
+	foamMask = max( foamMask, 0.3 * vTsunami.z * smoothstep( 0.7, 0.92, 0.5 + 0.5 * noise.z + 0.35 * sin( dot( vRest, vec2( tsuFront.w, - tsuFront.z ) ) * 0.06 + 2.0 * noise.x ) ) );
 
 	// Off the islands' shores (island.ts): clear water over rock, only where it is really shallow, for they rise steeply off a bank
 	// some eighty metres deep; and the swell, with nowhere to shoal, heaves up and washes white against the rock.
@@ -1320,6 +1476,10 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		partShape: { value: new THREE.Vector4(0, 0, 0, 0) },
 		partSwell: { value: new THREE.Vector2(0.0124, 0.35) },
 		partMore: { value: new THREE.Vector4() },
+		tsuFront: { value: new THREE.Vector4(0, 0, 0, -1) },
+		tsuShape: { value: new THREE.Vector4() },
+		tsuEdges: { value: new Array<number>(TSUNAMI_PARTS).fill(0) },
+		tsuRemain: { value: Array.from({ length: TSUNAMI_PARTS }, () => new THREE.Vector2(1, 0)) },
 	};
 	useDialSea(uniforms);
 	Object.assign(material.uniforms, uniforms, { giantWaves: { value: GIANT_WAVES } });

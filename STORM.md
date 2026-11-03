@@ -871,3 +871,49 @@ strength. Together, they part the sea whilst creating huge swells around the par
   height (8 to 14 m) at 1.4 × the real period (12 to 20 s); the lane bent downwind by the real wind
   across it (some 160 m at 2 km in a fresh crosswind); its walls rising and settling 6 to 12% with each
   real swell, the rise running along them; spray off the lips from the real gusts over 30 km/h.
+
+## 36. The rogue's tsunami (3 November)
+
+The owner: "Let's have rogue channeller on the boat create a tsunami of IMMENSE force and size that
+approaches the POV and let's have all the other channellers suddenly choose parts of it to tackle,
+siphoning parts of it and its gravity into spurts of air flows and akashic flows, basically rapidly
+breaking it apart before it reaches the boat until by the time it should have reached the boat/POV,
+it is completely dissipated. Make one of the channellers do a light weave that is so strong the entire
+ocean is illuminated as though it is daylight. EVERYONE IS IN EMERGENCY MODE." `storm.json`
+`"tsunami": { "from": ..., "hours": 24 }`: each visitor who comes while it is on sees the rogue throw
+20 s after they arrive (`TSUNAMI_AFTER`); `?tsunami` for this visit from now, `?tsunami=60` a minute
+in, `?tsunami=off`; `__tsunami()` in the console says who holds which part and how much of it is left.
+The menu's weather row reads "Channelled, for Ben" while it lasts (the owner: "Change the weather
+channelling credit for Ben"; Ben's relation to the owner was not said).
+
+- **The rogue** (`tsunami.ts`): Leane · Ember (chosen by me; the owner named no one), her rope ember red.
+  She throws it six kilometres ahead and the sea heaves into a wall 300 m high across the whole view
+  (a megatsunami near its source; 200 m at 8.5 km was only a line on the horizon), its crest a long arc;
+  2.5 km from foot to foot, so it runs at 62 m/s, the speed of a deep-water wave that long, and would
+  reach the boat in about 100 s. Its front is no steeper than water stands (about 30°); the sea draws
+  back a little before it. She keeps feeding it, her rope over the heart's crest and into its back.
+- **The wave** (`tsunamiHeight` and `tsunamiSea` in `gerstner-waves.ts`): a height on the sea (nothing
+  folds over), in twelve parts along its length; the boat rides it (`seaSurfaceAt`). Its face's slope is
+  worked out for each point of the picture (`tsunamiSlope`): from the grid's vertices it showed the
+  grid as stripes and diamonds. On its faces the sea's own waves are drawn out smooth and foam streams
+  down; white along the crest only where it still stands high; torn white where a part is drawn off.
+- **Emergency** (`tsunamiBusy`): every other channeller drops what she is doing at once (the everyday
+  flow, the dawn link as Manulani's light passes through a dawn, the thermals and the shed rings all
+  stand aside) and comes back to it over the minute after. The strongest is first (3.5 s) and takes the
+  heart, the 1 km bearing on the boat; then the others as quickly as each is eager, each the part before
+  her own side of the boat, the mightiest nearest the middle, their ropes laid along the crest in their
+  thirds' colours. Each draws in pulls with the real swell under the boat (Siuan's way): a first great
+  pull, worn down while it stands, falling in the last quarter. The mighty finish first, so the wall is
+  torn open beside the heart and stands as towers; whoever finishes turns her rope to the heart; the
+  heart falls about 250 m out. Every rope starts 15 m from her hands: several sit behind the eye, and a
+  rope passing by it was stretched across the whole picture.
+- **The siphoning** (spurts): at each pull a stretch of the crest is drawn up into one column of spray
+  (soft drifting puffs, falling back as rain) 300 to 750 m high, whose weight goes on up as a flow of
+  air (violet, spreading wide downwind) or of akasha (gold, climbing), a great puff rolling in over
+  itself; air or akasha by her temperament; the strongest's white.
+- **The light**: Manulani's rope from the bow into a sun she holds where the six held theirs
+  (`NOON_ELEVATION`/`NOON_AZIMUTH`); the sky is drawn from it (`lightByHer` beside `noonByThem` in
+  `OceanBackground.vue`), lit from 5 s to 22 s, held a minute after the wave is gone, given back over two.
+- Seen in stills by her light only (the boat's night, 3 November); never by real day, never in motion,
+  never on a phone. About 12% slower while it runs (14 against 16 frames a second, headless Brave). The
+  ropes' ends lying along the crest read close up as brushed fans; the last seconds are hazy with spray.

@@ -533,6 +533,17 @@ export function partingSince(now: Date) {
 	return since >= 0 ? since : undefined;
 }
 
+// The rogue's tsunami (tsunami.ts): storm.json "tsunami": { "from": ISO time, "hours": 24 }: seconds
+// since, while it is on (each visitor then sees it begin TSUNAMI_AFTER after they come). Credited to Ben
+// (the owner, 3 November: "Change the weather channelling credit for Ben").
+export const TSUNAMI_WORDS = "Channelled, for Ben";
+export function tsunamiSince(now: Date) {
+	const tsunami = (stormSwitch as { tsunami?: { from: string | null; hours?: number } }).tsunami;
+	if (!tsunami?.from) return undefined;
+	const since = (now.getTime() - timeOf(tsunami.from)) / 1000;
+	return since >= 0 && since < (tsunami.hours ?? 24) * 3600 ? since : undefined;
+}
+
 // Noon at night (noon.ts): storm.json "noon": { "from": ISO time, "until": ISO time }, seconds
 // since it began, and since they let it go (undefined until then).
 export function noonSince(now: Date) {
