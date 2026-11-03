@@ -60,6 +60,22 @@ vec3 tame( vec3 c, float k ) {
 }
 `;
 
+// The film look (for everyone, ?film=off for none; the owner, 4 November, with a cross-processed photograph of wheat under a
+// turquoise sky: "urgent colour-grading intervention on the shades of the weaving for diff elements").
+// Across a weave, core 0 at its flank to 1 at its heart: its flank holds its colour richer at the same
+// lightness, the warm going warmer and the cool cooler, as film keeps colour in its shadows; its heart
+// goes towards a cream or an ice white, as film's highlights do. A white stays a white.
+export const filmShaderChunk = /* glsl */ `
+vec3 filmShade( vec3 tint, float core ) {
+	float l = dot( tint, vec3( 0.2126, 0.7152, 0.0722 ) );
+	vec3 rich = tint * tint;
+	rich = min( rich * 0.9 * l / max( dot( rich, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-4 ), vec3( 1.6 ) );
+	float warm = clamp( ( tint.r - tint.b ) / max( max( tint.r, tint.b ), 1e-4 ), - 1.0, 1.0 ) * 0.5 + 0.5;
+	vec3 light = mix( vec3( 0.86, 0.96, 1.0 ), vec3( 1.0, 0.93, 0.8 ), warm ) * max( 1.5 * l, 0.6 );
+	return core < 0.5 ? mix( rich, tint, 2.0 * core ) : mix( tint, light, 1.4 * core - 0.7 );
+}
+`;
+
 export const ribbonShaderChunk = /* glsl */ `
 uniform vec2 uResolution;
 uniform float uPixelRatio;

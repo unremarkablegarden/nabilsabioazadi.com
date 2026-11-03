@@ -29,6 +29,16 @@
 // along the crest to the heart, so that at the last all of them are on what is left before the bow,
 // and it falls some two hundred and fifty metres off. Nothing reaches the boat but broken water.
 //
+// Some of them burn it off instead (the owner, 4 November: "that fire that's helping to evaporate the
+// fucking tidal wave: that should look strong"): the fire-minded, Leane's eager ones, and the strongest
+// at the heart. At such a pull a sheet of fire runs along that stretch of crest and boils it: flames a
+// few hundred metres high, as fire is, hot at the root and cooling as they climb (the colour of glowing
+// soot, deep red near 900 K, through orange, to a cream white near 3000 K, and far brighter the hotter),
+// rolling up in slow puffs as a great fire does (a pool fire puffs about 1.5/√D times a second), and
+// raked back over the crest, since the crest runs on under them at 62 m/s and the hot gas keeps only
+// some of that; the strongest's white-hot. What they boil goes up as steam, white, lit from below by the
+// fire, and rises and spreads instead of falling back as rain.
+//
 // Manulani, as only she can, weaves light: her rope up from the bow into a sun she holds high ahead,
 // so strong that the whole sea is lit as by day (OceanBackground.vue lifts the sun the sky is drawn
 // from to hers, as for the six's noon). She holds it a minute after the wave is gone and gives the
@@ -38,7 +48,7 @@ import { lines } from "./embroidery";
 import { TSUNAMI_ARC, TSUNAMI_PARTS, tsunamiHeight, type GerstnerUniforms } from "./gerstner-waves";
 import { NAMES, ropeMight, STRONGEST_MIND, TEMPERS } from "./psyche";
 import { seatOf } from "./treason";
-import { pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
+import { filmShaderChunk, pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 // Leane · Ember, and Manulani, by their place among the minds.
 export const TSUNAMI_ROGUE = 3;
@@ -112,6 +122,8 @@ const PARTS = [
 		phase: (who * 2.399) % (2 * Math.PI),
 		// How much of what she draws goes up as air, the rest as akasha.
 		air: temper.air / (temper.air + temper.water),
+		// And how much of it she burns off as steam instead: the eager (Leane's, chiefly), and the strongest.
+		fire: heart ? 0.6 : THREE.MathUtils.clamp((temper.eager - 0.5) * 2.4, 0, 0.7),
 		size: Math.cbrt(ropeMight(who) / ropeMight(STRONGEST_MIND)),
 	};
 });
@@ -138,6 +150,8 @@ const SPURTS = 4;
 const STEM = 24;
 const RING = 40;
 const SPURT_SEGMENTS = 64;
+// The tongues of each burning.
+const FLAMES = 160;
 
 const ropeVertex = /* glsl */ `
 attribute float aT;
@@ -163,6 +177,7 @@ varying float vAlpha;
 varying float vEdge;
 varying float vSky;
 varying vec3 vTint;
+varying float vCore;
 ${ribbonShaderChunk}
 
 vec3 bezier( vec3 a, vec3 b, vec3 c, vec3 d, float t ) {
@@ -232,6 +247,8 @@ void main() {
 	vEdge = aSide;
 	vSky = againstSky( here );
 	vTint = uTints[ who ];
+	// (Its filaments nearest the line are its heart, the outermost its flank.)
+	vCore = 1.0 - aSeed.z;
 	mat4 vp = projectionMatrix * viewMatrix;
 	gl_Position = ribbonPosition( vp * vec4( here, 1.0 ), vp * vec4( next, 1.0 ), aSide, mix( 1.0, 1.3, uDay ) );
 }
@@ -240,14 +257,18 @@ void main() {
 const ropeFragment = /* glsl */ `
 uniform float uGain;
 uniform float uDay;
+uniform float uFilm;
 varying float vAlpha;
 varying float vEdge;
 varying float vSky;
 varying vec3 vTint;
+varying float vCore;
+${filmShaderChunk}
 void main() {
 	float body = 1.0 - smoothstep( 0.7, 1.0, abs( vEdge ) );
+	vec3 tint = mix( vTint, filmShade( vTint, vCore ), uFilm );
 	// (By day lighter against the sky: never a dark line.)
-	gl_FragColor = vec4( mix( vTint * uGain, vTint * max( 1.2, uGain * mix( 0.8, 1.5, vSky ) ), uDay ), body * vAlpha * 0.03 * mix( 1.0, 3.0, uDay ) );
+	gl_FragColor = vec4( mix( tint * uGain, tint * max( 1.2, uGain * mix( 0.8, 1.5, vSky ) ), uDay ), body * vAlpha * 0.03 * mix( 1.0, 3.0, uDay ) );
 	// (Relaxed by half: WEAVE_RELAX.)
 	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
@@ -266,12 +287,14 @@ uniform float uOmega;
 uniform vec3 uWind;
 // For each part, from the left: when she begins to draw, when her own part is gone, her place in the
 // swell's rhythm, and when the heart is gone; where her part lies (middle, half-width, m); the crest's
-// height there and at the heart now (m); her size, and how much of what she draws goes up as air.
+// height there and at the heart now (m); her size, how much of what she draws goes up as air, and how
+// much she burns off.
 uniform vec4 uBite[ ${TSUNAMI_PARTS} ];
 uniform vec2 uPart[ ${TSUNAMI_PARTS} ];
 uniform vec2 uHigh[ ${TSUNAMI_PARTS} ];
-uniform vec2 uKind[ ${TSUNAMI_PARTS} ];
+uniform vec3 uKind[ ${TSUNAMI_PARTS} ];
 uniform float uDay;
+uniform float uFilm;
 uniform vec3 uAir;
 uniform vec3 uGold;
 uniform vec3 uSpray;
@@ -311,7 +334,10 @@ const spurtTiming = /* glsl */ `
 	vec2 part = helping ? uPart[ ${HEART_PART} ] : uPart[ p ];
 	float high = helping ? uHigh[ p ].y : uHigh[ p ].x;
 	float x = part.x + part.y * 0.8 * ( 2.0 * spurtHash( n, float( p ) ) - 1.0 );
-	bool air = spurtHash( n + 7.0, float( p ) ) < uKind[ p ].y;
+	bool fire = spurtHash( n + 13.0, float( p ) ) < uKind[ p ].z;
+	bool air = ! fire && spurtHash( n + 7.0, float( p ) ) < uKind[ p ].y;
+	// A burning: how far its fire is alight (it boils the crest first, and is out before the steam is).
+	float burning = fire ? smoothstep( 0.0, 0.8, age ) * ( 1.0 - smoothstep( 6.0, 11.0, age ) ) : 0.0;
 	float size = uKind[ p ].x * ( 0.7 + 0.5 * spurtHash( n + 3.0, float( p ) ) );
 	float crest = crestAt( bornAt );
 	vec3 root = crestPoint( x, high, crest );
@@ -335,6 +361,7 @@ attribute vec2 aCell;
 attribute vec4 aSeed;
 ${spurtCommon}
 varying float vEdge;
+varying float vCore;
 ${ribbonShaderChunk}
 
 void main() {
@@ -358,6 +385,9 @@ ${spurtTiming}
 		}
 		shown = 0.8 * smoothstep( 0.0, 0.5, age ) * ( 1.0 - smoothstep( 4.0, 11.0, age ) ) * smoothstep( 0.0, 0.03, aT );
 		tint = uSpray;
+		// (Boiled, it is steam: white, and lit from below by the fire while it burns.)
+		if ( fire ) tint = mix( vec3( 1.0 ), vec3( 1.0, 0.62, 0.32 ), 0.8 * burning * ( 1.0 - smoothstep( 0.0, 0.45, aT ) ) );
+		vCore = 1.0 - aSeed.z;
 	} else {
 		// Its head, a great puff rolling in over itself, widening as it rises; the air's spreading wide
 		// and flattening as it is spent, the akasha's climbing. Each filament on its own shell, so it
@@ -377,9 +407,10 @@ ${spurtTiming}
 			if ( k == 0 ) here = q; else next = q;
 		}
 		shown = smoothstep( 0.5, 3.0, age ) * ( 1.0 - smoothstep( 0.7 * life, life, age ) ) * smoothstep( 0.0, 0.15, s ) * ( 1.0 - smoothstep( 0.8, 1.0, s ) );
-		tint = air ? uAir : uGold;
+		tint = fire ? vec3( 1.0, 0.98, 0.95 ) : air ? uAir : uGold;
 		// (The strongest's own are white.)
 		if ( p == ${HEART_PART} && ! helping ) tint = mix( tint, vec3( 1.0 ), 0.65 );
+		vCore = 1.0 - aSeed.w;
 	}
 	float far = length( here - cameraPosition );
 	vAlpha = shown * ( 0.6 + 0.4 * size ) * smoothstep( 10.0, 60.0, far ) * exp( - far / 14000.0 );
@@ -393,13 +424,17 @@ ${spurtTiming}
 const spurtFragment = /* glsl */ `
 uniform float uGain;
 uniform float uDay;
+uniform float uFilm;
 varying float vAlpha;
 varying float vEdge;
 varying vec3 vTint;
+varying float vCore;
+${filmShaderChunk}
 void main() {
 	float across = abs( vEdge );
 	float body = pow( max( 1.0 - across * across, 0.0 ), 1.5 );
-	gl_FragColor = vec4( mix( vTint * uGain, vTint * max( 1.8, 1.4 * uGain ), uDay ), body * vAlpha * mix( 0.08, 0.2, uDay ) );
+	vec3 tint = mix( vTint, filmShade( vTint, vCore ), uFilm );
+	gl_FragColor = vec4( mix( tint * uGain, tint * max( 1.8, 1.4 * uGain ), uDay ), body * vAlpha * mix( 0.08, 0.2, uDay ) );
 	// (Relaxed by half: WEAVE_RELAX.)
 	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
 	#include <tonemapping_fragment>
@@ -422,15 +457,17 @@ ${spurtTiming}
 	vec3 base = crestPoint( x + spread * ( 2.0 * aSeed.y - 1.0 ), high, crest );
 	float gather = smoothstep( 0.0, 0.75, t );
 	vec3 line = vec3( mix( base.x, head.x, gather ), mix( base.y, head.y, t ), mix( base.z, head.z, gather ) ) + side * z * 0.06 * sin( t * 3.0 + n ) * t;
-	float fall = max( 0.0, age - 3.0 - 6.0 * t );
+	float fall = fire ? 0.0 : max( 0.0, age - 3.0 - 6.0 * t );
 	line.y = max( line.y - 4.9 * fall * fall, 0.0 );
-	float width = 12.0 + 0.12 * z * t + 5.0 * age;
+	// (Steam rises, and spreads the more.)
+	if ( fire ) line.y += ( 4.0 + 8.0 * t ) * age;
+	float width = 12.0 + 0.12 * z * t + ( fire ? 9.0 : 5.0 ) * age;
 	vec3 centre = line + ( side * ( aSeed.z - 0.5 ) + run * ( aSeed.w - 0.5 ) ) * width * 1.4;
 	float puff = ( 16.0 + 0.1 * z * t + 3.0 * age ) * ( 0.6 + 0.8 * fract( aSeed.z * 7.13 ) );
 	float far = length( centre - cameraPosition );
 	// (Thinner where all of them are on the heart at once, or it whitened the sky.)
-	vAlpha = smoothstep( 0.0, 0.6, age ) * ( 1.0 - smoothstep( 3.0 + 6.0 * t, 6.0 + 9.0 * t, age ) ) * smoothstep( 10.0, 60.0, far ) * exp( - far / 14000.0 ) * ( 0.6 + 0.4 * size ) * ( helping ? 0.35 : 1.0 );
-	vTint = uSpray;
+	vAlpha = smoothstep( 0.0, 0.6, age ) * ( 1.0 - ( fire ? smoothstep( 8.0 + 6.0 * t, 16.0 + 8.0 * t, age ) : smoothstep( 3.0 + 6.0 * t, 6.0 + 9.0 * t, age ) ) ) * smoothstep( 10.0, 60.0, far ) * exp( - far / 14000.0 ) * ( 0.6 + 0.4 * size ) * ( helping ? 0.35 : 1.0 );
+	vTint = fire ? mix( vec3( 1.0 ), vec3( 1.0, 0.62, 0.32 ), 0.8 * burning * ( 1.0 - smoothstep( 0.0, 0.4, t ) ) ) : uSpray;
 	vAt = position.xy;
 	vec4 seen = viewMatrix * vec4( centre, 1.0 );
 	seen.xy += position.xy * puff;
@@ -441,15 +478,77 @@ ${spurtTiming}
 const sprayFragment = /* glsl */ `
 uniform float uGain;
 uniform float uDay;
+uniform float uFilm;
 varying float vAlpha;
 varying vec3 vTint;
 varying vec2 vAt;
 void main() {
 	float soft = exp( - 3.0 * dot( vAt, vAt ) );
+	// (The film look: a cream white where it is thick, and its thin edges cooler, as the photograph's clouds.)
+	vec3 tint = mix( vTint, vTint * mix( vec3( 0.8, 0.94, 1.0 ), vec3( 1.0, 0.97, 0.9 ), soft ), uFilm );
 	// (Lit spray is white: by day as bright as the sky, or it reads as smoke.)
-	gl_FragColor = vec4( mix( vTint * uGain, vTint * max( 2.4, 1.6 * uGain ), uDay ), soft * vAlpha * mix( 0.1, 0.17, uDay ) );
+	gl_FragColor = vec4( mix( tint * uGain, tint * max( 2.4, 1.6 * uGain ), uDay ), soft * vAlpha * mix( 0.1, 0.17, uDay ) );
 	// (Relaxed by half: WEAVE_RELAX.)
 	gl_FragColor.a *= ${WEAVE_RELAX.toFixed(3)};
+	#include <tonemapping_fragment>
+	#include <colorspace_fragment>
+}
+`;
+
+// The fire of a burning, as soft tongues of flame: each leaves the crest where it then was, along the
+// stretch being boiled, and climbs, narrowing in towards the column and drawn out upward, cooling as it
+// goes, and is gone at the top; the whole sheet rises and falls in slow puffs that roll along it. The
+// crest runs on under them, so they are raked back over it.
+const flameVertex = /* glsl */ `
+attribute vec2 aCell;
+attribute vec4 aSeed;
+${spurtCommon}
+varying vec2 vAt;
+varying float vHeat;
+void main() {
+${spurtTiming}
+	if ( burning <= 0.0 ) { gl_Position = vec4( 0.0, 0.0, 2.0, 1.0 ); vAlpha = 0.0; return; }
+	float rise = 1.8 + 1.4 * aSeed.w;
+	float u = fract( aSeed.x + uTime / rise );
+	float left = u * rise;
+	// (Where the crest was when it left it, less half the run since, as the hot gas keeps half of it.)
+	float crestThen = max( crestAt( uSince - left ) - 0.5 * ${SPEED.toFixed(1)} * left, crestAt( uSince ) );
+	// (Lower towards the ends of the stretch, as a fire is lowest where it has least to burn.)
+	float tall = ( 180.0 + 320.0 * size ) * ( 0.85 + 0.25 * sin( 0.95 * uTime + n * 1.7 + aSeed.y * 2.0 ) ) * ( 0.4 + 0.6 * burning ) * ( 1.0 - 0.65 * pow( abs( 2.0 * aSeed.y - 1.0 ), 2.5 ) );
+	float along = x + spread * 1.1 * ( 2.0 * aSeed.y - 1.0 ) * ( 1.0 - 0.35 * u ) + 0.12 * tall * u * sin( 0.6 * uTime + aSeed.y * 9.0 );
+	vec3 centre = crestPoint( along, high - 6.0 + tall * pow( u, 0.85 ), crestThen ) + uWind * left * 0.8;
+	// (Broad and overlapping, so that they are one body of flame and not sparks.)
+	float puff = ( 16.0 + 30.0 * size ) * ( 0.9 + 1.1 * u ) * ( 1.0 - 0.5 * u * u ) * ( 0.7 + 0.6 * aSeed.z ) * ( 0.5 + 0.5 * burning );
+	// Hot at the root, cooling as it climbs; the strongest's hotter.
+	vHeat = clamp( pow( 1.0 - u, 0.8 ) * ( 0.9 + 0.15 * aSeed.z ), 0.0, 1.0 ) * ( 0.6 + 0.4 * burning );
+	if ( p == ${HEART_PART} && ! helping ) vHeat = min( 1.0, 1.1 * vHeat + 0.08 );
+	float far = length( centre - cameraPosition );
+	vAlpha = burning * smoothstep( 0.0, 0.12, u ) * ( 1.0 - smoothstep( 0.65, 1.0, u ) ) * smoothstep( 10.0, 60.0, far ) * exp( - far / 14000.0 ) * ( 0.6 + 0.4 * size );
+	vTint = vec3( 1.0 );
+	vAt = position.xy;
+	vec4 seen = viewMatrix * vec4( centre, 1.0 );
+	seen.xy += position.xy * puff * vec2( 1.0, mix( 1.0, 1.8, smoothstep( 0.2, 0.7, u ) ) );
+	gl_Position = projectionMatrix * seen;
+}
+`;
+
+const flameFragment = /* glsl */ `
+uniform float uGain;
+uniform float uDay;
+varying float vAlpha;
+varying float vHeat;
+varying vec2 vAt;
+void main() {
+	float d = dot( vAt, vAt );
+	float soft = exp( - 3.5 * d );
+	float k = clamp( vHeat * ( 0.75 + 0.3 * exp( - 3.0 * d ) ), 0.0, 1.0 );
+	// Glowing soot (Planck): deep red near 900 K, through orange, to a cream white near 3000 K, and far
+	// brighter the hotter.
+	vec3 glow = vec3( 1.0, mix( 0.03, 0.55, pow( k, 1.2 ) ), 0.28 * pow( k, 2.2 ) ) * ( 0.4 + 2.8 * k * k );
+	float a = soft * vAlpha;
+	// Fire is light: it gives its own (premultiplied), and is thick enough to hide a little of what is
+	// behind it, the more by day, or the day sky shows through it as a peach haze.
+	gl_FragColor = vec4( glow * uGain * mix( 1.0, 1.6, uDay ) * a * 0.5, a * mix( 0.12, 0.5, uDay ) );
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }
@@ -475,6 +574,8 @@ export interface TsunamiFrame {
 	air: THREE.Color;
 	gold: THREE.Color;
 	water: THREE.Color;
+	// 0..1 the film look (?film=off for none): the shades of each weave graded as in the owner's photograph.
+	film: number;
 }
 
 // Whose each is (Siuan's, Leane's, Moiraine's).
@@ -500,6 +601,7 @@ export function createTsunami(scene: THREE.Scene, layer: number, sea: GerstnerUn
 		uEnds: { value: Array.from({ length: 14 }, () => new THREE.Vector2()) },
 		uLight: { value: new THREE.Vector3() },
 		uDay: { value: 0 },
+		uFilm: { value: 0 },
 		uGain: { value: 1 },
 		uResolution: { value: new THREE.Vector2(1, 1) },
 		uPixelRatio: pixelRatio,
@@ -523,8 +625,9 @@ export function createTsunami(scene: THREE.Scene, layer: number, sea: GerstnerUn
 		uBite: { value: PARTS.map((part) => new THREE.Vector4(part.draws, part.gone, part.phase, HEART_GONE)) },
 		uPart: { value: PARTS.map((part) => new THREE.Vector2(part.middle, part.half)) },
 		uHigh: { value: PARTS.map(() => new THREE.Vector2()) },
-		uKind: { value: PARTS.map((part) => new THREE.Vector2(part.size, part.air)) },
+		uKind: { value: PARTS.map((part) => new THREE.Vector3(part.size, part.air, part.fire)) },
 		uDay: { value: 0 },
+		uFilm: { value: 0 },
 		uGain: { value: 1 },
 		uAir: { value: new THREE.Color() },
 		uGold: { value: new THREE.Color() },
@@ -549,7 +652,25 @@ export function createTsunami(scene: THREE.Scene, layer: number, sea: GerstnerUn
 	sprayGeometry.setAttribute("aSeed", new THREE.InstancedBufferAttribute(spraySeeds, 4));
 	sprayGeometry.instanceCount = sprayCount;
 	const spray = new THREE.Mesh(sprayGeometry, new THREE.ShaderMaterial({ uniforms: spurtUniforms, vertexShader: sprayVertex, fragmentShader: sprayFragment, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
-	for (const mesh of [ropes, spurts, spray]) {
+	const flameGeometry = new THREE.InstancedBufferGeometry();
+	flameGeometry.index = quad.index;
+	flameGeometry.setAttribute("position", quad.getAttribute("position"));
+	const flameCount = TSUNAMI_PARTS * SPURTS * FLAMES;
+	const flameCells = new Float32Array(flameCount * 2);
+	const flameSeeds = new Float32Array(flameCount * 4);
+	for (let i = 0; i < flameCount; i++) {
+		flameCells.set([Math.floor(i / (SPURTS * FLAMES)), Math.floor(i / FLAMES) % SPURTS], i * 2);
+		flameSeeds.set([Math.random(), Math.random(), Math.random(), Math.random()], i * 4);
+	}
+	flameGeometry.setAttribute("aCell", new THREE.InstancedBufferAttribute(flameCells, 2));
+	flameGeometry.setAttribute("aSeed", new THREE.InstancedBufferAttribute(flameSeeds, 4));
+	flameGeometry.instanceCount = flameCount;
+	// (Premultiplied: its own light added, and a little of what is behind it hidden.)
+	const flames = new THREE.Mesh(
+		flameGeometry,
+		new THREE.ShaderMaterial({ uniforms: spurtUniforms, vertexShader: flameVertex, fragmentShader: flameFragment, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor }),
+	);
+	for (const mesh of [ropes, spurts, spray, flames]) {
 		mesh.frustumCulled = false;
 		mesh.renderOrder = WEAVE_RENDER_ORDER;
 		mesh.layers.set(layer);
@@ -575,6 +696,7 @@ export function createTsunami(scene: THREE.Scene, layer: number, sea: GerstnerUn
 			ropes.visible = false;
 			spurts.visible = false;
 			spray.visible = false;
+			flames.visible = false;
 			sea.tsuShape.value.setY(0);
 			told = [];
 			return;
@@ -628,6 +750,7 @@ export function createTsunami(scene: THREE.Scene, layer: number, sea: GerstnerUn
 			}
 		}
 		ropeUniforms.uDay.value = frame.day;
+		ropeUniforms.uFilm.value = frame.film;
 		ropeUniforms.uGain.value = frame.gain;
 		ropeUniforms.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(pixelRatio.value);
 
@@ -640,6 +763,7 @@ export function createTsunami(scene: THREE.Scene, layer: number, sea: GerstnerUn
 		spurtUniforms.uWind.value.copy(frame.wind);
 		PARTS.forEach((part, k) => spurtUniforms.uHigh.value[k]!.set(crestHigh(part.middle, crest, frame.boat), heartHigh));
 		spurtUniforms.uDay.value = frame.day;
+		spurtUniforms.uFilm.value = frame.film;
 		spurtUniforms.uGain.value = frame.gain;
 		spurtUniforms.uAir.value.copy(frame.air);
 		spurtUniforms.uGold.value.copy(frame.gold);
@@ -653,6 +777,7 @@ export function createTsunami(scene: THREE.Scene, layer: number, sea: GerstnerUn
 		ropes.visible = true;
 		spurts.visible = since < HEART_GONE + 60;
 		spray.visible = spurts.visible;
+		flames.visible = spurts.visible;
 		told = [
 			`${Math.round(since)} s · the wave ${Math.round(crest)} m off, ${Math.round(raised)} m high where unbroken · Manulani's light ${Math.round(tsunamiLight(since) * 100)}% · the rogue: ${NAMES[TSUNAMI_ROGUE]}`,
 			...PARTS.map((part, k) => `${NAMES[part.who]}: ${Math.round(part.from)} to ${Math.round(part.to)} m, ${Math.round(now[k]!.left * 100)}% left${since > part.gone && k !== HEART_PART ? ", on the heart" : ""}`),
@@ -662,13 +787,14 @@ export function createTsunami(scene: THREE.Scene, layer: number, sea: GerstnerUn
 	const describe = () => told;
 
 	const dispose = () => {
-		for (const mesh of [ropes, spurts, spray]) {
+		for (const mesh of [ropes, spurts, spray, flames]) {
 			scene.remove(mesh);
 			(mesh.material as THREE.Material).dispose();
 		}
 		ropeGeometry.dispose();
 		spurtGeometry.dispose();
 		sprayGeometry.dispose();
+		flameGeometry.dispose();
 		quad.dispose();
 	};
 

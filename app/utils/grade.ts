@@ -16,7 +16,11 @@
 //                element colours, the owner's, still show);
 //   storm        less saturated, a little cooler.
 // Highlights lose some saturation as they brighten, so sun glitter goes to a warm white and not to a
-// hue. The sea's own blue is never rotated: no teal-and-orange.
+// hue. The sea's own blue was never rotated: no teal-and-orange.
+// Until the film look (the owner, 4 November, with a cross-processed photograph of wheat under a
+// turquoise sky, chosen for everyone the same day; ?film=off shows the site without it): split toning as
+// that film has it, the cool turned towards turquoise and richer, the warm richer still, the shadows
+// lifted and cooled (by day only: by night it greyed the dark), the brightest warmed towards cream.
 import * as THREE from "three";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 
@@ -31,6 +35,9 @@ const shader = {
 		uWarmth: { value: 0 },
 		// The exposure the tone mapping will apply, to know what will read as bright.
 		uExposure: { value: 1 },
+		// 0..1 the film look, and how far it lifts the shadows (by day only).
+		uFilm: { value: 0 },
+		uFilmLift: { value: 0 },
 	},
 	vertexShader: /* glsl */ `
 varying vec2 vUv;
@@ -46,6 +53,8 @@ uniform float uSaturation;
 uniform float uContrast;
 uniform float uWarmth;
 uniform float uExposure;
+uniform float uFilm;
+uniform float uFilmLift;
 varying vec2 vUv;
 void main() {
 	vec4 texel = texture2D( tDiffuse, vUv );
@@ -64,6 +73,23 @@ void main() {
 	c = e / max( uExposure, 1e-6 );
 	// Warmth.
 	c *= vec3( 1.0 + uWarmth, 1.0, 1.0 - uWarmth );
+	// The film look: the warm colours richer, the shadows lifted and turquoise, the highlights cream.
+	if ( uFilm > 0.0 ) {
+		e = c * uExposure;
+		float l = dot( e, vec3( 0.2126, 0.7152, 0.0722 ) );
+		float warm = clamp( ( e.r - e.b ) / max( max( e.r, e.b ), 1e-4 ), - 1.0, 1.0 );
+		float hot = max( warm, 0.0 );
+		float cool = smoothstep( 0.0, 0.3, - warm );
+		// (The cool towards turquoise, as that film turns a blue sky, and both richer, the warm the more.)
+		e *= mix( vec3( 1.0 ), vec3( 0.82, 1.0, 1.0 ), cool * uFilm );
+		l = dot( e, vec3( 0.2126, 0.7152, 0.0722 ) );
+		e = max( mix( vec3( l ), e, 1.0 + uFilm * ( 0.5 * hot + 0.35 * cool ) ), vec3( 0.0 ) );
+		float shadow = 1.0 - smoothstep( 0.0, 0.25, l );
+		float high = smoothstep( 0.9, 3.0, l );
+		e *= mix( vec3( 1.0 ), mix( vec3( 1.0 ), vec3( 0.92, 1.02, 1.06 ), shadow ) * mix( vec3( 1.0 ), vec3( 1.06, 1.0, 0.88 ), high ), uFilm );
+		e += uFilmLift * 0.012 * vec3( 0.55, 0.95, 1.0 );
+		c = e / max( uExposure, 1e-6 );
+	}
 	gl_FragColor = vec4( c, texel.a );
 }
 `,
@@ -78,13 +104,15 @@ export interface GradeFrame {
 	// 0..1 how stormy.
 	storm: number;
 	exposure: number;
+	// 0..1 the film look (?film=off for none).
+	film?: number;
 }
 
 export function createGradePass() {
 	const pass = new ShaderPass(shader);
 	const u = pass.uniforms as unknown as typeof shader.uniforms;
 	const { smoothstep, lerp } = THREE.MathUtils;
-	const update = ({ day, night, sunElevation, storm, exposure }: GradeFrame) => {
+	const update = ({ day, night, sunElevation, storm, exposure, film = 0 }: GradeFrame) => {
 		const golden = smoothstep(sunElevation, -1, 3) * (1 - smoothstep(sunElevation, 6, 12));
 		const blue = smoothstep(sunElevation, -10, -4) * (1 - smoothstep(sunElevation, -2, 1));
 		u.uPhotopic.value = lerp(1, 0.45, night) * (1 - 0.3 * blue * (1 - night));
@@ -92,6 +120,8 @@ export function createGradePass() {
 		u.uContrast.value = lerp(1.08, 1.1, night) * lerp(1, 0.95, storm);
 		u.uWarmth.value = 0.06 * golden * day - 0.04 * blue - 0.03 * storm;
 		u.uExposure.value = exposure;
+		u.uFilm.value = film;
+		u.uFilmLift.value = film * (1 - night);
 	};
 	return { pass, update };
 }

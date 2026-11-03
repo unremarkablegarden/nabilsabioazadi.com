@@ -922,3 +922,33 @@ channelling credit for Ben"; Ben's relation to the owner was not said).
   while it runs, against about 50 ms for the ordinary sea (it was 52 to 108 ms before the weaves were let
   go). The
   ropes' ends lying along the crest read close up as brushed fans; the last seconds are hazy with spray.
+
+## 37. Fire on the wave; the film look (4 November)
+
+The owner, with a still of the tsunami and a cross-processed photograph of wheat under a turquoise sky:
+"We need urgent colour-grading intervention on the shades of the weaving for diff elements. In a scene
+like this, consider the above image and show me what that could look like. Also — can't you just figure
+out how to make the flows look like themselves? Like that fire that's helping to evaporate the fucking
+tidal wave: that should look strong?" (The orange they pointed at was Leane · Ember's rope, the rogue's,
+feeding the wave; it is still hers.)
+
+- **Fire** (`tsunami.ts`, `flameVertex`): the fire-minded burn their part off instead of siphoning it, at
+  some of their pulls: the strongest at the heart (60%), and Leane's eager ones, Kite (70%), Sail and
+  Lantern (60%), a little Keel. A sheet of flame runs along the stretch of crest being boiled, 180 to 500 m
+  high by her strength, lower at its ends; 160 soft tongues to each burning, broad enough to be one body,
+  hot at the root and cooling as they climb in the colour of glowing soot (deep red near 900 K, orange,
+  cream white near 3000 K, brighter the hotter), rising and falling in slow puffs, raked back over the crest
+  as it runs on under them. Drawn premultiplied: their own light added, a little of what is behind hidden,
+  or the day sky showed through as a peach haze. Not relaxed by half. What is boiled goes up as steam,
+  white and lit orange from below while it burns, and rises and spreads instead of falling as rain.
+- **The film look**, for everyone (the owner chose "Film look for all" the same day; `?film=off` shows
+  the site without it): the elements' colours `FILM_COLOURS` (akasha the wheat's gold
+  #eda44a, water the sky's turquoise #1fb4c6, air a cooler periwinkle #7f95f0), and in the tsunami each
+  weave's shades graded across it (`filmShaderChunk` in `weave.ts`): its flank richer at the same
+  lightness, its heart towards cream or ice. The everyday weaves take the colours only, not the shades.
+  The whole picture is graded so as well (`grade.ts`): the cool turned towards turquoise and richer,
+  the warm richer still, shadows lifted and cooled (by day only: by night it greyed the dark), the
+  brightest warmed to cream. In a channelled storm it takes the place of the storm's graded colours.
+- The tsunami seen only by Manulani's light, about 70 s in, in headless Brave at 1280 by 720; not close
+  up as the heart falls, not on a phone, not timed. The ordinary sea seen once at 13:00 and 22:00 with
+  and without; not at dawn or dusk, not in a storm.

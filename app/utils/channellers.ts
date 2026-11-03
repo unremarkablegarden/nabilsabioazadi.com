@@ -807,6 +807,11 @@ export const ELEMENT_COLOURS = { air: "#9e7bf3", water: "#00b0a2", akasha: "#e0b
 // During a channelled storm, graded (the owner, 15 October): the same three families, each nearer
 // a grey of its own lightness. Air a dusk lavender, water sea glass, akasha old gold.
 export const GRADED_COLOURS = { air: "#8e8ac4", water: "#4f978e", akasha: "#c3a574", strongest: "#0050cb" };
+// The film look (the owner, 4 November, with a cross-processed photograph of wheat under a turquoise
+// sky; for everyone since, ?film=off for the colours above): the warm elements stand against the cool as that wheat against that sky. Akasha the
+// wheat's gold, water the sky's turquoise, air a cooler periwinkle so that the two cool ones stay apart.
+// (Each weave's shades across it are graded too: filmShaderChunk in weave.ts.)
+export const FILM_COLOURS = { air: "#7f95f0", water: "#1fb4c6", akasha: "#eda44a", strongest: "#0050cb" };
 export type ElementColours = typeof ELEMENT_COLOURS;
 
 // By day: how much more of itself a weave of colour needs than one of light, how deep that
