@@ -26,7 +26,7 @@
 // Everything in the weave curves: only the bolt itself is jagged, being lightning.
 import * as THREE from "three";
 import { lines } from "./embroidery";
-import { NAMES, ropeMight, STRONGEST_MIND, TEMPERS } from "./psyche";
+import { NAMES, ropeMightThen, STORM_MINDS, STRONGEST_MIND, TEMPERS } from "./psyche";
 import { seatOf } from "./treason";
 import { pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
@@ -37,7 +37,7 @@ const SLOT_LENGTH = 115;
 const PARTS = [160, 80, 96, 72];
 const SEGMENTS = 96;
 // The greatest of the strengths, for each one's share of the filaments.
-const MOST = Math.max(...TEMPERS.map((_, who) => ropeMight(who)));
+const MOST = Math.max(...TEMPERS.slice(0, STORM_MINDS).map((_, who) => ropeMightThen(who)));
 // The swell's group speed (m/s): that of the two-hundred-metre waves it is mostly made of.
 const RING_SPEED = 0.5 * Math.sqrt((9.8 * 200) / (2 * Math.PI));
 // The water weave presses the sea this long after the stroke.
@@ -273,7 +273,7 @@ export function createJenna(scene: THREE.Scene, layer: number, rings: THREE.Vect
 		let who = STRONGEST_MIND;
 		if (!first || busy.includes(who)) {
 			// Whoever is free, most often those of both air and water.
-			const weights = TEMPERS.map((t, i) => (busy.includes(i) ? 0 : (t.air * t.water) ** 2 * ropeMight(i)));
+			const weights = TEMPERS.slice(0, STORM_MINDS).map((t, i) => (busy.includes(i) ? 0 : (t.air * t.water) ** 2 * ropeMightThen(i)));
 			let pick = Math.random() * weights.reduce((a, b) => a + b, 0);
 			who = weights.findIndex((w) => (pick -= w) <= 0);
 			if (who < 0) who = 0;
@@ -281,7 +281,7 @@ export function createJenna(scene: THREE.Scene, layer: number, rings: THREE.Vect
 		first = false;
 		lastCalled = time;
 		holder[slot] = who;
-		const might = ropeMight(who);
+		const might = ropeMightThen(who);
 		const height = Math.min(9, 2 + 0.9 * might);
 		uniforms.uFoot.value[slot]!.set(foot.x, 0, foot.z, height);
 		uniforms.uWhen.value[slot]!.set(time, strikeAt, Math.max(0.3, might / MOST), 1);

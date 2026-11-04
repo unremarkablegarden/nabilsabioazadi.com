@@ -36,6 +36,10 @@ uniform float channelStream;
 // have. By day each tends the sea and the air in their own way, and they only come together
 // every so often (the owner's): see tend in channellers.ts.
 uniform float channelLink;
+// For each seat, 0..1 how far its occupant joins in that link (1 for all but one: Pardis links only
+// with Keel, Mohabat and Laeni, the owner's, 5 November, and keeps her own tress while anyone else
+// is in the flow).
+uniform vec4 channelLinkOwn;
 // For each seat, where its occupant's own weave goes when they are not linked: 0 into the water
 // (it lies along the surface), 1 into the air (it climbs), between the two for akasha.
 uniform vec4 channelInto;
@@ -105,13 +109,18 @@ float channelStrength( float k ) {
 // 3 and 7, never the same from one second to the next.
 // (Not linked, they do not join until far out: as they link, the place where they meet runs in
 // towards the boat, and as they part it runs out again.)
-float channelJoin() {
-	return ( 5.0 + 1.2 * sin( channelTime * 0.83 ) + 0.6 * sin( channelTime * 2.3 + 1.0 ) + 0.2 * sin( channelTime * 5.9 ) ) * pow( 140.0, 1.0 - channelLink );
+// How far seat k is linked.
+float channelLinked( float k ) {
+	return channelLink * channelOf( channelLinkOwn, k );
+}
+
+float channelJoin( float k ) {
+	return ( 5.0 + 1.2 * sin( channelTime * 0.83 ) + 0.6 * sin( channelTime * 2.3 + 1.0 ) + 0.2 * sin( channelTime * 5.9 ) ) * pow( 140.0, 1.0 - channelLinked( k ) );
 }
 
 // 0..1 how far apart the four tresses still are at a distance ahead: 1 at the boat, 0 once joined.
-float channelApart( float ahead ) {
-	return 1.0 - smoothstep( 0.0, channelJoin(), ahead );
+float channelApart( float k, float ahead ) {
+	return 1.0 - smoothstep( 0.0, channelJoin( k ), ahead );
 }
 
 // Where the middle of that one great flow lies at a distance ahead, sideways of the line
@@ -130,7 +139,7 @@ float channelFlow( float ahead ) {
 // flow within a few metres; inside it each still keeps a place of its own, winding slowly round
 // the others, the stronger ones nearer the middle.
 float channelLine( float k, float ahead ) {
-	float apart = channelApart( ahead );
+	float apart = channelApart( k, ahead );
 	float turn = log( ahead + 12.0 ) * 2.2 * ( mod( k, 2.0 ) < 0.5 ? 1.0 : - 1.0 ) + k * 1.5708 - channelTime * 0.06;
 	float within = ( 0.5 + 0.04 * ahead ) * ( 1.25 - channelStrength( k ) ) * ( 1.0 - smoothstep( 0.6, 0.97, channelWay( ahead ) ) )
 		* ( 1.0 - 0.85 * channelPresence( k, ahead ).y );
@@ -141,7 +150,7 @@ float channelLine( float k, float ahead ) {
 		+ 0.035 * sin( log( ahead + 12.0 ) * 1.6 + k * 1.7 - channelTime * 0.05 )
 		// (One sent up to read the wind is carried aside by it, the more the higher it has gone.)
 		+ channelWind.x * 0.22 * channelOf( channelInto, k ) * ( 1.0 - channelOf( channelInto, k ) ) * 4.0 * smoothstep( 20.0, 200.0, ahead );
-	float towards = ( k - 1.5 ) * 1.5 * apart + own * ahead * apart * ( 1.0 - channelLink ) + channelFlow( ahead ) + cos( turn ) * within * ( 1.0 - apart );
+	float towards = ( k - 1.5 ) * 1.5 * apart + own * ahead * apart * ( 1.0 - channelLinked( k ) ) + channelFlow( ahead ) + cos( turn ) * within * ( 1.0 - apart );
 	// Holding the boat back they do not join. Each lays their tress out on the water to their own
 	// side, the four spread like the lines of a sea anchor, and the current draws them the way it runs.
 	float held = ( k - 1.5 ) * ( 1.5 + 0.3 * ahead ) + channelCurrent * ahead * ahead / ( 90.0 + ahead );
@@ -156,7 +165,7 @@ float channelRise( float k, float ahead ) {
 	// Driven with their whole strength it does not climb: it keeps to the surface all the way.
 	// Each for themselves, a weave meant for the water lies along it and one meant for the air climbs.
 	return 0.06 * ( 1.0 - 0.92 * channelSurge ) * ( 1.0 - channelHold ) * ahead * pow( sin( 3.14159 * pow( channelWay( ahead ), 0.7 ) ), 1.5 )
-		* mix( 0.1 + 5.5 * channelOf( channelInto, k ) * channelOf( channelInto, k ), 1.0, channelLink ) * ( 1.0 - 0.9 * channelHeal );
+		* mix( 0.1 + 5.5 * channelOf( channelInto, k ) * channelOf( channelInto, k ), 1.0, channelLinked( k ) ) * ( 1.0 - 0.9 * channelHeal );
 }
 
 // A wave of brightness that travels out along a tress, 0..1.

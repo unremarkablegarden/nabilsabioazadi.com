@@ -22,7 +22,7 @@
 import * as THREE from "three";
 import { lines } from "./embroidery";
 import type { SeaConditions } from "./manawatawhi";
-import { ropeMight, STRONGEST_MIND } from "./psyche";
+import { ropeMightThen, STRONGEST_MIND } from "./psyche";
 import { pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 export const PART_COUNT = 16;
@@ -55,7 +55,7 @@ export const partShare = (since: number) => {
 	const p = THREE.MathUtils.clamp((since - partArrives(PART_COUNT - 1) - 10) / 240, 0, 1);
 	return p * p * (3 - 2 * p);
 };
-const FILAMENTS = Math.round(24 * ropeMight(STRONGEST_MIND));
+const FILAMENTS = Math.round(24 * ropeMightThen(STRONGEST_MIND));
 const SEGMENTS = 80;
 
 const vertex = /* glsl */ `

@@ -279,7 +279,7 @@ export function breathRing(uniforms: GerstnerUniforms, x: number, z: number, tim
 
 // The freshening (fresh.ts): how many places they work the water at, and how far round the boat
 // the strongest's light falls and the water is made fresh (m).
-export const FRESH_PLACES = 13;
+export const FRESH_PLACES = 14;
 export const FRESH_RADIUS = 300;
 
 // The rogue's tsunami (tsunami.ts). A wall of water raised by the rogue some kilometres off and
@@ -484,6 +484,7 @@ export interface GerstnerUniforms {
 	channelStream: THREE.IUniform<number>;
 	// By day: how far the four are linked, and where each one's own weave goes (channel-path.ts).
 	channelLink: THREE.IUniform<number>;
+	channelLinkOwn: THREE.IUniform<THREE.Vector4>;
 	channelInto: THREE.IUniform<THREE.Vector4>;
 	// 0..1 how far the water shows the good their weaving does it by day: clearer where a weave lies.
 	channelReading: THREE.IUniform<number>;
@@ -1588,6 +1589,7 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		channelSurge: { value: 0 },
 		channelStream: { value: 0 },
 		channelLink: { value: 1 },
+		channelLinkOwn: { value: new THREE.Vector4(1, 1, 1, 1) },
 		channelInto: { value: new THREE.Vector4(0.5, 0.5, 0.5, 0.5) },
 		channelReading: { value: 0 },
 		channelHeal: { value: 0 },

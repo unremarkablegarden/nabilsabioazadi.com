@@ -1023,3 +1023,41 @@ fresh water round the boat, the sea breathing" (my words; the owner gave none).
   8 s), and the boat rides it.
 - Seen once at 1280 by 720 in the in-app browser, at night (25 s and 150 s in) and at 13:00; not at dawn or
   dusk, not on a phone, not timed. The breathing was checked in numbers (`__fresh()`), not watched in motion.
+
+## 40. Laeni, Pardis, Mohabat and Leilehua (5 November)
+
+The owner: "The strongest is now 250% more powerful than everyone and called Laeni. She is strongest
+in Air, Spirit, Water and Fire. Kite is now called Pardis and she is 500% times stronger but only links
+with Fathom and Keel and Laeni. Fathom is now called Mohabat and is 80% stronger." And a new
+channeller, Leilehua, "at the back of the boat ... at 4000% because she holds a terangreal". Asked, the
+owner confirmed that Laeni is the owner's own character renamed (so "she", where older notes say "the
+strongest" and "they"), that Leilehua is a fifteenth channeller, and that the percentages are "more".
+
+- Names (psyche.ts `NAMES`, channellers.ts `PILGRIMS` and `AES_SEDAI`): the strongest is Laeni, Kite
+  (Leane · Kite in storms) is Pardis, Fathom (Siuan · Fathom) is Mohabat, Leilehua is the fifteenth.
+- Strength, all in one table now (psyche.ts `TRUE_STRENGTH`, with its history in the comment): Pardis 6
+  times what she was, Mohabat 1.8 times, Leilehua 40 times an ordinary one's 0.5 (20 in the code's
+  units), and Laeni set as a rule at 3.5 times everyone else together, Manulani and Leilehua included:
+  about 22,150 against 6,330, nearly sixteen times what the strongest was. Manulani keeps her own
+  strength (no longer 1.12 times the strongest's): about 7% of Laeni's.
+- Drawn by the cube root, as always (`RAISED_SINCE`, `ropeMight`): Laeni's rope about 1,210 filaments
+  (481 before), Pardis's 570 (313), Mohabat's 298 (245), Leilehua's 219. In the everyday weaving the
+  seats hold 10, 10, 19 and 10 measures (`MEASURES`), Laeni's being the third; her filaments there carry
+  only her four elements (air, akasha, water, fire), no earth or metal.
+- Pardis's links (`linksWith` in psyche.ts; `channelLinkOwn` in channel-path.ts, each seat's own share
+  of the link): she runs her tress into the others' only while the rest of the four at the front are
+  Keel, Mohabat and Laeni, and never in the dawn and dusk link of all thirteen; otherwise she keeps her
+  own tress, fanned out as when not linked, and the others link without her.
+- Leilehua sits at the stern, centre, 9 m behind the eye and 1.4 m below it (`seatOf`, treason.ts). She
+  does not take turns at the front. In today's freshening (fresh.ts) she works the water astern, 140 m
+  out, so she is not in view; her temperament is mine, as none was given. The minds of the storms
+  (`createPsyche`) stay the fourteen who met them.
+- Laeni's light rope in the freshening carries 2.5 times the filaments (377) and is 1.6 times as broad,
+  still wound tight. The other workers' water spreads as before (measured against the strongest's might
+  when the work began); Pardis's a little wider, and she now works nearest ahead on the left.
+- The storms and events before today keep the strengths they had (`ropeMightThen`: jenna.ts, parting.ts,
+  tsunami.ts; and the tables of their own in contest.ts, noon.ts, compelled.ts, five.ts, swells.ts), so
+  their previews look as they did, with the new names.
+- Seen at 1280 by 720 in the in-app browser: the freshening 150 s in at night, the everyday weaving at
+  13:00 and 23:00, no errors. Not seen: Pardis at the front holding her tress apart (it depends on who is
+  at the front), dawn or dusk, a phone, frame timing (Laeni's broader rope costs more to draw).

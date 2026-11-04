@@ -40,14 +40,18 @@
 import * as THREE from "three";
 import type { SeaConditions } from "./manawatawhi";
 
-// In the order the weaves use: the twelve in SLOTS order (wrath.ts, five.ts), the strongest, Manulani.
+// In the order the weaves use: the twelve in SLOTS order (wrath.ts, five.ts), the strongest, Manulani,
+// and since 5 November Leilehua.
+// (5 November, the owner: the strongest is called Laeni, "she"; Kite is called Pardis, and Fathom
+// Mohabat. Laeni is the owner's own: where older notes say "the strongest" and "they", it is she.)
 export const NAMES = [
-	"Siuan · Keel", "Leane · Kite", "Siuan · Fathom", "Leane · Ember", "Moiraine · Loom", "Moiraine · Listener",
+	"Siuan · Keel", "Pardis", "Mohabat", "Leane · Ember", "Moiraine · Loom", "Moiraine · Listener",
 	"Leane · Sail", "Siuan · Reef", "Moiraine · Glass", "Leane · Lantern", "Siuan · Ballast", "Moiraine · Mist",
-	"the strongest", "Manulani",
+	"Laeni", "Manulani", "Leilehua",
 ];
 // air, water, eager, stamina, steady, sociable (AES_SEDAI in channellers.ts; Manulani's her own:
-// she who holds the light is steady and long-lasting, and close to the others).
+// she who holds the light is steady and long-lasting, and close to the others; Leilehua's, mine, as
+// the owner gave none: steady and lasting at the stern, leaning a little to the water).
 export const TEMPERS = [
 	[0.5, 0.7, 0.55, 0.95, 0.95, 0.6],
 	[0.9, 0.35, 0.8, 0.6, 0.65, 0.5],
@@ -63,6 +67,7 @@ export const TEMPERS = [
 	[0.6, 0.6, 0.45, 0.6, 0.7, 0.6],
 	[0.84, 0.84, 1, 1, 1, 0.5],
 	[0.7, 0.7, 0.6, 0.95, 0.9, 0.7],
+	[0.6, 0.75, 0.5, 0.85, 0.85, 0.55],
 ].map(([air, water, eager, stamina, steady, sociable]) => ({ air: air!, water: water!, eager: eager!, stamina: stamina!, steady: steady!, sociable: sociable! }));
 // The strongest six (the strongest, Manulani and the four mighty) given 80% more strength (the
 // owner, 21 October: "give them all 80% more strength"), and then that doubled ("aggravate my
@@ -76,12 +81,57 @@ export const SIX_STRONGER = 3.6;
 // strengthened by how near water she is: Siuan · Reef, the most water-minded, nine times (800%
 // more), the air-minded Leane's about twice. Their true strength, by mind (Siuan, the strongest and
 // Manulani, who hold none, 1).
-export const TER_ANGREAL = TEMPERS.map((temper, i) => (i === 2 || i >= 12 ? 1 : 1 + 8 * (temper.water / 0.95) ** 2));
-// Strength as their ropes' measures (MIGHT in channellers.ts): the four mighty, the strongest, Manulani.
-const MIGHT = [2.5, 2.5, 2.5, 1, 1, 2.5, 1, 1, 1, 1, 1, 1, 4.9, 5.1].map((might, i) => (might > 2 ? might * Math.cbrt(SIX_STRONGER) : might) * Math.cbrt(TER_ANGREAL[i]!));
-// (For the weaves that draw one channeller at a time by her strength: jenna.ts.)
-export const ropeMight = (who: number) => MIGHT[who]!;
+// (Leilehua's, 5 November: "she is at 4000% because she holds a terangreal", the owner's: forty
+// times what an ordinary one would be.)
+export const TER_ANGREAL = TEMPERS.map((temper, i) => (i === 14 ? 40 : i === 2 || i >= 12 ? 1 : 1 + 8 * (temper.water / 0.95) ** 2));
 export const STRONGEST_MIND = 12;
+export const MANULANI_MIND = 13;
+export const LEILEHUA_MIND = 14;
+// The minds that met the storms (all but Leilehua, who came aboard on 5 November, after them).
+export const STORM_MINDS = 14;
+
+// Their true strength, in the units of `REST` (what each of the twelve was at the start):
+//   12 October   the strongest 1.8 times the other twelve together
+//   17 October   Keel, Kite, Fathom and Listener (the four mighty) 64 times stronger
+//   18 October   Manulani 1.12 times the strongest
+//   21 October   the six (the strongest, Manulani, the four mighty) 3.6 times stronger
+//   23 October   the pounamu ter'angreal, up to nine times (TER_ANGREAL)
+//    5 November  (the owner) Pardis 500% stronger, Mohabat 80% stronger; Leilehua aboard, at 4000%
+//                of an ordinary one's strength (REST's middle, 0.5) by her ter'angreal; and Laeni
+//                "250% more powerful than everyone": 3.5 times all the others together.
+export const REST = [0.95, 0.9, 0.82, 0.78, 0.7, 0.64, 0.58, 0.52, 0.47, 0.42, 0.38, 0.34];
+const MIGHTY_MINDS = [0, 1, 2, 5];
+const BEGAN = REST.map((strength, i) => (MIGHTY_MINDS.includes(i) ? 64 * strength : strength));
+const STRONGEST_BEGAN = 1.8 * BEGAN.reduce((sum, one) => sum + one, 0);
+// As they were until 5 November.
+const TRUE_THEN = [...BEGAN.map((strength, i) => strength * (MIGHTY_MINDS.includes(i) ? SIX_STRONGER : 1) * TER_ANGREAL[i]!), STRONGEST_BEGAN * SIX_STRONGER, 1.12 * STRONGEST_BEGAN * SIX_STRONGER];
+// What the owner raised on 5 November (by mind).
+const RAISED: Record<number, number> = { 1: 6, 2: 1.8 };
+export const LAENI_OVER_ALL = 3.5;
+const OTHERS_NOW = [...TRUE_THEN.map((strength, i) => strength * (RAISED[i] ?? 1)), 0.5 * TER_ANGREAL[LEILEHUA_MIND]!];
+OTHERS_NOW[STRONGEST_MIND] = 0;
+const LAENI_NOW = LAENI_OVER_ALL * OTHERS_NOW.reduce((sum, one) => sum + one, 0);
+export const TRUE_STRENGTH = OTHERS_NOW.map((strength, i) => (i === STRONGEST_MIND ? LAENI_NOW : strength));
+// How much stronger each is than until 5 November (Leilehua, new, as an ordinary one: 1).
+export const RAISED_SINCE = TRUE_STRENGTH.map((strength, i) => (i === LEILEHUA_MIND ? 1 : strength / TRUE_THEN[i]!));
+
+// Strength as their ropes' measures (MIGHT in channellers.ts): the four mighty, the strongest, Manulani.
+// As it was until 5 November, kept for the storms and the events before then (jenna.ts, parting.ts,
+// tsunami.ts), so that they are seen as they were.
+const MIGHT_THEN = [2.5, 2.5, 2.5, 1, 1, 2.5, 1, 1, 1, 1, 1, 1, 4.9, 5.1].map((might, i) => (might > 2 ? might * Math.cbrt(SIX_STRONGER) : might) * Math.cbrt(TER_ANGREAL[i]!));
+// And now: each by the cube root of how much stronger she is; Leilehua as one of the eight, by the
+// cube root of her ter'angreal.
+const MIGHT = [...MIGHT_THEN.map((might, i) => might * Math.cbrt(RAISED_SINCE[i]!)), Math.cbrt(TER_ANGREAL[LEILEHUA_MIND]!)];
+// (For the weaves that draw one channeller at a time by her strength.)
+export const ropeMight = (who: number) => MIGHT[who]!;
+export const ropeMightThen = (who: number) => MIGHT_THEN[who]!;
+// What each is strongest in: Laeni in air, spirit (akasha), water and fire (the owner, 5 November).
+export const LAENI_ELEMENTS = ["air", "akasha", "water", "fire"] as const;
+// Who links with whom: Pardis only with Keel, Mohabat and Laeni (the owner, 5 November); the rest
+// with anyone.
+export const PARDIS_MIND = 1;
+const LINKS_ONLY: Record<number, number[]> = { [PARDIS_MIND]: [0, 2, STRONGEST_MIND] };
+export const linksWith = (a: number, b: number) => a === b || ((LINKS_ONLY[a]?.includes(b) ?? true) && (LINKS_ONLY[b]?.includes(a) ?? true));
 // The strongest channellers, who try the others: the four mighty, the strongest, Manulani.
 // (Named, not read off their might: with the ter'angreal some of the others are nearly as strong.)
 const JUDGES = [0, 1, 2, 5, 12, 13];
@@ -170,7 +220,8 @@ export interface PsycheFrame {
 }
 
 export function createPsyche() {
-	const n = NAMES.length;
+	// (The fourteen who met the storms: Leilehua has not yet been through one with them.)
+	const n = STORM_MINDS;
 	const arousal = new Array<number>(n).fill(0.3);
 	const spent = new Array<number>(n).fill(0);
 	const collapsed = new Array<boolean>(n).fill(false);
@@ -208,7 +259,7 @@ export function createPsyche() {
 				continue;
 			}
 			const t = TEMPERS[i]!;
-			const load = demand / Math.sqrt(MIGHT[i]!);
+			const load = demand / Math.sqrt(MIGHT_THEN[i]!);
 			const beside = BESIDE[i]!;
 			// (The death of one beside her is felt as the worst of fear.)
 			const contagion = beside.reduce((sum, j) => sum + (dead[j] ? 1.2 : Math.max(0, arousal[j]! - arousal[i]!)), 0) / Math.max(1, beside.length);
@@ -266,7 +317,7 @@ export function createPsyche() {
 			const t = TEMPERS[i]!;
 			const m = mind[i]!;
 			const free = 1 - Math.min(1, m.x + m.y + m.z);
-			const among = (i === STRONGEST_MIND ? NAMES.map((_, j) => j).filter((j) => j !== i) : BESIDE[i]!).filter((j) => !dead[j]);
+			const among = (i === STRONGEST_MIND ? [...Array(n).keys()].filter((j) => j !== i) : BESIDE[i]!).filter((j) => !dead[j]);
 			let worst = -1;
 			for (const j of among) if (worst < 0 || distress[j]! > distress[worst]!) worst = j;
 			const need = worst >= 0 ? THREE.MathUtils.smoothstep(distress[worst]!, 0.3, 0.8) : 0;
@@ -280,7 +331,7 @@ export function createPsyche() {
 
 	// For ?controls and for checking: each one's state in words.
 	const describe = () =>
-		NAMES.map((name, i) => {
+		NAMES.slice(0, n).map((name, i) => {
 			const m = mind[i]!;
 			if (dead[i]) return `${name}: stilled for treason and burned`;
 			if (trial?.who === i) return `${name}: on trial for treason (${trial.held.toFixed(0)} of ${TRIAL} s)`;
@@ -291,7 +342,7 @@ export function createPsyche() {
 
 	// For checking: brings one of the others to trial as though she had deserted.
 	const accuse = (who: number) => {
-		if (dead[who] || JUDGES.includes(who) || !NAMES[who]) return "only the others can be tried";
+		if (dead[who] || JUDGES.includes(who) || !(who >= 0 && who < n)) return "only the others can be tried";
 		deserted[who] = TREASON + 1;
 		return `${NAMES[who]} accused`;
 	};

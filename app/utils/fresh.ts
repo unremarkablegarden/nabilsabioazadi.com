@@ -32,7 +32,7 @@
 import * as THREE from "three";
 import { lines } from "./embroidery";
 import { FRESH_PLACES, FRESH_RADIUS, type GerstnerUniforms } from "./gerstner-waves";
-import { NAMES, ropeMight, STRONGEST_MIND, TEMPERS } from "./psyche";
+import { LEILEHUA_MIND, NAMES, RAISED_SINCE, ropeMight, ropeMightThen, STRONGEST_MIND, TEMPERS } from "./psyche";
 import { seatOf } from "./treason";
 import { filmLook, filmShaderChunk, pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
@@ -59,23 +59,26 @@ const BREATH_RISE = 26;
 const BREATH_HIGH = 1.6;
 
 // Who works where: everyone but the strongest, each on her own side of the boat, the mightiest nearest
-// ahead; Manulani, at the bow, straight ahead. Bearings off ahead (radians, + to the right) and
-// distances (m); and how far her fresh water spreads (m).
+// ahead; Manulani, at the bow, straight ahead; and since 5 November Leilehua, at the stern, the water
+// astern. Bearings off ahead (radians, + to the right) and distances (m); and how far her fresh water
+// spreads (m), by her might against the strongest's as it was when the work began (so that Laeni's
+// greater strength since leaves the others' water as it was).
 const sideOf = (who: number) => Math.sign(seatOf(who, new THREE.Vector3(), new THREE.Vector3(0, 0, -1), new THREE.Vector3(1, 0, 0)).x);
-const WORKERS = [...Array(14).keys()].filter((who) => who !== STRONGEST_MIND);
+const WORKERS = [...Array(NAMES.length).keys()].filter((who) => who !== STRONGEST_MIND);
 const byMight = (a: number, b: number) => ropeMight(b) - ropeMight(a);
 const PLACES = WORKERS.map((who) => {
 	const side = sideOf(who);
 	const row = WORKERS.filter((other) => sideOf(other) === side).sort(byMight);
 	const k = row.indexOf(who);
-	const bearing = side === 0 ? 0 : side * THREE.MathUtils.degToRad(8 + 102 * ((k + 0.5) / row.length) ** 1.3);
-	const size = Math.cbrt(ropeMight(who) / ropeMight(STRONGEST_MIND));
+	const astern = who === LEILEHUA_MIND;
+	const bearing = astern ? Math.PI : side === 0 ? 0 : side * THREE.MathUtils.degToRad(8 + 102 * ((k + 0.5) / row.length) ** 1.3);
+	const size = Math.cbrt(ropeMight(who) / ropeMightThen(STRONGEST_MIND));
 	const temper = TEMPERS[who]!;
 	const joins = 4 + 6 * (1 - temper.eager);
 	return {
 		who,
 		bearing,
-		far: side === 0 ? 200 : 80 + 160 * ((0.37 + who * 0.618) % 1),
+		far: astern ? 140 : side === 0 ? 200 : 80 + 160 * ((0.37 + who * 0.618) % 1),
 		spread: 30 + 40 * size,
 		size,
 		joins,
@@ -87,7 +90,11 @@ if (PLACES.length !== FRESH_PLACES) throw new Error(`the freshening has ${PLACES
 const FILAMENTS = 18;
 const SEGMENTS = 72;
 // The strongest's rope: its filaments, and enough segments along it for its tight twist.
-const LIGHT_FILAMENTS = 150;
+// (Since 5 November Laeni's, she being about sixteen times as strong as when it was made: its mass
+// by the cube root of that, and its girth by the square root of its mass, still wound tight.)
+const LIGHT_MASS = Math.cbrt(RAISED_SINCE[STRONGEST_MIND]!);
+const LIGHT_FILAMENTS = Math.round(150 * LIGHT_MASS);
+const LIGHT_GIRTH = Math.sqrt(LIGHT_MASS).toFixed(3);
 const LIGHT_SEGMENTS = 240;
 // The steam off each place.
 const PUFFS = 24;
@@ -214,9 +221,9 @@ vec3 woundAt( float t, float strand ) {
 	// Tight: each strand a third of a turn from the next, a turn in every fifteen metres or so, and the
 	// whole hardly wider than a hand's breadth or two, narrowing into the light.
 	float turn = strand * 2.0944 + t * 210.0 - uTime * 0.6;
-	float wound = 0.06 * ( 1.0 - 0.6 * t );
+	float wound = 0.06 * ${LIGHT_GIRTH} * ( 1.0 - 0.6 * t );
 	float own = aSeed.y * 6.28318 + t * 37.0;
-	float loose = 0.05 * sqrt( aSeed.z ) * ( 1.0 - 0.5 * t );
+	float loose = 0.05 * ${LIGHT_GIRTH} * sqrt( aSeed.z ) * ( 1.0 - 0.5 * t );
 	return here + ( n1 * cos( turn ) + n2 * sin( turn ) ) * wound + ( n1 * cos( own ) + n2 * sin( own ) ) * loose;
 }
 void main() {

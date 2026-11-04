@@ -46,7 +46,7 @@
 import * as THREE from "three";
 import { lines } from "./embroidery";
 import { TSUNAMI_ARC, TSUNAMI_PARTS, tsunamiHeight, type GerstnerUniforms } from "./gerstner-waves";
-import { NAMES, ropeMight, STRONGEST_MIND, TEMPERS } from "./psyche";
+import { NAMES, ropeMightThen, STRONGEST_MIND, TEMPERS } from "./psyche";
 import { seatOf } from "./treason";
 import { filmLook, filmShaderChunk, pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
@@ -89,7 +89,7 @@ const HEART = 500;
 const REACHES = 8000;
 const sideOf = (who: number) => Math.sign(seatOf(who, new THREE.Vector3(), new THREE.Vector3(0, 0, -1), new THREE.Vector3(1, 0, 0)).x);
 const others = [...Array(14).keys()].filter((who) => who !== TSUNAMI_ROGUE && who !== LIGHT_BEARER && who !== STRONGEST_MIND);
-const byMight = (a: number, b: number) => ropeMight(b) - ropeMight(a);
+const byMight = (a: number, b: number) => ropeMightThen(b) - ropeMightThen(a);
 const outward = (count: number) => Array.from({ length: count + 1 }, (_, k) => HEART + (REACHES - HEART) * (k / count) ** 1.5);
 const onLeft = others.filter((who) => sideOf(who) < 0).sort(byMight);
 const onRight = others.filter((who) => sideOf(who) > 0).sort(byMight);
@@ -116,7 +116,7 @@ const PARTS = [
 		draws: joins + 2.5,
 		// Her part is gone as soon as her strength allows: the mighty's first, beside the heart, so that
 		// it is torn open there while the weaker hold on further out; the heart last of all.
-		gone: heart ? HEART_GONE : THREE.MathUtils.lerp(TSUNAMI_ARRIVES - 12, 0.5 * TSUNAMI_ARRIVES, (ropeMight(who) / ropeMight(0)) ** 0.7),
+		gone: heart ? HEART_GONE : THREE.MathUtils.lerp(TSUNAMI_ARRIVES - 12, 0.5 * TSUNAMI_ARRIVES, (ropeMightThen(who) / ropeMightThen(0)) ** 0.7),
 		// How great her first pull is, and her place in the swell's rhythm.
 		first: heart ? 0.3 : 0.08 + 0.2 * temper.eager,
 		phase: (who * 2.399) % (2 * Math.PI),
@@ -124,7 +124,7 @@ const PARTS = [
 		air: temper.air / (temper.air + temper.water),
 		// And how much of it she burns off as steam instead: the eager (Leane's, chiefly), and the strongest.
 		fire: heart ? 0.6 : THREE.MathUtils.clamp((temper.eager - 0.5) * 2.4, 0, 0.7),
-		size: Math.cbrt(ropeMight(who) / ropeMight(STRONGEST_MIND)),
+		size: Math.cbrt(ropeMightThen(who) / ropeMightThen(STRONGEST_MIND)),
 	};
 });
 const HEART_PART = PARTS.findIndex((part) => part.who === STRONGEST_MIND);
@@ -584,7 +584,7 @@ const WHITE = new THREE.Color(1, 1, 1);
 
 export function createTsunami(scene: THREE.Scene, layer: number, sea: GerstnerUniforms) {
 	const ropeCells: [number, number][] = [];
-	for (let who = 0; who < 14; who++) for (let f = 0; f < Math.round(FILAMENTS * ropeMight(who)); f++) ropeCells.push([who, 0]);
+	for (let who = 0; who < 14; who++) for (let f = 0; f < Math.round(FILAMENTS * ropeMightThen(who)); f++) ropeCells.push([who, 0]);
 	const ropeGeometry = lines(ropeCells.length, SEGMENTS, (i) => ropeCells[i]!);
 	const ropeUniforms = {
 		uTime: { value: 0 },
@@ -594,7 +594,7 @@ export function createTsunami(scene: THREE.Scene, layer: number, sea: GerstnerUn
 		uBack: { value: BACK },
 		uSeats: { value: Array.from({ length: 14 }, () => new THREE.Vector3()) },
 		uTints: { value: Array.from({ length: 14 }, () => new THREE.Color()) },
-		uGirth: { value: Array.from({ length: 14 }, (_, who) => 1.4 * Math.cbrt(ropeMight(who))) },
+		uGirth: { value: Array.from({ length: 14 }, (_, who) => 1.4 * Math.cbrt(ropeMightThen(who))) },
 		uWork: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) },
 		uEnds: { value: Array.from({ length: 14 }, () => new THREE.Vector2()) },
 		uLight: { value: new THREE.Vector3() },

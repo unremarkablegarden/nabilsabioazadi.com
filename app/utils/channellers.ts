@@ -35,7 +35,11 @@
 import * as THREE from "three";
 import { CHANNELLERS, channelPathChunk } from "./channel-path";
 import type { GerstnerUniforms } from "./gerstner-waves";
-import { SIX_STRONGER, TER_ANGREAL } from "./psyche";
+import { LAENI_ELEMENTS, linksWith, RAISED_SINCE, SIX_STRONGER, STRONGEST_MIND, TER_ANGREAL } from "./psyche";
+
+// Each of the thirteen of the weaving (CREW's order: the strongest first, then the twelve) as one of
+// the minds (psyche.ts: the twelve, then the strongest).
+const mindOf = (member: number) => (member === 0 ? STRONGEST_MIND : member - 1);
 import { pathPassChunk, pathsShared, ribbonPaths, THREAD_PATH } from "./ribbon-paths";
 import { filmLook, pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
@@ -58,6 +62,8 @@ const GOLD_PLAIN = TINTS[2]!.clone();
 const BASE = new THREE.Color(0xcdd9ec);
 const ELEMENTS = [0xf6f7fb, 0xa9c8f4, 0xb4d0bd, 0xecbd98, 0x8099d2, 0xa7afba].map((hex) => new THREE.Color(hex));
 const METAL = 5;
+// (In ELEMENTS' order: akasha, air, earth, fire, water, metal.)
+const LAENI_ELEMENT_INDEX = LAENI_ELEMENTS.map((element) => ({ akasha: 0, air: 1, fire: 3, water: 4 })[element]);
 const BLUE = 0;
 const WHITE = 1;
 const GOLD = 2;
@@ -74,7 +80,9 @@ const GOLDEN = 14;
 // is another 64, gold among them as in the first, alight only while one so strong holds the seat.
 // Every seat has room for eight measures (since the six were made 3.6 times stronger, 21 October, the
 // strongest's about 7.5; and since the ter'angreal, 23 October, Keel's about 6.7, Listener's 6.2).
-const MEASURES = [8, 8, 8, 8];
+// Since 5 November Laeni's, in the strongest's seat (the third), about 18.7, and Pardis's, who may
+// take any of the others, about 9.2.
+const MEASURES = [10, 10, 19, 10];
 const SEGMENTS = 300;
 
 // The height of the sea at a place (x), and beside it (y) the height of the long swell alone,
@@ -516,9 +524,9 @@ vec3 threadPoint( float t, bool onlyPlace ) {
 	// (In a storm the linked flow is thrown wide over the waves ahead.)
 	float width = ( 0.1 + 0.04 * along ) * ( 1.0 + 1.8 * channelHold ) * ( 1.0 + 1.4 * channelControl ) * ( 0.75 + 0.7 * channelSea.x ) * ( 1.0 + 0.4 * channelSurge ) * smoothstep( - 4.0, 8.0, ahead ) * breath * ( 0.55 + 0.7 * channelStrength( who ) ) * ( 1.0 - smoothstep( 0.6, 0.97, way ) )
 		// (Each for themselves by day, a tress lies open and loose on the sea, not drawn tight.)
-		* ( 1.0 + 0.5 * ( 1.0 - channelLink ) )
+		* ( 1.0 + 0.5 * ( 1.0 - channelLinked( who ) ) )
 		// (Each as open or as close as they hold it: see uOpen.)
-		* mix( channelOf( uOpen, who ), 1.0, channelLink )
+		* mix( channelOf( uOpen, who ), 1.0, channelLinked( who ) )
 		// (The mighty's tress is a rope, broader for all it carries: see uMight.)
 		* sqrt( channelOf( uMight, who ) );
 	// Its three strands pass over and under each other: a plait, loosely kept.
@@ -544,7 +552,7 @@ vec3 threadPoint( float t, bool onlyPlace ) {
 	// (In a storm the strays are drawn in: thrown wide over the waves, they were loops and
 	// scribbles across the sea. Its breadth is in the tress, not in its strays.)
 	// (A tube, the owner's "cleaner": the strays drawn in to under a third.)
-	across += ( 1.0 - 0.7 * CLEAN ) * ( 1.0 - 0.6 * ( 1.0 - channelLink ) ) * aSeed.w * 0.55 * ( 0.55 + 1.1 * restless ) * ( 1.0 - 0.75 * skill ) * ( 1.0 - 0.6 * channelHold ) * ( 1.0 - 0.85 * smoothstep( 0.3, 0.8, way ) ) * ( 1.0 - 0.75 * channelControl ) * vec2(
+	across += ( 1.0 - 0.7 * CLEAN ) * ( 1.0 - 0.6 * ( 1.0 - channelLinked( who ) ) ) * aSeed.w * 0.55 * ( 0.55 + 1.1 * restless ) * ( 1.0 - 0.75 * skill ) * ( 1.0 - 0.6 * channelHold ) * ( 1.0 - 0.85 * smoothstep( 0.3, 0.8, way ) ) * ( 1.0 - 0.75 * channelControl ) * vec2(
 		drift( q * 2.3 + aSeed.x * 40.0 - channelOf( uWanderX, who ) ),
 		drift( q * 2.9 + aSeed.y * 40.0 + channelOf( uWanderY, who ) )
 	);
@@ -565,7 +573,7 @@ vec3 threadPoint( float t, bool onlyPlace ) {
 	across.x += channelWind.x * aSeed.w * 0.9;
 	// They leave the channeller's two open hands spread like fingers, as loose wisps, and are
 	// only drawn into a tress a little way out.
-	float fromHands = channelApart( along ) * ( aSoft > 0.9 ? 0.0 : 1.0 );
+	float fromHands = channelApart( who, along ) * ( aSoft > 0.9 ? 0.0 : 1.0 );
 	float hand = aSeed.x < 0.5 ? - 1.0 : 1.0;
 	vec2 loose = vec2( hand * 0.32 + ( aSeed.y - 0.5 ) * 0.5, ( fract( aSeed.x * 7.0 ) - 0.5 ) * 0.35 ) * fromHands;
 	vec2 p = channelBoat + vec2( channelLine( who, along ) + across.x * width + loose.x, - ahead );
@@ -689,7 +697,7 @@ void main() {
 	if ( aSoft > 0.9 ) lit = strength * ( 0.75 + 0.25 * withWaves );
 	// Where the four tresses have run together there are four times the filaments in one place,
 	// and each is drawn fainter, or the middle of the flow would burn out to plain white.
-	lit /= 1.0 + 2.8 * ( 1.0 - channelApart( ahead ) ) * ( 1.0 - channelHold ) * ( 1.0 - 0.45 * uDay );
+	lit /= 1.0 + 2.8 * ( 1.0 - channelApart( aThread.x, ahead ) ) * ( 1.0 - channelHold ) * ( 1.0 - 0.45 * uDay );
 	// Held back, the weaving does not reach for the horizon: it is spent within a few hundred metres.
 	lit *= mix( 1.0, 1.0 - smoothstep( 50.0, 300.0, ahead ), channelHold );
 	int element = int( aKind.w + 0.5 );
@@ -698,7 +706,7 @@ void main() {
 	float tendingNow = clamp( channelReading + channelHeal, 0.0, 1.0 );
 	if ( uDay > 0.5 || tendingNow > 0.5 ) {
 		int third = element - 3 * ( element / 3 );
-		element = channelLink > 0.5 ? ( third == 0 ? 0 : third == 1 ? 1 : 4 ) : int( channelOf( uSeatElement, aThread.x ) + 0.5 );
+		element = channelLinked( aThread.x ) > 0.5 ? ( third == 0 ? 0 : third == 1 ? 1 : 4 ) : int( channelOf( uSeatElement, aThread.x ) + 0.5 );
 	}
 	// How far this stretch of the filament leans towards its element's colour just now.
 	float leaning = 0.5 + 0.5 * drift( q * 1.1 - channelStream * 0.12 + aSeed.y * 57.0 );
@@ -1472,7 +1480,12 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			// Most lie close in their strand; the gold ones stray far.
 			const seedValues = [Math.random(), veil ? 0 : Math.random(), veil ? 0.4 * Math.random() : Math.sqrt(Math.random()), veil ? 0.1 : gold ? 1.4 + 1.8 * Math.random() : Math.random() ** 3 * 1.6];
 			// Between them the four work every element; each has two that are most their own.
-			const element = Math.random() < 0.6 ? (who + (filament % 2) * 3) % 6 : Math.floor(Math.random() * 6);
+			// (Laeni, in the strongest's seat, works only the four she is strongest in: air, akasha, water
+			// and fire, the owner's, 5 November.)
+			const element =
+				who === STRONGEST
+					? LAENI_ELEMENT_INDEX[Math.random() < 0.6 ? filament % 4 : Math.floor(Math.random() * 4)]!
+					: Math.random() < 0.6 ? (who + (filament % 2) * 3) % 6 : Math.floor(Math.random() * 6);
 			const kindValues = gold
 				? [0.9, 9 + 8 * Math.random(), 1.6 + 1.4 * Math.random(), element]
 				: [veil ? 0.05 : bright ? 0.95 : 0.22 + 0.3 * Math.random(), 1.6 + 3 * Math.random(), 0.5 + 0.8 * Math.random(), element];
@@ -1561,6 +1574,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		channelSurge: sea.channelSurge,
 		channelStream: sea.channelStream,
 		channelLink: sea.channelLink,
+		channelLinkOwn: sea.channelLinkOwn,
 		channelInto: sea.channelInto,
 		channelReading: sea.channelReading,
 		channelHeal: sea.channelHeal,
@@ -2052,6 +2066,10 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	// Seats left out of this link.
 	let sitsOut: number[] = [];
 	let link = 1;
+	// For each seat, how far its occupant joins in the link (see channelLinkOwn), and whether it has
+	// been set yet (at the first frame it is set outright, not eased in).
+	const linkOwn = [1, 1, 1, 1];
+	let linkOwnSet = false;
 	// 0..1 how far each is at their own reading, and how far they are linked to heal.
 	let reading = 0;
 	let healing = 0;
@@ -2273,10 +2291,13 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	// mass by its cube root.)
 	// (And since 23 October each of the Aes Sedai but Siuan holds a pounamu ter'angreal, her strength
 	// up to nine times again, TER_ANGREAL in psyche.ts: her mass by its cube root.)
+	// (And since 5 November, the owner: Laeni, the strongest, 3.5 times all the others together,
+	// Pardis 500% stronger and Mohabat 80%: RAISED_SINCE in psyche.ts, each one's mass by its cube root.)
 	const MIGHT = TRUE_STRENGTH.map(
 		(strength, member) =>
 			(member === 0 || MIGHTY.includes(member) ? ((0.62 * REST[0]! * Math.cbrt(MIGHTIER) * Math.cbrt(strength / (MIGHTIER * REST[0]!))) / 0.9) * Math.cbrt(SIX_STRONGER) : 1) *
-			(member === 0 ? 1 : Math.cbrt(TER_ANGREAL[member - 1]!)),
+			(member === 0 ? 1 : Math.cbrt(TER_ANGREAL[member - 1]!)) *
+			Math.cbrt(RAISED_SINCE[mindOf(member)]!),
 	);
 	// The farthest any of the eight would sound (see uReach): as far as the strongest of them went before.
 	const ORDINARY_MOST = 0.62 * REST[0]!;
@@ -2304,13 +2325,13 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	// who longs much say to him who longs little, 'Wherefore are you slow and halting?'" Three were
 	// renamed for it: Gale, Spark and Drift are Sail, Lantern and Mist.)
 	const PILGRIMS = [
-		{ name: "the strongest", air: 0.84, water: 0.84, eager: 1, stamina: 1, steady: 1, sociable: 0.5, curious: 1 },
+		{ name: "Laeni", air: 0.84, water: 0.84, eager: 1, stamina: 1, steady: 1, sociable: 0.5, curious: 1 },
 		// The rudder: holds a place longest and lies stillest; reason that serves and does not rule.
 		{ name: "Keel", air: 0.5, water: 0.55, eager: 0.55, stamina: 0.95, steady: 0.95, sociable: 0.65, curious: 0.35 },
 		// Air, and free because held: first to feel a shift in the wind, never carried off by it.
-		{ name: "Kite", air: 0.9, water: 0.35, eager: 0.75, stamina: 0.6, steady: 0.65, sociable: 0.5, curious: 0.7 },
+		{ name: "Pardis", air: 0.9, water: 0.35, eager: 0.75, stamina: 0.6, steady: 0.65, sociable: 0.5, curious: 0.7 },
 		// Patient water: comes in slowly, goes deepest, and does not hurry back with what it finds.
-		{ name: "Fathom", air: 0.3, water: 0.95, eager: 0.35, stamina: 0.85, steady: 0.85, sociable: 0.4, curious: 0.9 },
+		{ name: "Mohabat", air: 0.3, water: 0.95, eager: 0.35, stamina: 0.85, steady: 0.85, sociable: 0.4, curious: 0.9 },
 		// Warmth that lasts: comes in readily, and burns low and long rather than bright and short.
 		{ name: "Ember", air: 0.6, water: 0.45, eager: 0.8, stamina: 0.55, steady: 0.65, sociable: 0.55, curious: 0.5 },
 		// Joins without binding: lays a tress in with the others and keeps a space between them.
@@ -2338,10 +2359,10 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 	// blunt and unshakeable. Leane Sharif: quick, tall, decisive, keen to step forward. Moiraine
 	// Damodred: cool, patient, watching, keeping her own counsel.
 	const AES_SEDAI = [
-		{ name: "the strongest", air: 0.84, water: 0.84, eager: 1, stamina: 1, steady: 1, sociable: 0.5, curious: 1 },
+		{ name: "Laeni", air: 0.84, water: 0.84, eager: 1, stamina: 1, steady: 1, sociable: 0.5, curious: 1 },
 		{ name: "Siuan · Keel", air: 0.5, water: 0.7, eager: 0.55, stamina: 0.95, steady: 0.95, sociable: 0.6, curious: 0.35 },
-		{ name: "Leane · Kite", air: 0.9, water: 0.35, eager: 0.8, stamina: 0.6, steady: 0.65, sociable: 0.5, curious: 0.7 },
-		{ name: "Siuan · Fathom", air: 0.3, water: 0.95, eager: 0.4, stamina: 0.85, steady: 0.85, sociable: 0.4, curious: 0.9 },
+		{ name: "Pardis", air: 0.9, water: 0.35, eager: 0.8, stamina: 0.6, steady: 0.65, sociable: 0.5, curious: 0.7 },
+		{ name: "Mohabat", air: 0.3, water: 0.95, eager: 0.4, stamina: 0.85, steady: 0.85, sociable: 0.4, curious: 0.9 },
 		{ name: "Leane · Ember", air: 0.6, water: 0.45, eager: 0.8, stamina: 0.6, steady: 0.65, sociable: 0.55, curious: 0.5 },
 		{ name: "Moiraine · Loom", air: 0.55, water: 0.55, eager: 0.45, stamina: 0.75, steady: 0.85, sociable: 0.7, curious: 0.6 },
 		{ name: "Moiraine · Listener", air: 0.8, water: 0.6, eager: 0.35, stamina: 0.7, steady: 0.9, sociable: 0.35, curious: 0.95 },
@@ -2652,6 +2673,17 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 			mended.forEach((one) => (one.growing = false));
 		}
 		sea.channelLink.value = link;
+		// Pardis links only with Keel, Mohabat and Laeni (the owner, 5 November): while anyone else is
+		// at the front, or all thirteen are linked at dawn or dusk, she keeps her own tress, and the
+		// others run theirs together without her.
+		const inTheLink = linkedAll ? CREW.map((_, member) => member) : atFront;
+		for (let seat = 0; seat < CHANNELLERS; seat++) {
+			const occupant = mindOf(memberAt(seat));
+			const joinsIn = inTheLink.every((other) => linksWith(occupant, mindOf(other))) ? 1 : 0;
+			linkOwn[seat] = linkOwnSet ? linkOwn[seat]! + (joinsIn - linkOwn[seat]!) * Math.min(1, delta / 1.5) : joinsIn;
+		}
+		linkOwnSet = true;
+		sea.channelLinkOwn.value.fromArray(linkOwn);
 		// (Wholly the one or the other but for a second or two between: a weave half-way between its
 		// reading's form and the flow is neither.)
 		// (The turn between the two runs out along the weaves from the boat: see `turned`.)

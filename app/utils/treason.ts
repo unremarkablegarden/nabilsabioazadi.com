@@ -12,8 +12,9 @@
 import * as THREE from "three";
 import { WEAVE_RENDER_ORDER } from "./weave";
 
-// In the order of the minds (psyche.ts): the twelve's seats (SLOTS), the strongest's, Manulani's.
-const SEAT_OF = [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 2, 13];
+// In the order of the minds (psyche.ts): the twelve's seats (SLOTS), the strongest's, Manulani's,
+// Leilehua's (14: at the stern, behind the last of the rails).
+const SEAT_OF = [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 2, 13, 14];
 // How long from the boat to the sea (s), and the sphere's radius (m).
 const FLIGHT = 9;
 const RADIUS = 3.2;
@@ -147,6 +148,7 @@ void main() {
 // Her seat, as the weaves place it (seatAt in five.ts), by her place among the minds.
 export function seatOf(who: number, boat: THREE.Vector3, ahead: THREE.Vector3, across: THREE.Vector3) {
 	const seat = SEAT_OF[who]!;
+	if (seat > 13.5) return boat.clone().addScaledVector(ahead, -9).add(new THREE.Vector3(0, -1.4, 0));
 	if (seat > 12.5) return boat.clone().addScaledVector(ahead, 2.6).add(new THREE.Vector3(0, -0.8, 0));
 	if (seat < 3.5) return boat.clone().addScaledVector(across, (seat - 1.5) * 1.5).addScaledVector(ahead, 0.5).add(new THREE.Vector3(0, -1.2, 0));
 	const k = seat - 4;
