@@ -1061,3 +1061,52 @@ strongest" and "they"), that Leilehua is a fifteenth channeller, and that the pe
 - Seen at 1280 by 720 in the in-app browser: the freshening 150 s in at night, the everyday weaving at
   13:00 and 23:00, no errors. Not seen: Pardis at the front holding her tress apart (it depends on who is
   at the front), dawn or dusk, a phone, frame timing (Laeni's broader rope costs more to draw).
+
+## 41. Ranat's storm (5 November)
+
+The owner: "I want the strongest channellers on the boat each channelling out in 35 degree directions
+roughly to call on a storm. No more circles in the sky. This time the channellers are reaching into the
+horizon to pull water towards them that they then use complex weaves of multiple elements to explode
+into rain. They are mourning someone. We will log this in the side bar as Channelling for Ranat. One of
+the weaker channellers will call the rain using only weaves of water into the sky in very disparate
+ways." And while it was being made: "intensify the storm: one weaker channeller should add akasha to the
+ocean while another one helps her aspirate the water into weak swells that fly across the POV like rain".
+
+- storm.json "ranat": from 09:30 on 5 November, 24 hours; each visitor sees them turn to it 6 s after
+  coming. `?ranat`, `?ranat=150`, `?ranat=off`; `__ranat()` in the console. The side bar's weather row
+  reads "Channelling for Ranat" (RANAT_WORDS). While it is on the freshening gives way to it (its light
+  is gone: no circle of any kind in the sky), and everyone's everyday weaves are let go, as for the
+  freshening and the rogue's wave (no shed rings, no plumes).
+- The storm (ranatStorm in channelled-storm.ts), from the day's own weather, raised over five minutes
+  from their first bursts and relaxed by half as every storm is: the real wind raised to a storm (to
+  75 km/h plus twice the real, at most 120), gusting 1.6 times that, its sea with it, the swell up to
+  2.2 times (at most 7 m), the pressure 16 hPa down and falling, full low cloud, heavy rain as far as
+  Lantern's calls have brought it on, the haze thickening with it to 2.2 km. Weather code 65, no thunder.
+- The six (ranat.ts): Laeni straight ahead, Pardis and Manulani 35 degrees either side, Keel and Mohabat
+  70, Listener 105 to the left (out of view behind her, as Keel and Mohabat are on a 16 by 9 screen; only
+  Laeni's on a phone held upright). Each rope runs low over the sea, about two metres up, out to the
+  horizon some seven kilometres away and down into it, by her might in filaments (Laeni's about 300).
+  Each hauls: a body of water comes in along it as low spray, densest at its front, over four of the
+  real swell's periods (at least 30 s), the rope drawn taut and its light running back to the boat; some
+  1.5 to 2.4 km out (the stronger, the nearer) a sheaf of all five elements rises from it, close about the
+  water and flaring into the cloud, turning gently some one way and some the other, and bursts it: a
+  column of cloud goes up from the sea, narrow at its foot and spreading under the cloud, lit from within
+  for a moment, and a shaft of rain falls out of it, leaning downwind, for a minute and a half. Then a
+  stillness, the rope slack and lower, before the next haul: 14 s for Laeni, nearly 30 for Mohabat.
+  Their colours cooled a third of the way to grey; Laeni's white.
+- Lantern (the youngest of the eight) calls the rain from 50 s: water only, sea glass, thrown up to the
+  cloud base (450 to 900 m), never the same way twice running: a thread that frays at its top, a sheaf to
+  different places, one carried far downwind, one low over the sea far out and then steeply up, a few
+  apart at their own bearings in their own time; sometimes two close together, sometimes a long wait.
+  Each one reaching the cloud brings the rain on over the boat (`rainCalled`).
+- Loom lays akasha into the sea 36 m out on the right, her rope opening into it as a root does; Sail's
+  air goes out to it and low across the front of the boat; on each weak swell they raise (two to each real
+  swell period) a gust of the water is flung right to left across the view, a few metres up, as
+  streaks, like rain driven sideways.
+- Seen at 1280 by 720 in the in-app browser, by day at 13:00 and by night at 22:00, about two and a half
+  minutes in; no errors. On the way: the bursts at first coiled into white balls on the horizon (now a
+  sheaf flaring upward), the clouds' feet were blown kilometres along the sea (now held), rain and cloud
+  were lighter than the night sky and glowed like searchlights (now as dark as the night), and the ropes,
+  lifted with the storm's waves to the eye's own height, lay along the horizon as hooks (now two metres
+  over the water). Not seen: dawn or dusk, a phone, the first minute, Lantern's every kind of throw,
+  frame timing; the clouds by night still show as pale columns.

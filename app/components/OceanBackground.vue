@@ -73,6 +73,8 @@ const jennaRaisedNow = ref(false);
 const tsunamiNow = ref(false);
 // The freshening, and the sea breathing (fresh.ts), while it lasts.
 const freshNow = ref(false);
+// Ranat's storm (ranat.ts), while it lasts.
+const ranatNow = ref(false);
 // The whales who greet it, where they were last heard (server/api/whales.get.ts).
 const whalesLine = ref<string>();
 const captionInNavigation = useState("caption-in-navigation", () => false);
@@ -172,7 +174,7 @@ const liveFigures = computed(() => {
 
 watchEffect(() => {
 	shownAt.value = dateAtBoatHour(hour.value, pretendDate.value ?? new Date()).getTime();
-	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: tsunamiNow.value ? TSUNAMI_WORDS : freshNow.value ? FRESH_WORDS : channelled.value ? (jennaRaisedNow.value ? JENNA_WORDS : siuanRaisedNow.value ? SIUAN_WORDS : vesalRaisedNow.value ? VESAL_WORDS : fiveRaised.value && wrathRaised.value ? BOTH_WORDS : fiveRaised.value ? FIVE_WORDS : wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined, whales: channelled.value && fiveRaised.value ? whalesLine.value : undefined };
+	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: ranatNow.value ? RANAT_WORDS : tsunamiNow.value ? TSUNAMI_WORDS : freshNow.value ? FRESH_WORDS : channelled.value ? (jennaRaisedNow.value ? JENNA_WORDS : siuanRaisedNow.value ? SIUAN_WORDS : vesalRaisedNow.value ? VESAL_WORDS : fiveRaised.value && wrathRaised.value ? BOTH_WORDS : fiveRaised.value ? FIVE_WORDS : wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined, whales: channelled.value && fiveRaised.value ? whalesLine.value : undefined };
 });
 
 onMounted(async () => {
@@ -679,11 +681,29 @@ onMounted(async () => {
 	// The freshening (fresh.ts): "fresh" in storm.json, everyone turning to it for each visitor
 	// FRESH_AFTER after they come, and at it for as long as they stay; or ?fresh for this visit from now,
 	// ?fresh=300 five minutes in, ?fresh=off without it.
+	// Ranat's storm (ranat.ts, ranatStorm): "ranat" in storm.json, everyone turning to it for each visitor
+	// RANAT_AFTER after they come; or ?ranat for this visit from now, ?ranat=300 five minutes in, ?ranat=off
+	// without it. While it is on, the freshening has given way to it.
+	const ranatAsked = query.get("ranat");
+	const ranatSeconds = () => {
+		const here = (Date.now() - pageOpened) / 1000;
+		if (ranatAsked === "off") return undefined;
+		if (ranatAsked !== null) return (Number(ranatAsked) || 0) + here;
+		const byClock = ranatSince(new Date());
+		return byClock === undefined ? undefined : Math.min(byClock, here - RANAT_AFTER);
+	};
+	const ranatUp = () => {
+		const since = ranatSeconds();
+		return since === undefined ? 0 : ranatRaised(since);
+	};
+	// How far Lantern's calls have brought the rain on over the boat (ranat.ts), for the storm's figures.
+	let ranatCalled = 0;
 	const freshAsked = query.get("fresh");
 	const freshSeconds = () => {
 		const here = (Date.now() - pageOpened) / 1000;
 		if (freshAsked === "off") return undefined;
 		if (freshAsked !== null) return (Number(freshAsked) || 0) + here;
+		if (ranatSeconds() !== undefined) return undefined;
 		const byClock = freshSince(new Date());
 		return byClock === undefined ? undefined : Math.min(byClock, here - FRESH_AFTER);
 	};
@@ -710,6 +730,9 @@ onMounted(async () => {
 	const pretendNow = () => {
 		// (Until the day's figures are known there is nothing yet to raise.)
 		if (vesalSeconds() !== undefined && !realNow) return asPretended;
+		// (Ranat's storm before any other.)
+		const ranatRaise = ranatUp();
+		if (ranatRaise > 0 && realNow) return { ...relaxed(ranatStorm(realNow, ranatRaise, ranatCalled), realNow), ...asPretended };
 		const vesal = vesalFigures();
 		vesalRaisedNow.value = !!vesal;
 		// (Worsened as any storm is, storm.json "worse": 12.66 since the owner's "worse by 1166%".)
@@ -888,6 +911,10 @@ onMounted(async () => {
 	// The freshening: the strongest's light, the others making the water fresh, the sea breathing; __fresh() in the console.
 	const fresh = createFresh(scene, SCREEN_LAYER, waveUniforms);
 	(window as unknown as { __fresh?: () => string[] }).__fresh = fresh.describe;
+	// Ranat's storm: the six hauling water in from the horizon and bursting it into rain, Lantern calling
+	// the rain, Loom and Sail flinging the akasha's water across; __ranat() in the console.
+	const ranat = createRanat(scene, SCREEN_LAYER);
+	(window as unknown as { __ranat?: () => string[] }).__ranat = ranat.describe;
 	const island = createIsland(scene, waveUniforms, camera.position, query.has("island") && query.get("island") !== "off");
 	const noonAsked = query.get("noon");
 	const noonSeconds = () => (noonAsked === "off" || calmMotion ? undefined : noonAsked !== null ? (Number(noonAsked) || 0) + (Date.now() - pageOpened) / 1000 : noonSince(new Date()));
@@ -1125,7 +1152,9 @@ onMounted(async () => {
 		// (And while Jenna's storm is raised or let down.)
 		const thundering = jennaSeconds();
 		const gathering = thundering !== undefined && (thundering < 700 || (thundering > jennaHours() * 3600 - 60 && thundering < jennaHours() * 3600 + 1900));
-		if (((raising !== undefined && changing) || swelling || gathering) && stormNow() === stormOn && measured) {
+		// (And all through Ranat's storm, which follows Lantern's calls for rain.)
+		const ranatGoing = ranatSeconds() !== undefined;
+		if (((raising !== undefined && changing) || swelling || gathering || ranatGoing) && stormNow() === stormOn && measured) {
 			pretend = pretendNow();
 			conditions.value = { ...measured, ...pretend };
 			return;
@@ -1259,7 +1288,11 @@ onMounted(async () => {
 		const freshAt = calmMotion ? undefined : freshSeconds();
 		const freshBusyNow = freshAt === undefined ? 0 : freshBusy(freshAt);
 		freshNow.value = freshAt !== undefined && freshAt >= 0;
-		const droppedNow = Math.max(tsunamiBusyNow, freshBusyNow);
+		// Ranat's storm: everyone drops what they are doing for it too.
+		const ranatAt = calmMotion ? undefined : ranatSeconds();
+		const ranatBusyNow = ranatAt === undefined ? 0 : ranatBusy(ranatAt);
+		ranatNow.value = ranatAt !== undefined && ranatAt >= 0;
+		const droppedNow = Math.max(tsunamiBusyNow, freshBusyNow, ranatBusyNow);
 		// (Nor is the sky opened while the strongest is stilling it.)
 		const stillingNow = stillingBegun(new Date(), stillAsked, pageOpened, stormAsked !== null);
 		const stillingAny = stillingNow !== undefined;
@@ -1613,7 +1646,7 @@ onMounted(async () => {
 		);
 		// The weaker channellers' deep weaves round the boat, slowing it: by day or night, as much as it needs.
 		// (More of it, and more of the sea round the boat, when the strongest have taken it over.)
-		waveUniforms.deepWeave.value = (0.3 * Math.max(holdLevel, 0.6 * channelling.masters) * alive * (1 - freshBusyNow)) / steadyExposure;
+		waveUniforms.deepWeave.value = (0.3 * Math.max(holdLevel, 0.6 * channelling.masters) * alive * (1 - Math.max(freshBusyNow, ranatBusyNow))) / steadyExposure;
 		waveUniforms.deepMaster.value = channelling.masters;
 		waveUniforms.channelLoss.value = lightIsLoss;
 		waveUniforms.channelBalm.value = 0.9 * channelling.working * tending * lerp(0.5, 1, day) * alive;
@@ -1911,6 +1944,29 @@ onMounted(async () => {
 					}
 				: undefined,
 		);
+		// Ranat's storm.
+		ranat.update(
+			ranatAt !== undefined && liveOnly
+				? {
+						since: ranatAt,
+						time,
+						boat: camera.position,
+						ahead: skyAhead,
+						swellPeriod: liveOnly.swellPeriod,
+						waveHeight: liveOnly.waveHeight,
+						wind: rainWind,
+						visibility: liveOnly.visibility,
+						day: daylight,
+						gain: 1.5 / steadyExposure,
+						exposure: steadyExposure,
+						mist,
+						air: skySheath[0]!,
+						water: skySheath[1]!,
+						gold: skySheath[2]!,
+					}
+				: undefined,
+		);
+		ranatCalled = ranat.rainCalled();
 		// The freshening: the strongest's light, the others' ropes into the water, the sea breathing.
 		fresh.update(
 			freshAt !== undefined && liveOnly
@@ -2090,6 +2146,7 @@ onMounted(async () => {
 		parting.dispose();
 		tsunami.dispose();
 		fresh.dispose();
+		ranat.dispose();
 		rings.dispose();
 		plumes.dispose();
 		stilling.dispose();
