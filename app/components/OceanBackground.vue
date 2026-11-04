@@ -71,6 +71,8 @@ const siuanRaisedNow = ref(false);
 const jennaRaisedNow = ref(false);
 // The rogue's tsunami (tsunami.ts), while it lasts.
 const tsunamiNow = ref(false);
+// The freshening, and the sea breathing (fresh.ts), while it lasts.
+const freshNow = ref(false);
 // The whales who greet it, where they were last heard (server/api/whales.get.ts).
 const whalesLine = ref<string>();
 const captionInNavigation = useState("caption-in-navigation", () => false);
@@ -170,7 +172,7 @@ const liveFigures = computed(() => {
 
 watchEffect(() => {
 	shownAt.value = dateAtBoatHour(hour.value, pretendDate.value ?? new Date()).getTime();
-	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: tsunamiNow.value ? TSUNAMI_WORDS : channelled.value ? (jennaRaisedNow.value ? JENNA_WORDS : siuanRaisedNow.value ? SIUAN_WORDS : vesalRaisedNow.value ? VESAL_WORDS : fiveRaised.value && wrathRaised.value ? BOTH_WORDS : fiveRaised.value ? FIVE_WORDS : wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined, whales: channelled.value && fiveRaised.value ? whalesLine.value : undefined };
+	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: tsunamiNow.value ? TSUNAMI_WORDS : freshNow.value ? FRESH_WORDS : channelled.value ? (jennaRaisedNow.value ? JENNA_WORDS : siuanRaisedNow.value ? SIUAN_WORDS : vesalRaisedNow.value ? VESAL_WORDS : fiveRaised.value && wrathRaised.value ? BOTH_WORDS : fiveRaised.value ? FIVE_WORDS : wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined, whales: channelled.value && fiveRaised.value ? whalesLine.value : undefined };
 });
 
 onMounted(async () => {
@@ -674,6 +676,17 @@ onMounted(async () => {
 		// (Only for a visitor who came while it is on.)
 		return tsunamiSince(new Date(pageOpened)) === undefined ? undefined : here - TSUNAMI_AFTER;
 	};
+	// The freshening (fresh.ts): "fresh" in storm.json, everyone turning to it for each visitor
+	// FRESH_AFTER after they come, and at it for as long as they stay; or ?fresh for this visit from now,
+	// ?fresh=300 five minutes in, ?fresh=off without it.
+	const freshAsked = query.get("fresh");
+	const freshSeconds = () => {
+		const here = (Date.now() - pageOpened) / 1000;
+		if (freshAsked === "off") return undefined;
+		if (freshAsked !== null) return (Number(freshAsked) || 0) + here;
+		const byClock = freshSince(new Date());
+		return byClock === undefined ? undefined : Math.min(byClock, here - FRESH_AFTER);
+	};
 	const vesalFigures = () => {
 		const since = vesalSeconds();
 		return since !== undefined && realNow ? vesalStorm(realNow, vesalRaised(since), compelledNow()) : undefined;
@@ -872,6 +885,9 @@ onMounted(async () => {
 	// The rogue's tsunami, the others breaking it, and Manulani's light; __tsunami() in the console says who has which part.
 	const tsunami = createTsunami(scene, SCREEN_LAYER, waveUniforms);
 	(window as unknown as { __tsunami?: () => string[] }).__tsunami = tsunami.describe;
+	// The freshening: the strongest's light, the others making the water fresh, the sea breathing; __fresh() in the console.
+	const fresh = createFresh(scene, SCREEN_LAYER, waveUniforms);
+	(window as unknown as { __fresh?: () => string[] }).__fresh = fresh.describe;
 	const island = createIsland(scene, waveUniforms, camera.position, query.has("island") && query.get("island") !== "off");
 	const noonAsked = query.get("noon");
 	const noonSeconds = () => (noonAsked === "off" || calmMotion ? undefined : noonAsked !== null ? (Number(noonAsked) || 0) + (Date.now() - pageOpened) / 1000 : noonSince(new Date()));
@@ -1239,6 +1255,11 @@ onMounted(async () => {
 		const tsunamiAt = calmMotion ? undefined : tsunamiSeconds();
 		const tsunamiBusyNow = tsunamiAt === undefined ? 0 : tsunamiBusy(tsunamiAt);
 		tsunamiNow.value = tsunamiAt !== undefined && tsunamiAt >= 0 && tsunamiAt < TSUNAMI_LASTS;
+		// The freshening: everyone drops what they are doing for it too, and stays at it.
+		const freshAt = calmMotion ? undefined : freshSeconds();
+		const freshBusyNow = freshAt === undefined ? 0 : freshBusy(freshAt);
+		freshNow.value = freshAt !== undefined && freshAt >= 0;
+		const droppedNow = Math.max(tsunamiBusyNow, freshBusyNow);
 		// (Nor is the sky opened while the strongest is stilling it.)
 		const stillingNow = stillingBegun(new Date(), stillAsked, pageOpened, stormAsked !== null);
 		const stillingAny = stillingNow !== undefined;
@@ -1424,7 +1445,7 @@ onMounted(async () => {
 		const steadyExposure = exposure * lerp(1, lerp(2.5, 0.6, daylight), fury);
 		// (AgX is flatter than ACES was: a third of a stop more by day, none by night.)
 		renderer.toneMappingExposure = steadyExposure * (1 + 5 * flash) * (1 + 4 * moment.white * moment.veil) * lerp(1.32, 1, nightfall);
-		grade.update({ day: daylight, night: nightfall * (1 - noonHeld), sunElevation: lerp(sunHeightNow, NOON_ELEVATION, noonHeld), storm: stormLevel.value, exposure: renderer.toneMappingExposure, film: filmLook.value });
+		grade.update({ day: daylight, night: nightfall * (1 - noonHeld), sunElevation: lerp(sunHeightNow, NOON_ELEVATION, noonHeld), storm: stormLevel.value, exposure: renderer.toneMappingExposure, film: filmLook.value, lit: freshAt !== undefined && liveOnly ? freshLight(freshAt) : 0 });
 		twilightUniforms.uTwilightLevel.value = twilightGlow / steadyExposure;
 		// The air it is worked out from is the air at the boat (not during the storm's story, which is staged).
 		const skyAir = twilightAir(liveOnly);
@@ -1524,10 +1545,10 @@ onMounted(async () => {
 			// Each channeller's own hand, from their temperament (the plan's first part): try it with ?hands.
 			hands: query.has("hands"),
 			// (Nobody links at dawn while the rogue's wave comes, though Manulani's light passes through one.)
-			gathering: gathering * (1 - tsunamiBusyNow),
+			gathering: gathering * (1 - droppedNow),
 			// Soft against a light sky, fine against a dark one.
 			soften: skyLight,
-			tending: tending * alive * (1 - tsunamiBusyNow),
+			tending: tending * alive * (1 - droppedNow),
 			day,
 			// What is really there for them to read (a barometer moving 1.5 hPa in three hours is "fast").
 			pressure: liveOnly ? THREE.MathUtils.clamp(liveOnly.pressureTrend / 1.5, -1, 1) : 0,
@@ -1561,12 +1582,12 @@ onMounted(async () => {
 			// (All twelve are in the calming while it lasts, and rest for hours after it.)
 			// (And while the strongest stills the weather the twelve stand back, coming back over the
 			// half hour after it is done.)
-			strength: Math.max(darkness, controlLevel, gathering) * alive * (1 - (holding?.quiet ?? 0)) * (calming ? THREE.MathUtils.smoothstep(calming.after, 2, 10) : 1) * standBack * (1 - (leane?.watching ?? 0)) * (mourningOn || actOn ? 0 : 1) * (1 - tsunamiBusyNow),
+			strength: Math.max(darkness, controlLevel, gathering) * alive * (1 - (holding?.quiet ?? 0)) * (calming ? THREE.MathUtils.smoothstep(calming.after, 2, 10) : 1) * standBack * (1 - (leane?.watching ?? 0)) * (mourningOn || actOn ? 0 : 1) * (1 - droppedNow),
 			// More light by day, when it has a bright sea to show against.
 			// (And more under a moon, whose light on the sea would otherwise drown it.)
 			gain: (0.3 + 0.6 * daylight + 0.6 * nightfall * (1 - darkness)) / steadyExposure,
 			// (Everything dropped at once for the rogue's wave: let go, not left to linger.)
-			dropped: tsunamiBusyNow,
+			dropped: droppedNow,
 		});
 		if (showControls.value && Math.floor(time) !== toldAt) {
 			toldAt = Math.floor(time);
@@ -1579,20 +1600,20 @@ onMounted(async () => {
 		});
 		// The serpents, from the sea's real heat (plumes.ts).
 		plumes.update(
-			liveOnly && !calmMotion && tsunamiBusyNow < 0.5
+			liveOnly && !calmMotion && droppedNow < 0.5
 				? { conditions: liveOnly, time, boat: camera.position, ahead: skyAhead, wind: rainWind, sea: seaAtBoat, day: daylight, gain: 1.5 / steadyExposure, water: embroideryTints[0]!, gold: embroideryTints[2]! }
 				: undefined,
 			delta,
 		);
 		// What the flow spends it sheds as small rings off its far reach (rings.ts).
 		rings.update(
-			calmMotion || tsunamiBusyNow > 0.5
+			calmMotion || droppedNow > 0.5
 				? undefined
 				: { time, delta, working: channelling.working * alive, energy: sea, spentAt: channelling.flowPoint, boat: camera.position, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, white: lerp(0.5, 3.5, daylight) / steadyExposure },
 		);
 		// The weaker channellers' deep weaves round the boat, slowing it: by day or night, as much as it needs.
 		// (More of it, and more of the sea round the boat, when the strongest have taken it over.)
-		waveUniforms.deepWeave.value = (0.3 * Math.max(holdLevel, 0.6 * channelling.masters) * alive) / steadyExposure;
+		waveUniforms.deepWeave.value = (0.3 * Math.max(holdLevel, 0.6 * channelling.masters) * alive * (1 - freshBusyNow)) / steadyExposure;
 		waveUniforms.deepMaster.value = channelling.masters;
 		waveUniforms.channelLoss.value = lightIsLoss;
 		waveUniforms.channelBalm.value = 0.9 * channelling.working * tending * lerp(0.5, 1, day) * alive;
@@ -1606,7 +1627,8 @@ onMounted(async () => {
 		// (The lamps do not snap on and off with the weaving, which made the water at the bottom of
 		// the page turn brown and back in an instant. Their light is lost in the weaving's over two
 		// or three seconds as it runs out, and comes back over six once the weaving has gone.)
-		const lampWanted = nightfall * (1 - channelling.anything);
+		// (Not under the strongest's light.)
+		const lampWanted = nightfall * (1 - channelling.anything) * (1 - freshBusyNow);
 		lampLevel += (lampWanted - lampLevel) * Math.min(1, delta / (lampWanted > lampLevel ? 6 : 2.5));
 		waveUniforms.boatLamp.value = (0.01344 * lampLevel * alive) / steadyExposure;
 		waveUniforms.weavePull.value = formed * (0.6 + 0.8 * fury);
@@ -1889,6 +1911,26 @@ onMounted(async () => {
 					}
 				: undefined,
 		);
+		// The freshening: the strongest's light, the others' ropes into the water, the sea breathing.
+		fresh.update(
+			freshAt !== undefined && liveOnly
+				? {
+						since: freshAt,
+						time,
+						boat: camera.position,
+						ahead: skyAhead,
+						swellPeriod: liveOnly.swellPeriod,
+						wind: rainWind,
+						visibility: liveOnly.visibility,
+						day: daylight,
+						gain: 1.5 / steadyExposure,
+						exposure: steadyExposure,
+						air: skySheath[0]!,
+						water: skySheath[1]!,
+						gold: skySheath[2]!,
+					}
+				: undefined,
+		);
 		// The six's noon: their sun, and their ropes up into it.
 		const noonAt = noonSeconds();
 		noonByThem = noonAt === undefined ? 0 : noonShare(noonAt, noonAsked !== null ? undefined : noonLetGo(new Date()));
@@ -2047,6 +2089,7 @@ onMounted(async () => {
 		jenna.dispose();
 		parting.dispose();
 		tsunami.dispose();
+		fresh.dispose();
 		rings.dispose();
 		plumes.dispose();
 		stilling.dispose();

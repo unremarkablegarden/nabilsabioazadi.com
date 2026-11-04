@@ -976,3 +976,50 @@ this to look more like this but muted like the fuji film landscapes".
 - Seen once in headless Brave at 1280 by 720: the healing flow at 13:00 and 22:00, the tsunami about 70 s
   in. By day the weaves' colour now hardly shows at all; by night they were already near grey. Not at
   dawn, dusk or in a storm, not on a phone.
+
+## 39. Fresh water round the boat; the strongest's light; the sea breathing (4 November)
+
+The owner, at 22:30 on the 4th: "I need all the channellers to focus on something important immediately.
+They need to create freshwater around the boat by desalinating it using all of the elements to do so. It
+will make the water around the boat seem dappled. To help the other channellers work, one of the strongest
+— me — will create a light in the sky using a single, tight weave of akasha, air and fire that looks almost
+blue-violet but is ultimately almost white. While they do this, for the first time, we will see the ocean
+'breathe'. This means that we will see their collective engagement with the One Power create waves that
+emanate from the boat. The night sky will be lit up but not quite like day time. It will be like a torch
+that only shines light on 300m radius around the boat." `storm.json` `"fresh": { "from": ..., "hours": 24 }`:
+each visitor sees everyone turn to it 6 s after they come (`FRESH_AFTER`), and they stay at it while the
+visitor stays; `?fresh` for this visit from now, `?fresh=150` two and a half minutes in, `?fresh=off`;
+`__fresh()` in the console says who works where and how fresh. The menu's weather row reads "Channelled:
+fresh water round the boat, the sea breathing" (my words; the owner gave none).
+
+- **Everyone drops what she is doing** (`freshBusy`, as for the rogue's wave): the everyday weaves fade out
+  over three seconds and are not drawn; the dawn link, thermals, shed rings, the deep weaves slowing the
+  boat and the boat's lamps all stand aside while it lasts.
+- **The strongest's light** (`fresh.ts`), first, for the others to work by: one rope from their hands up
+  into a small point of light 470 m ahead, a little right, 150 m up (some 18° up, in the view), three
+  strands (akasha, air, fire) wound tight about one another, the fire burning blue-white as the hottest
+  fire does; each strand's flank blue-violet and its heart white. Its light is a torch's beam: the cone from
+  the point to the circle 300 m round the boat (`torch`, `torchFoot` in `gerstner-waves.ts`), soft-edged by
+  30 m; it lights each facet of the sea by how squarely it faces it and by the inverse square of distance
+  (0.5 at the boat, against Manulani's near-noon 0.9), with its glitter towards it; beyond the circle the
+  sea is night. The air in the beam gives it back (single scattering, Henyey–Greenstein g 0.75, summed in
+  equal steps of the angle at the light, more in thick air by the measured visibility), so the sky over
+  the boat is lit, brightest towards the light and dark above it, never as day; drawn in the water's mirror
+  too. Under it the eye is lifted partly out of its night (`lit` in `grade.ts`), so colour is seen again.
+- **The others** (all thirteen, Manulani and the rogue included), each at a place 80 to 240 m out by her own
+  side of the boat, the mightiest nearest ahead, Manulani straight ahead: a rope low over the sea and into it
+  at a slant, opening as it goes in, its filaments all five elements (water draws the salt out, earth takes
+  it down, fire warms, air lifts, akasha binds), swelling a little with each of their pulls. Thin steam
+  rises off each place, spreads level and drifts downwind.
+- **The fresh water** (`sweet` in the water shader): spreading from each place, running together over five
+  minutes to the whole 300 m; never mixed in, but lying in bodies on the salt (fresher and saltier side by
+  side, carried round and back by each swell), so the sea is dappled: the fresh bodies paler and greener
+  under the light, the salt a deeper blue, the fronts between them a little brighter and smoothed of
+  ripples. Nothing painted on the sea: each body takes the light as its water would.
+- **The sea breathing** (`breathRing`): their pulls, in time with the real swell's period (taken as they
+  begin, 8 to 13 s), are one beat at the boat, and rings of swell run out from it as deep water answers any
+  rising and falling: as long as that period makes them, their front going out at half their speed, lowering
+  as 1/√r, rising over 26 s as they all join; 1.6 m at the boat (no steeper than 0.07, so about 1.1 m at
+  8 s), and the boat rides it.
+- Seen once at 1280 by 720 in the in-app browser, at night (25 s and 150 s in) and at 13:00; not at dawn or
+  dusk, not on a phone, not timed. The breathing was checked in numbers (`__fresh()`), not watched in motion.

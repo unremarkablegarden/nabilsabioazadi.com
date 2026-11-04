@@ -544,6 +544,16 @@ export function tsunamiSince(now: Date) {
 	return since >= 0 && since < (tsunami.hours ?? 24) * 3600 ? since : undefined;
 }
 
+// The freshening, and the sea breathing (fresh.ts): storm.json "fresh": { "from": ISO time, "hours": 24 },
+// seconds since it began, while it lasts.
+export const FRESH_WORDS = "Channelled: fresh water round the boat, the sea breathing";
+export function freshSince(now: Date) {
+	const fresh = (stormSwitch as { fresh?: { from: string | null; hours?: number } }).fresh;
+	if (!fresh?.from) return undefined;
+	const since = (now.getTime() - timeOf(fresh.from)) / 1000;
+	return since >= 0 && since < (fresh.hours ?? 24) * 3600 ? since : undefined;
+}
+
 // Noon at night (noon.ts): storm.json "noon": { "from": ISO time, "until": ISO time }, seconds
 // since it began, and since they let it go (undefined until then).
 export function noonSince(now: Date) {

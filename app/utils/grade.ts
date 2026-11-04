@@ -105,16 +105,19 @@ export interface GradeFrame {
 	exposure: number;
 	// 0..1 the film look (?film=off for none).
 	film?: number;
+	// 0..1 how far a light woven by night lifts the eye out of its night (fresh.ts): under it colour is
+	// seen again, as under any bright lamp; the dark beyond it is graded as night still.
+	lit?: number;
 }
 
 export function createGradePass() {
 	const pass = new ShaderPass(shader);
 	const u = pass.uniforms as unknown as typeof shader.uniforms;
 	const { smoothstep, lerp } = THREE.MathUtils;
-	const update = ({ day, night, sunElevation, storm, exposure, film = 0 }: GradeFrame) => {
+	const update = ({ day, night, sunElevation, storm, exposure, film = 0, lit = 0 }: GradeFrame) => {
 		const golden = smoothstep(sunElevation, -1, 3) * (1 - smoothstep(sunElevation, 6, 12));
 		const blue = smoothstep(sunElevation, -10, -4) * (1 - smoothstep(sunElevation, -2, 1));
-		u.uPhotopic.value = lerp(1, 0.45, night) * (1 - 0.3 * blue * (1 - night));
+		u.uPhotopic.value = lerp(1, 0.45, night * (1 - 0.6 * lit)) * (1 - 0.3 * blue * (1 - night));
 		u.uSaturation.value = lerp(lerp(1.15, 0.95, night), 0.7, storm * 0.6) * (1 - 0.05 * blue);
 		u.uContrast.value = lerp(1.08, 1.1, night) * lerp(1, 0.95, storm);
 		u.uWarmth.value = 0.06 * golden * day - 0.04 * blue - 0.03 * storm;

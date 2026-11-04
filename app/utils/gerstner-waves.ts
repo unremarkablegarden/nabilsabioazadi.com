@@ -250,6 +250,38 @@ export function strikeRing(q: THREE.Vector4, x: number, z: number, time: number)
 	return { a, f, k, dirX: r > 1 ? rx / r : 0, dirZ: r > 1 ? rz / r : 0 };
 }
 
+// The sea breathing (fresh.ts). While they all work the water about the boat together, their pulls,
+// each in time with the real swell, are one slow beat at the boat; and the sea answers it as deep
+// water answers anything that rises and falls in it: rings of swell running out from the boat, as
+// long as deep water makes a wave of that period (g T² / 2π), their front going out at half their
+// speed, as a wave's energy goes; lowering as one over the root of how far they have spread round;
+// the sea at the boat itself rising and falling with each. Each ring is as high as their work was
+// when it left the boat, so it is felt at the boat first and seen further out later. No steeper than
+// a long, glassy swell. (The same in the water shader, breathRing.)
+//   breath:     the boat (x, z), when it began (in waveTime), and its height at the boat at the full (m)
+//   breathForm: its wavenumber and angular frequency, and when (s after it began) it rose from and to its full
+export const BREATH_SOURCE = 60;
+const BREATH_STEEP = 0.07;
+export function breathRing(uniforms: GerstnerUniforms, x: number, z: number, time: number) {
+	const q = uniforms.breath.value;
+	const form = uniforms.breathForm.value;
+	const tau = time - q.z;
+	if (q.w <= 0 || tau <= 0) return undefined;
+	const rx = x - q.x;
+	const rz = z - q.y;
+	const r = Math.hypot(rx, rz);
+	const k = form.x;
+	const omega = form.y;
+	const rose = THREE.MathUtils.smoothstep(tau - (r * 2 * k) / omega, form.z, form.w);
+	const a = Math.min(q.w * rose * Math.sqrt(BREATH_SOURCE / (BREATH_SOURCE + r)) * (1 - THREE.MathUtils.smoothstep(r, 2500, 4500)), BREATH_STEEP / k);
+	return { a, f: k * r - omega * tau, k, dirX: r > 1 ? rx / r : 0, dirZ: r > 1 ? rz / r : 0 };
+}
+
+// The freshening (fresh.ts): how many places they work the water at, and how far round the boat
+// the strongest's light falls and the water is made fresh (m).
+export const FRESH_PLACES = 13;
+export const FRESH_RADIUS = 300;
+
 // The rogue's tsunami (tsunami.ts). A wall of water raised by the rogue some kilometres off and
 // running at the boat, drawn as a height on the sea (nothing in it folds over): its crest a long arc
 // about a centre far beyond it, so that it lies near straight across the view and curves away at its
@@ -306,6 +338,8 @@ export function crestLimitFor(uniforms: GerstnerUniforms) {
 	for (const w of uniforms.lensWaves.value) sum += 0.5 * w.z * uniforms.lensAmount.value * ((2 * Math.PI) / w.w);
 	// (Jenna's rings, at their steepest, each with its sway at 0.6.)
 	for (const q of uniforms.strikeRings.value) if (q.w > 0) sum += 0.6 * 0.12;
+	// (And the sea's breathing, at its steepest.)
+	if (uniforms.breath.value.w > 0) sum += 0.6 * BREATH_STEEP;
 	sum *= 1 + 0.5 * uniforms.lensCurrent.value.w;
 	return Math.min(1, 0.8 / Math.max(sum, 1e-6));
 }
@@ -343,6 +377,12 @@ export function seaSurfaceAt(uniforms: GerstnerUniforms, x: number, z: number, t
 			dx += ring.dirX * ring.a * 0.6 * Math.cos(ring.f);
 			dz += ring.dirZ * ring.a * 0.6 * Math.cos(ring.f);
 			h += ring.a * Math.sin(ring.f);
+		}
+		const breathing = breathRing(uniforms, px, pz, time);
+		if (breathing) {
+			dx += breathing.dirX * breathing.a * 0.6 * Math.cos(breathing.f);
+			dz += breathing.dirZ * breathing.a * 0.6 * Math.cos(breathing.f);
+			h += breathing.a * Math.sin(breathing.f);
 		}
 		h += tsunamiHeight(uniforms, px, pz);
 		return { dx: dx * limit, dz: dz * limit, h };
@@ -523,6 +563,20 @@ export interface GerstnerUniforms {
 	tsuShape: THREE.IUniform<THREE.Vector4>;
 	tsuEdges: THREE.IUniform<number[]>;
 	tsuRemain: THREE.IUniform<THREE.Vector2[]>;
+	// The sea breathing (fresh.ts, breathRing): the boat (x, z), when it began (waveTime) and its
+	// height at the boat (m); its wavenumber and angular frequency, and when it rose from and to its full.
+	breath: THREE.IUniform<THREE.Vector4>;
+	breathForm: THREE.IUniform<THREE.Vector4>;
+	// The strongest's light (fresh.ts): where it is (world) and how bright at the boat, before tone
+	// mapping; the boat (x, z), how far round it the beam falls (m) and how soft its edge (m); its
+	// colour, and its distance from the boat squared (m²).
+	torch: THREE.IUniform<THREE.Vector4>;
+	torchFoot: THREE.IUniform<THREE.Vector4>;
+	torchTint: THREE.IUniform<THREE.Vector4>;
+	// The water made fresh: for each place they work, where (x, z), how far it has spread (m) and
+	// 0..1 how fresh; and 0..1 how far it has run together over the whole of the water round the boat.
+	freshAt: THREE.IUniform<THREE.Vector4[]>;
+	freshWhole: THREE.IUniform<number>;
 }
 
 const pressedChunk = /* glsl */ `
@@ -751,6 +805,26 @@ void strikeRing( vec4 q, vec2 p, inout vec3 offset, inout vec3 tangent, inout ve
 	binormal += vec3( - 0.6 * d.x * d.y * s * sin( f ), d.y * s * cos( f ), - 0.6 * d.y * d.y * s * sin( f ) );
 	crest += 0.5 * s * sin( f );
 }
+// The sea breathing, as breathRing in gerstner-waves.ts.
+uniform vec4 breath;
+uniform vec4 breathForm;
+void breathRing( vec2 p, inout vec3 offset, inout vec3 tangent, inout vec3 binormal, inout float crest ) {
+	float tau = waveTime - breath.z;
+	if ( breath.w <= 0.0 || tau <= 0.0 ) return;
+	vec2 rel = p - breath.xy;
+	float r = length( rel );
+	float k = breathForm.x;
+	float rose = smoothstep( breathForm.z, breathForm.w, tau - r * 2.0 * k / breathForm.y );
+	float a = min( breath.w * rose * sqrt( ${BREATH_SOURCE.toFixed(1)} / ( ${BREATH_SOURCE.toFixed(1)} + r ) ) * ( 1.0 - smoothstep( 2500.0, 4500.0, r ) ), ${BREATH_STEEP} / k );
+	if ( a < 0.002 ) return;
+	float f = k * r - breathForm.y * tau;
+	vec2 d = r > 1.0 ? rel / r : vec2( 0.0 );
+	float s = a * k;
+	offset += vec3( 0.6 * d.x * a * cos( f ), a * sin( f ), 0.6 * d.y * a * cos( f ) );
+	tangent += vec3( - 0.6 * d.x * d.x * s * sin( f ), d.x * s * cos( f ), - 0.6 * d.x * d.y * s * sin( f ) );
+	binormal += vec3( - 0.6 * d.x * d.y * s * sin( f ), d.y * s * cos( f ), - 0.6 * d.y * d.y * s * sin( f ) );
+	crest += 0.3 * s * sin( f );
+}
 vec2 windFrame( vec2 p ) {
 	return vec2( - windHeading.y * p.x + windHeading.x * p.y, - dot( windHeading, p ) );
 }
@@ -864,6 +938,8 @@ vec3 gerstner( vec3 p, out vec3 normal, out float crest, out float gust ) {
 	}
 	// Jenna's swells, running out from where each channelled bolt met the sea.
 	for ( int i = 0; i < ${STRIKE_RINGS}; i ++ ) strikeRing( strikeRings[ i ], p.xz, offset, tangent, binormal, crest );
+	// And the sea breathing out from the boat while they make its water fresh.
+	breathRing( p.xz, offset, tangent, binormal, crest );
 	// And Leane's four drive a current against the swell there: waves meeting a current shorten
 	// and stand up (as off the Agulhas), so the sea about the place grows taller and sheerer, and
 	// breaks. (Never at the boat.)
@@ -1028,6 +1104,19 @@ ${pressedChunk}
 ${stillChunk}
 uniform float boatLamp;
 uniform vec4 manuLight;
+uniform vec4 torch;
+uniform vec4 torchFoot;
+uniform vec4 torchTint;
+uniform vec4 freshAt[ ${FRESH_PLACES} ];
+uniform float freshWhole;
+// Smooth noise for the bodies of fresh and salt water, 0..1.
+float sweetHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
+float sweetNoise( vec2 p ) {
+	vec2 i = floor( p );
+	vec2 f = fract( p );
+	f = f * f * ( 3.0 - 2.0 * f );
+	return mix( mix( sweetHash( i ), sweetHash( i + vec2( 1.0, 0.0 ) ), f.x ), mix( sweetHash( i + vec2( 0.0, 1.0 ) ), sweetHash( i + vec2( 1.0, 1.0 ) ), f.x ), f.y );
+}
 uniform float deepWeave;
 uniform float deepMaster;
 ${channelPathChunk}
@@ -1094,8 +1183,38 @@ const fragmentNormal = /* glsl */ `
 		vec2 late = texture2D( normalSampler, place / 21.0 + 0.41 - current * fract( beat + 0.5 ) * 0.12 ).xy;
 		noise.xy += ( mix( early, late, abs( 2.0 * beat - 1.0 ) ) - 0.5 ) * 2.2 * ( fresh + meeting ) * ( 1.0 - smoothstep( 500.0, 1500.0, fromEye ) );
 	}
+	// The water they are making fresh round the boat (fresh.ts). What they make is not mixed in at once:
+	// fresh water is lighter than salt and lies on it in bodies of its own, as a river's water lies on
+	// the sea off its mouth, fresher and saltier side by side, carried round and back by each swell as
+	// the ripples are and turning over slowly; so the sea there is dappled, and nothing is painted on it:
+	// each body takes the light as its own water does (below). Where two bodies meet a front forms, and
+	// the ripples are smoothed along it, as along any front between waters.
+	float sweet = 0.0;
+	float sweetFront = 0.0;
+	if ( freshWhole > 0.0 ) {
+		vec2 fromBoat_ = vRest - torchFoot.xy;
+		float round_ = length( fromBoat_ );
+		if ( round_ < ${(FRESH_RADIUS * 1.3).toFixed(1)} ) {
+			float made = 0.0;
+			for ( int i = 0; i < ${FRESH_PLACES}; i ++ ) {
+				vec4 f = freshAt[ i ];
+				if ( f.w <= 0.0 ) continue;
+				vec2 off = vRest - f.xy;
+				made += f.w * exp( - dot( off, off ) / max( f.z * f.z, 1.0 ) );
+			}
+			made = max( min( made, 1.0 ), freshWhole * ( 1.0 - smoothstep( ${(FRESH_RADIUS * 0.8).toFixed(1)}, ${(FRESH_RADIUS * 1.15).toFixed(1)}, round_ ) ) );
+			// Broad bodies with smaller ones within and between them, each drifting and turning its own way.
+			vec2 q = vRest + 18.0 * vec2( sweetNoise( vRest / 70.0 + waveTime * 0.004 ), sweetNoise( vRest / 70.0 + 5.2 - waveTime * 0.003 ) );
+			float body = 0.55 * sweetNoise( q / 38.0 + vec2( waveTime * 0.006, 0.0 ) ) + 0.3 * sweetNoise( q / 15.0 - vec2( 0.0, waveTime * 0.011 ) + 3.1 ) + 0.15 * sweetNoise( q / 6.0 + 7.7 );
+			// How much of the water is fresh rises with how much they have made, but never all of it: it is
+			// dappled while it lasts.
+			float level = mix( 0.22, 0.64, made );
+			sweet = ( 1.0 - smoothstep( level - 0.02, level + 0.02, body ) ) * smoothstep( 0.02, 0.15, made );
+			sweetFront = exp( - pow( ( body - level ) / 0.012, 2.0 ) ) * smoothstep( 0.02, 0.2, made ) * ( 1.0 - smoothstep( 300.0, 900.0, fromEye ) );
+		}
+	}
 	float slick = smoothstep( 0.55, 0.95, 0.5 + 0.5 * sin( place.x * 0.011 + place.y * 0.021 - waveTime * 0.22 ) );
-	float rippled = 1.5 * ripple * mix( 1.0, mix( 0.4, 2.0, vGust ), gustiness ) * ( 1.0 - 0.5 * internalWaves * slick );
+	float rippled = 1.5 * ripple * mix( 1.0, mix( 0.4, 2.0, vGust ), gustiness ) * ( 1.0 - 0.5 * internalWaves * slick ) * ( 1.0 - 0.6 * sweetFront );
 	// The place as the wind sees it (x across the wind, y against it), for what the wind carries.
 	// (The ripples lie on the water where it came from, before the waves moved it, so each swell carries them
 	// round and back as it passes; and they gather on the face a wave turns to the wind and at its crest, and thin behind it.)
@@ -1395,6 +1514,32 @@ const fragmentFoam = /* glsl */ `
 		vec3 bounce = reflect( - eyeDirection, surfaceNormal );
 		outgoingLight += noon * manuLight.w * fall * ( 1.5 * pow( max( dot( bounce, toward ), 0.0 ), 600.0 ) ) * reflectance * ( 1.0 - foamMask );
 	}
+
+	// The fresh water by any light: a little paler and greener than the salt beside it.
+	outgoingLight *= mix( vec3( 1.0 ), vec3( 0.88, 1.06, 1.02 ), 0.4 * sweet * ( 1.0 - reflectance ) * ( 1.0 - foamMask ) );
+	// The strongest's light (fresh.ts): a small woven point of light in the sky ahead, shaped as a torch's
+	// beam is, so that it falls only on the sea within torchFoot.z of the boat, its edge soft as a beam's
+	// is. It lights the sea as any bright point does: each place by how squarely it faces it, and by the
+	// inverse square of how far it is (given here as a share of the light at the boat), so the faces of
+	// the waves turned to it are lit and the far faces stay dark, and its glitter runs over the water
+	// towards it. The water gives it back from within as its own water does: the fresh bodies paler and
+	// greener, the salt a deeper blue, a little more along the fronts between them.
+	if ( torch.w > 0.0 ) {
+		vec2 fromBoat_ = worldPosition.xz - torchFoot.xy;
+		float beam = 1.0 - smoothstep( torchFoot.z - torchFoot.w, torchFoot.z + torchFoot.w, length( fromBoat_ ) );
+		if ( beam > 0.0 ) {
+			vec3 toLight = torch.xyz - worldPosition.xyz;
+			float r2 = dot( toLight, toLight );
+			vec3 toward = toLight * inversesqrt( r2 );
+			float fall = beam * torch.w * torchTint.w / r2;
+			float facing = max( dot( surfaceNormal, toward ), 0.0 );
+			vec3 within = mix( vec3( 0.02, 0.07, 0.17 ), vec3( 0.06, 0.17, 0.15 ), sweet ) + vec3( 0.05, 0.08, 0.08 ) * sweetFront;
+			outgoingLight += torchTint.rgb * fall * facing * ( within * ( 1.0 - reflectance ) + 0.55 * foamMask );
+			outgoingLight += torchTint.rgb * vec3( 0.12, 0.8, 0.75 ) * 0.1 * fall * facing * thinWater * ( 1.0 - reflectance );
+			vec3 bounce = reflect( - eyeDirection, surfaceNormal );
+			outgoingLight += torchTint.rgb * fall * ( 1.5 * pow( max( dot( bounce, toward ), 0.0 ), 600.0 ) + 0.04 * pow( max( dot( bounce, toward ), 0.0 ), 30.0 ) ) * reflectance * ( 1.0 - foamMask );
+		}
+	}
 `;
 
 export function replaceOrThrow(source: string, search: string, replacement: string) {
@@ -1482,6 +1627,13 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		tsuShape: { value: new THREE.Vector4() },
 		tsuEdges: { value: new Array<number>(TSUNAMI_PARTS).fill(0) },
 		tsuRemain: { value: Array.from({ length: TSUNAMI_PARTS }, () => new THREE.Vector2(1, 0)) },
+		breath: { value: new THREE.Vector4() },
+		breathForm: { value: new THREE.Vector4(0.04, 0.63, 0, 1) },
+		torch: { value: new THREE.Vector4() },
+		torchFoot: { value: new THREE.Vector4(0, 0, FRESH_RADIUS, 30) },
+		torchTint: { value: new THREE.Vector4(1, 1, 1, 1) },
+		freshAt: { value: Array.from({ length: FRESH_PLACES }, () => new THREE.Vector4()) },
+		freshWhole: { value: 0 },
 	};
 	useDialSea(uniforms);
 	Object.assign(material.uniforms, uniforms, { giantWaves: { value: GIANT_WAVES } });
