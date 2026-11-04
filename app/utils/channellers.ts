@@ -37,7 +37,7 @@ import { CHANNELLERS, channelPathChunk } from "./channel-path";
 import type { GerstnerUniforms } from "./gerstner-waves";
 import { SIX_STRONGER, TER_ANGREAL } from "./psyche";
 import { pathPassChunk, pathsShared, ribbonPaths, THREAD_PATH } from "./ribbon-paths";
-import { pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
+import { filmLook, pixelRatio, ribbonShaderChunk, stripIndices, unplaced, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 // What the weaving looks like follows the owner's reference (the women channelling together in
 // The Wheel of Time): not a few drawn lines but a great many hair-fine filaments streaming
@@ -807,11 +807,13 @@ export const ELEMENT_COLOURS = { air: "#9e7bf3", water: "#00b0a2", akasha: "#e0b
 // During a channelled storm, graded (the owner, 15 October): the same three families, each nearer
 // a grey of its own lightness. Air a dusk lavender, water sea glass, akasha old gold.
 export const GRADED_COLOURS = { air: "#8e8ac4", water: "#4f978e", akasha: "#c3a574", strongest: "#0050cb" };
-// The film look (the owner, 4 November, with a cross-processed photograph of wheat under a turquoise
-// sky; for everyone since, ?film=off for the colours above): the warm elements stand against the cool as that wheat against that sky. Akasha the
-// wheat's gold, water the sky's turquoise, air a cooler periwinkle so that the two cool ones stay apart.
-// (Each weave's shades across it are graded too: filmShaderChunk in weave.ts.)
-export const FILM_COLOURS = { air: "#7f95f0", water: "#1fb4c6", akasha: "#eda44a", strongest: "#0050cb" };
+// The film look (the owner, 4 November; for everyone, ?film=off for the colours above): first the wheat's
+// gold, the sky's turquoise and a periwinkle, from a cross-processed photograph, which the owner found
+// "too gamey"; now the same three families muted as the owner's Fuji landscapes are, each nearer a grey
+// of its own lightness, as the strands of the television Wheel of Time's channelling are by the time
+// their colour has fallen away from their white hearts. Air a dusty lavender, water a grey sea glass,
+// akasha a pale old gold. (Each strand's heart is whitened too: filmShaderChunk in weave.ts.)
+export const FILM_COLOURS = { air: "#9590c0", water: "#64a0a4", akasha: "#cba96e", strongest: "#0050cb" };
 export type ElementColours = typeof ELEMENT_COLOURS;
 
 // By day: how much more of itself a weave of colour needs than one of light, how deep that
@@ -828,6 +830,7 @@ uniform float uSoften;
 uniform float uWhite;
 uniform float uDay;
 uniform float uGraded;
+uniform float uFilm;
 varying vec3 vTint;
 varying float vAlpha;
 varying float vEdge;
@@ -845,7 +848,10 @@ void main() {
 	float across = abs( vEdge ) * vWide;
 	float edge = mix( 1.0 - smoothstep( 0.35, 1.0, across ), pow( max( 1.0 - across * across, 0.0 ), 2.0 ), vSoft );
 	float amount = clamp( edge * vAlpha, 0.0, 1.0 );
-	gl_FragColor = vec4( vTint * uGain, 1.0 );
+	// (The film look: a filament's heart a warm white of its own brightness, its colour in what falls away
+	// to each side, as in the strands of light the owner sent; not a veil's.)
+	float heart = uFilm * 0.6 * ( 1.0 - smoothstep( 0.0, 0.5, across ) ) * ( 1.0 - vSoft );
+	gl_FragColor = vec4( mix( vTint, vec3( max( max( vTint.r, vTint.g ), vTint.b ) ) * vec3( 1.0, 0.97, 0.92 ), heart ) * uGain, 1.0 );
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 	// A weave is light, and is added to what is behind it; so against a bright sky it cannot be
@@ -867,7 +873,8 @@ void main() {
 	// threads must carry the colour themselves.)
 	// (Its element's colour carried a little further into the thread itself since 23 October: faint,
 	// but plainly air, water or akasha.)
-	vec3 body = mix( mix( mix( vec3( 1.0 ), vSheath, 0.58 ), mix( hue * hue, hue, uGraded ), 0.55 ) * 0.96, pale, vWhite ) * uWhite;
+	// (The film look: the thread whiter, and its hue not deepened, so that the sheath beside it carries the colour.)
+	vec3 body = mix( mix( mix( vec3( 1.0 ), vSheath, 0.58 * ( 1.0 - 0.45 * uFilm ) ), mix( hue * hue, hue, max( uGraded, uFilm ) ), 0.55 * ( 1.0 - 0.4 * uFilm ) ) * 0.96, pale, vWhite ) * uWhite;
 	float solid = max( vWhite, uDay );
 	vec3 colour = mix( gl_FragColor.rgb, body, solid ) * amount;
 	float cover = amount * solid;
@@ -1532,6 +1539,7 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		uTempo: { value: new THREE.Vector4() },
 		uTints: { value: TINTS },
 		uGraded: { value: 0 },
+		uFilm: filmLook,
 		uElements: { value: ELEMENTS },
 		uBaseTone: { value: BASE },
 		uPixelRatio: pixelRatio,

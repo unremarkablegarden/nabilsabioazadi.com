@@ -952,3 +952,27 @@ feeding the wave; it is still hers.)
 - The tsunami seen only by Manulani's light, about 70 s in, in headless Brave at 1280 by 720; not close
   up as the heart falls, not on a phone, not timed. The ordinary sea seen once at 13:00 and 22:00 with
   and without; not at dawn or dusk, not in a storm.
+
+## 38. Muted, as Fuji film; strands of light (4 November)
+
+The owner, of §37's film look: "It looks too gamey with the weaves and their colours." Then, with five
+stills of channelling from the television Wheel of Time and two muted Fuji landscapes: "What if we relax
+this to look more like this but muted like the fuji film landscapes".
+
+- **What the references show** (measured): the Fuji landscapes' colour is about a tenth of full; their
+  blacks a green-grey (#131613, #1a1a16) that never reaches black, their whites stopping at about 82%
+  (#d0d9cd sage, #c6c2a6 cream). In the stills a weave is many fine strands of light, each heart
+  overexposed nearly to white, its colour (gold, a pale blue, a smoky white) only in what falls away to
+  each side; where strands cross they go white.
+- **The grade** (`grade.ts`), the teal and orange gone: colour held back, blues most and warm least, as
+  Classic Chrome does (half to two-thirds of what it was); neutrals sage in the shadows and cream in the
+  light; the brightest held under white on a soft shoulder; the blacks lifted a little by day only.
+  Not as far as the photographs: still a sea.
+- **The weaves**: `FILM_COLOURS` muted (air a dusty lavender #9590c0, water a grey sea glass #64a0a4,
+  akasha a pale old gold #cba96e). Each filament of the everyday threads has a warm white heart and its
+  colour beside it (`uFilm` in `channellers.ts`); by day the thread itself whiter, the sheath carrying the
+  colour. The tsunami's weaves the same (`filmShade` in `weave.ts`, now muting the flank and whitening the
+  heart). One switch for all, `filmLook` in `weave.ts`; `?film=off` still shows the site without it.
+- Seen once in headless Brave at 1280 by 720: the healing flow at 13:00 and 22:00, the tsunami about 70 s
+  in. By day the weaves' colour now hardly shows at all; by night they were already near grey. Not at
+  dawn, dusk or in a storm, not on a phone.

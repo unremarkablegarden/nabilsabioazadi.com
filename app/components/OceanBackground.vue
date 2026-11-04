@@ -740,11 +740,12 @@ onMounted(async () => {
 	// The Aes Sedai may stay on after the storm is released (aesSedaiKept).
 	const weaversStay = aesSedaiKept();
 	if ((stormOn || weaversStay) && !coloursGiven) Object.assign(colours, GRADED_COLOURS);
-	// The film look (the owner's photograph of 4 November; for everyone since the owner chose it that day):
-	// its colours, each weave's shades graded across it, and the whole picture graded so (grade.ts).
+	// The film look (the owner, 4 November; for everyone): its muted colours, each weave a strand of light
+	// across it (filmLook in weave.ts), and the whole picture muted as Fuji's films are (grade.ts).
 	// ?film=off shows the site without it.
-	const filmLook = query.get("film") !== "off";
-	if (filmLook && !coloursGiven) Object.assign(colours, FILM_COLOURS);
+	const filmOn = query.get("film") !== "off";
+	filmLook.value = filmOn ? 1 : 0;
+	if (filmOn && !coloursGiven) Object.assign(colours, FILM_COLOURS);
 	// The last measured figures, to go back to when a storm ends.
 	let measured = conditions.value;
 	// The conditions come from the site's own server, which keeps one fresh copy for everyone;
@@ -1120,7 +1121,7 @@ onMounted(async () => {
 		channellers.setChannelledStorm(stormOn || weaversStay);
 		stormSince = -1;
 		if (!coloursGiven) {
-			Object.assign(colours, filmLook ? FILM_COLOURS : stormOn || weaversStay ? GRADED_COLOURS : ELEMENT_COLOURS);
+			Object.assign(colours, filmOn ? FILM_COLOURS : stormOn || weaversStay ? GRADED_COLOURS : ELEMENT_COLOURS);
 			channellers.setColours(colours, true);
 		}
 		if (measured) conditions.value = { ...measured, ...pretend };
@@ -1423,7 +1424,7 @@ onMounted(async () => {
 		const steadyExposure = exposure * lerp(1, lerp(2.5, 0.6, daylight), fury);
 		// (AgX is flatter than ACES was: a third of a stop more by day, none by night.)
 		renderer.toneMappingExposure = steadyExposure * (1 + 5 * flash) * (1 + 4 * moment.white * moment.veil) * lerp(1.32, 1, nightfall);
-		grade.update({ day: daylight, night: nightfall * (1 - noonHeld), sunElevation: lerp(sunHeightNow, NOON_ELEVATION, noonHeld), storm: stormLevel.value, exposure: renderer.toneMappingExposure, film: filmLook ? 1 : 0 });
+		grade.update({ day: daylight, night: nightfall * (1 - noonHeld), sunElevation: lerp(sunHeightNow, NOON_ELEVATION, noonHeld), storm: stormLevel.value, exposure: renderer.toneMappingExposure, film: filmLook.value });
 		twilightUniforms.uTwilightLevel.value = twilightGlow / steadyExposure;
 		// The air it is worked out from is the air at the boat (not during the storm's story, which is staged).
 		const skyAir = twilightAir(liveOnly);
@@ -1885,7 +1886,6 @@ onMounted(async () => {
 						air: skySheath[0]!,
 						gold: skySheath[2]!,
 						water: skySheath[1]!,
-						film: filmLook ? 1 : 0,
 					}
 				: undefined,
 		);

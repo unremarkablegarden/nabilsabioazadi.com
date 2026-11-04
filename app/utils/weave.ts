@@ -60,19 +60,22 @@ vec3 tame( vec3 c, float k ) {
 }
 `;
 
-// The film look (for everyone, ?film=off for none; the owner, 4 November, with a cross-processed photograph of wheat under a
-// turquoise sky: "urgent colour-grading intervention on the shades of the weaving for diff elements").
-// Across a weave, core 0 at its flank to 1 at its heart: its flank holds its colour richer at the same
-// lightness, the warm going warmer and the cool cooler, as film keeps colour in its shadows; its heart
-// goes towards a cream or an ice white, as film's highlights do. A white stays a white.
+// The film look (for everyone, ?film=off for none). First (the owner, 4 November, with a cross-processed
+// photograph of wheat under a turquoise sky: "urgent colour-grading intervention on the shades of the
+// weaving for diff elements") the flanks were made richer; the owner found it "too gamey", and sent
+// stills of channelling from the television Wheel of Time with two muted Fuji landscapes: "relax this to
+// look more like this but muted like the fuji film landscapes". In those stills a weave is strands of
+// light: each strand's heart overexposed nearly to white, its colour only in what falls away to each
+// side, and dense strands white where they cross. So across a weave, core 0 at its flank to 1 at its
+// heart: its flank its colour, muted towards a grey of its own lightness; its heart a warm white of the
+// same brightness. Shared by every weave that takes it: filmLook is 1 with the look, 0 without.
+export const filmLook = { value: 1 };
 export const filmShaderChunk = /* glsl */ `
 vec3 filmShade( vec3 tint, float core ) {
 	float l = dot( tint, vec3( 0.2126, 0.7152, 0.0722 ) );
-	vec3 rich = tint * tint;
-	rich = min( rich * 0.9 * l / max( dot( rich, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-4 ), vec3( 1.6 ) );
-	float warm = clamp( ( tint.r - tint.b ) / max( max( tint.r, tint.b ), 1e-4 ), - 1.0, 1.0 ) * 0.5 + 0.5;
-	vec3 light = mix( vec3( 0.86, 0.96, 1.0 ), vec3( 1.0, 0.93, 0.8 ), warm ) * max( 1.5 * l, 0.6 );
-	return core < 0.5 ? mix( rich, tint, 2.0 * core ) : mix( tint, light, 1.4 * core - 0.7 );
+	vec3 muted = mix( vec3( l ), tint, 0.6 );
+	vec3 white = vec3( max( max( tint.r, tint.g ), tint.b ) ) * vec3( 1.0, 0.97, 0.92 );
+	return mix( muted, white, 0.8 * smoothstep( 0.4, 1.0, core ) );
 }
 `;
 

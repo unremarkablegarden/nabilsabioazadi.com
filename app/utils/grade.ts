@@ -17,10 +17,13 @@
 //   storm        less saturated, a little cooler.
 // Highlights lose some saturation as they brighten, so sun glitter goes to a warm white and not to a
 // hue. The sea's own blue was never rotated: no teal-and-orange.
-// Until the film look (the owner, 4 November, with a cross-processed photograph of wheat under a
-// turquoise sky, chosen for everyone the same day; ?film=off shows the site without it): split toning as
-// that film has it, the cool turned towards turquoise and richer, the warm richer still, the shadows
-// lifted and cooled (by day only: by night it greyed the dark), the brightest warmed towards cream.
+// The film look (the owner, 4 November; for everyone, ?film=off shows the site without it). First a
+// cross-processed teal and orange, which the owner found "too gamey"; now muted as the owner's two Fuji
+// landscapes are (their colour about a tenth of full, their blacks a green-grey that never reaches black,
+// their whites stopping short of white, sage or cream): colour held back, the blues the most and the
+// warm the least, as Fuji's Classic Chrome does; the neutrals leaning sage in the shadows and cream in
+// the light; the brightest held under white on a soft shoulder; and by day the blacks lifted a little
+// (by night that greyed the dark). Still a sea: not as far as the photographs.
 import * as THREE from "three";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 
@@ -73,21 +76,17 @@ void main() {
 	c = e / max( uExposure, 1e-6 );
 	// Warmth.
 	c *= vec3( 1.0 + uWarmth, 1.0, 1.0 - uWarmth );
-	// The film look: the warm colours richer, the shadows lifted and turquoise, the highlights cream.
+	// The film look: muted, sage in the shadows and cream in the light, the whites held under white.
 	if ( uFilm > 0.0 ) {
 		e = c * uExposure;
 		float l = dot( e, vec3( 0.2126, 0.7152, 0.0722 ) );
 		float warm = clamp( ( e.r - e.b ) / max( max( e.r, e.b ), 1e-4 ), - 1.0, 1.0 );
-		float hot = max( warm, 0.0 );
-		float cool = smoothstep( 0.0, 0.3, - warm );
-		// (The cool towards turquoise, as that film turns a blue sky, and both richer, the warm the more.)
-		e *= mix( vec3( 1.0 ), vec3( 0.82, 1.0, 1.0 ), cool * uFilm );
-		l = dot( e, vec3( 0.2126, 0.7152, 0.0722 ) );
-		e = max( mix( vec3( l ), e, 1.0 + uFilm * ( 0.5 * hot + 0.35 * cool ) ), vec3( 0.0 ) );
-		float shadow = 1.0 - smoothstep( 0.0, 0.25, l );
-		float high = smoothstep( 0.9, 3.0, l );
-		e *= mix( vec3( 1.0 ), mix( vec3( 1.0 ), vec3( 0.92, 1.02, 1.06 ), shadow ) * mix( vec3( 1.0 ), vec3( 1.06, 1.0, 0.88 ), high ), uFilm );
-		e += uFilmLift * 0.012 * vec3( 0.55, 0.95, 1.0 );
+		e = mix( vec3( l ), e, mix( 1.0, mix( 0.5, 0.68, smoothstep( - 0.3, 0.3, warm ) ), uFilm ) );
+		float shadow = 1.0 - smoothstep( 0.0, 0.3, l );
+		float high = smoothstep( 0.4, 2.0, l );
+		e *= mix( vec3( 1.0 ), mix( vec3( 1.0 ), vec3( 0.95, 1.02, 0.96 ), shadow ) * mix( vec3( 1.0 ), vec3( 1.03, 1.01, 0.94 ), high ), uFilm );
+		e = mix( e, 1.6 * ( 1.0 - exp( - e / 1.6 ) ), uFilm );
+		e += uFilmLift * 0.014 * vec3( 0.9, 1.0, 0.93 );
 		c = e / max( uExposure, 1e-6 );
 	}
 	gl_FragColor = vec4( c, texel.a );

@@ -48,7 +48,7 @@ import { lines } from "./embroidery";
 import { TSUNAMI_ARC, TSUNAMI_PARTS, tsunamiHeight, type GerstnerUniforms } from "./gerstner-waves";
 import { NAMES, ropeMight, STRONGEST_MIND, TEMPERS } from "./psyche";
 import { seatOf } from "./treason";
-import { filmShaderChunk, pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
+import { filmLook, filmShaderChunk, pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
 // Leane · Ember, and Manulani, by their place among the minds.
 export const TSUNAMI_ROGUE = 3;
@@ -574,8 +574,6 @@ export interface TsunamiFrame {
 	air: THREE.Color;
 	gold: THREE.Color;
 	water: THREE.Color;
-	// 0..1 the film look (?film=off for none): the shades of each weave graded as in the owner's photograph.
-	film: number;
 }
 
 // Whose each is (Siuan's, Leane's, Moiraine's).
@@ -601,7 +599,7 @@ export function createTsunami(scene: THREE.Scene, layer: number, sea: GerstnerUn
 		uEnds: { value: Array.from({ length: 14 }, () => new THREE.Vector2()) },
 		uLight: { value: new THREE.Vector3() },
 		uDay: { value: 0 },
-		uFilm: { value: 0 },
+		uFilm: filmLook,
 		uGain: { value: 1 },
 		uResolution: { value: new THREE.Vector2(1, 1) },
 		uPixelRatio: pixelRatio,
@@ -627,7 +625,7 @@ export function createTsunami(scene: THREE.Scene, layer: number, sea: GerstnerUn
 		uHigh: { value: PARTS.map(() => new THREE.Vector2()) },
 		uKind: { value: PARTS.map((part) => new THREE.Vector3(part.size, part.air, part.fire)) },
 		uDay: { value: 0 },
-		uFilm: { value: 0 },
+		uFilm: filmLook,
 		uGain: { value: 1 },
 		uAir: { value: new THREE.Color() },
 		uGold: { value: new THREE.Color() },
@@ -750,7 +748,6 @@ export function createTsunami(scene: THREE.Scene, layer: number, sea: GerstnerUn
 			}
 		}
 		ropeUniforms.uDay.value = frame.day;
-		ropeUniforms.uFilm.value = frame.film;
 		ropeUniforms.uGain.value = frame.gain;
 		ropeUniforms.uResolution.value.set(window.innerWidth, window.innerHeight).multiplyScalar(pixelRatio.value);
 
@@ -763,7 +760,6 @@ export function createTsunami(scene: THREE.Scene, layer: number, sea: GerstnerUn
 		spurtUniforms.uWind.value.copy(frame.wind);
 		PARTS.forEach((part, k) => spurtUniforms.uHigh.value[k]!.set(crestHigh(part.middle, crest, frame.boat), heartHigh));
 		spurtUniforms.uDay.value = frame.day;
-		spurtUniforms.uFilm.value = frame.film;
 		spurtUniforms.uGain.value = frame.gain;
 		spurtUniforms.uAir.value.copy(frame.air);
 		spurtUniforms.uGold.value.copy(frame.gold);
