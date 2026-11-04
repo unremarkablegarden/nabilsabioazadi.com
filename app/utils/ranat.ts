@@ -88,7 +88,7 @@ const STREAM = 140;
 const PLUME = 44;
 const SHAFTS = 5;
 const BURST_FILAMENTS = 36;
-const BURST_SEGMENTS = 50;
+const BURST_SEGMENTS = 110;
 // How long a burst's weave, its cloud and its rain go on (s).
 const WEAVE_LASTS = 18;
 const PLUME_LASTS = 80;
@@ -128,6 +128,21 @@ vec3 bezier( vec3 a, vec3 b, vec3 c, vec3 d, float t ) {
 vec3 grieved( vec3 c, float grief ) {
 	return mix( c, vec3( dot( c, vec3( 0.3, 0.5, 0.2 ) ) ), grief );
 }
+// Where a thread leaves her (the owner, 5 November: the flows and threads "come from the palms and bodies
+// of the channellers on the boat. Not from the water"): one of her two open palms, held out a shoulder's
+// width apart towards her work, or her body behind them, each thread a little apart from the next as
+// fingers are. d is the way she faces; the offset is let go as the threads gather into her rope.
+vec3 rootOf( vec3 d, vec4 seed ) {
+	vec3 flat_ = normalize( vec3( d.x, 0.0, d.z ) + vec3( 0.0, 0.0, 1e-4 ) );
+	vec3 side = vec3( - flat_.z, 0.0, flat_.x );
+	float which = fract( seed.x * 7.13 );
+	vec3 root = which < 0.4 ? - side * 0.28 : which < 0.8 ? side * 0.28 : - flat_ * 0.22 + vec3( 0.0, 0.3, 0.0 );
+	return root + side * ( fract( seed.y * 5.7 ) - 0.5 ) * 0.16 + vec3( 0.0, ( fract( seed.z * 3.3 ) - 0.5 ) * 0.14, 0.0 );
+}
+// How much of that is still apart, this far from her (m): gathered within a few metres.
+float apartFrom( float fromHer ) {
+	return 1.0 - smoothstep( 0.0, 4.0, fromHer );
+}
 `;
 
 // The six ropes, out low over the sea to the horizon.
@@ -159,19 +174,20 @@ vec3 ropeAt( int r, float t ) {
 	vec4 haul = uHaul[ r ];
 	vec3 d = dirOf( rope.x );
 	vec3 side = vec3( - d.z, 0.0, d.x );
-	float dist = 10.0 * pow( rope.y / 10.0, t );
+	float dist = 0.4 * pow( rope.y / 0.4, t );
 	float q = log( dist + 12.0 );
 	// From her hands; it wanders a little over the sea as anything laid on moving water does, less when
 	// drawn taut.
 	vec3 hands = uSeats[ r ];
-	vec3 p = uBoat + d * dist + ( hands - uBoat ) * vec3( 1.0, 0.0, 1.0 ) * ( 1.0 - smoothstep( 10.0, 150.0, dist ) );
+	vec3 p = uBoat + d * dist + ( hands - uBoat ) * vec3( 1.0, 0.0, 1.0 ) * ( 1.0 - smoothstep( 10.0, 150.0, dist ) ) + rootOf( d, aSeed ) * apartFrom( dist );
 	// (Its wander and girth held in far out, where all of it is crowded into the horizon line.)
 	float wander = ( 0.03 * sin( q * 1.7 + float( r ) * 1.3 - uTime * 0.03 ) + 0.014 * sin( q * 3.9 - uTime * 0.05 + float( r ) * 2.1 ) ) * min( dist, 900.0 );
-	p += side * wander * ( 1.0 - 0.75 * haul.z );
+	p += side * wander * ( 1.0 - 0.75 * haul.z ) * smoothstep( 2.0, 30.0, dist );
 	// Low over the sea, lower still when slack in the stillness; down into the sea at the horizon.
 	// (Well under the eye, which is five metres up: at the eye's height it would lie along the horizon.)
 	float low = ( 1.5 + 0.3 * min( uSeaHigh, 4.0 ) ) * ( 1.0 - 0.4 * haul.w );
-	p.y = mix( hands.y, low, smoothstep( 10.0, 60.0, dist ) ) - 8.0 * smoothstep( 0.97, 1.0, t );
+	// (From her palms' height, and the root's own, down to low over the sea.)
+	p.y = mix( hands.y + ( p.y - uBoat.y ), low, smoothstep( 1.0, 40.0, dist ) ) - 8.0 * smoothstep( 0.97, 1.0, t );
 	return p;
 }
 void main() {
@@ -188,7 +204,7 @@ void main() {
 	// hauls, loosening in the stillness.
 	// (Broad across the sea and shallow over it, as a rope lying on water is: far out its breadth would
 	// otherwise stand up and down over tens of metres, and its threads be seen winding round it.)
-	float girth = rope.w * ( 0.35 + 0.0025 * min( dist, 2500.0 ) ) * sqrt( aSeed.z ) * ( 1.0 - 0.3 * haul.z + 0.3 * haul.w );
+	float girth = rope.w * ( 0.35 + 0.0025 * min( dist, 2500.0 ) ) * sqrt( aSeed.z ) * ( 1.0 - 0.3 * haul.z + 0.3 * haul.w ) * smoothstep( 0.0, 6.0, dist );
 	float turn = aSeed.y * 6.28318 + log( min( dist, 2500.0 ) + 12.0 ) * ( 1.2 + 0.8 * aSeed.x ) - uTime * 0.05;
 	vec3 off = ( n1 * cos( turn ) + n2 * sin( turn ) * min( 1.0, 3.0 / girth ) ) * girth;
 	here += off;
@@ -199,7 +215,7 @@ void main() {
 	float running = pow( 0.5 + 0.5 * sin( q * 6.0 + uTime * 1.3 + aSeed.x * 6.0 ), 4.0 );
 	float lit = ( 0.7 + 0.6 * haul.z * running ) * ( 1.0 - 0.4 * haul.w );
 	float haze = max( 0.12, exp( - far / ( 1.5 * uVisibility ) ) );
-	vAlpha = smoothstep( rope.z, rope.z - 0.02, aT ) * smoothstep( 8.0, 30.0, far ) * haze * lit;
+	vAlpha = smoothstep( rope.z, rope.z - 0.02, aT ) * smoothstep( 1.1, 2.0, far ) * haze * lit;
 	vEdge = aSide;
 	vec4 mixed = uMix[ r ];
 	float e = aSeed.w;
@@ -242,6 +258,9 @@ attribute vec4 aSeed;
 uniform vec4 uBurst[ ${BURSTS} ];
 // how high its cloud goes (m)
 uniform float uTop[ ${BURSTS} ];
+// her palms, whose burst it is
+uniform vec3 uBurstHands[ ${BURSTS} ];
+uniform float uSeaHigh;
 uniform vec3 uWind;
 uniform vec3 uElements[ 5 ];
 uniform float uVisibility;
@@ -252,16 +271,34 @@ varying vec3 vTint;
 varying float vCore;
 ${shared}
 ${ribbonShaderChunk}
-vec3 woundAt( vec4 b, float top, float t, float age ) {
-	float grow = smoothstep( 0.0, 5.0, age );
+// The weave leaves her palms and body and runs out low over the sea beside her rope to the water she
+// has brought in (the first two thirds of each thread), then goes up through it into the cloud as a sheaf.
+const float OUT_ = 0.66;
+vec3 woundAt( vec4 b, vec3 hands, float top, float t, float age ) {
+	vec3 place = vec3( b.x, 0.0, b.y );
+	vec3 to = place - hands;
+	float span = length( to.xz );
+	vec3 d = normalize( vec3( to.x, 0.0, to.z ) + vec3( 1e-4, 0.0, 0.0 ) );
+	vec3 side = vec3( - d.z, 0.0, d.x );
+	float low = 1.5 + 0.3 * min( uSeaHigh, 4.0 );
+	if ( t < OUT_ ) {
+		float dist = 0.4 * pow( span / 0.4, t / OUT_ );
+		vec3 p = hands + d * dist + rootOf( d, aSeed ) * apartFrom( dist );
+		p.y = mix( p.y, low + 0.5, smoothstep( 1.0, 40.0, dist ) );
+		// (Loosely about her rope's line, a little wider as it goes.)
+		float a = aSeed.y * 6.28318 + log( dist + 2.0 ) * ( 1.0 + aSeed.x );
+		return p + ( side * cos( a ) + vec3( 0.0, 0.25, 0.0 ) * sin( a ) ) * ( 0.2 + 0.004 * min( dist, 2500.0 ) ) * smoothstep( 0.0, 6.0, dist );
+	}
+	float u = ( t - OUT_ ) / ( 1.0 - OUT_ );
+	float grow = smoothstep( 1.5, 6.0, age );
 	float burst = smoothstep( 6.0, 12.0, age );
-	float h = 0.8 * top * t * ( 0.3 + 0.7 * grow ) + burst * 140.0 * aSeed.w * t;
+	float h = low + 0.5 + 0.8 * top * u * ( 0.2 + 0.8 * grow ) + burst * 140.0 * aSeed.w * u;
 	// A sheaf: close about the water at the sea, flaring out into the cloud above, each strand turned
 	// gently about the column, some one way and some the other (no coil at its foot).
-	float r = ( 3.0 + 140.0 * t * t * t ) * b.w * ( 1.0 + 1.5 * burst * ( 0.3 + aSeed.x ) );
+	float r = ( 3.0 + 140.0 * u * u * u ) * b.w * ( 1.0 + 1.5 * burst * ( 0.3 + aSeed.x ) );
 	float sense = aSeed.z < 0.5 ? 1.0 : - 1.0;
-	float a = aSeed.y * 6.28318 + sense * t * ( 0.6 + 1.2 * aSeed.x ) + uTime * 0.05 * sense;
-	return vec3( b.x, 2.0, b.y ) + vec3( cos( a ), 0.0, sin( a ) ) * r + vec3( 0.0, h, 0.0 ) + uWind * h * 0.02;
+	float a = aSeed.y * 6.28318 + sense * u * ( 0.6 + 1.2 * aSeed.x ) + uTime * 0.05 * sense;
+	return place + vec3( cos( a ), 0.0, sin( a ) ) * r + vec3( 0.0, h, 0.0 ) + uWind * ( h - low ) * 0.02;
 }
 void main() {
 	int s = int( aCell.x + 0.5 );
@@ -272,11 +309,14 @@ void main() {
 		gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );
 		return;
 	}
-	vec3 here = woundAt( b, uTop[ s ], aT, age );
-	vec3 next = woundAt( b, uTop[ s ], min( aT + 0.02, 1.0 ), age ) + ( aT >= 0.98 ? here - woundAt( b, uTop[ s ], aT - 0.02, age ) : vec3( 0.0 ) );
+	vec3 hands = uBurstHands[ s ];
+	float step_ = 1.0 / ${BURST_SEGMENTS}.0;
+	vec3 here = woundAt( b, hands, uTop[ s ], aT, age );
+	vec3 next = woundAt( b, hands, uTop[ s ], min( aT + step_, 1.0 ), age ) + ( aT >= 1.0 - step_ ? here - woundAt( b, hands, uTop[ s ], aT - step_, age ) : vec3( 0.0 ) );
 	float far = length( here - cameraPosition );
-	float drawn = smoothstep( 0.0, 5.0, age );
-	vAlpha = smoothstep( drawn * 1.02, drawn * 1.02 - 0.05, aT ) * ( 1.0 - smoothstep( 10.0, ${WEAVE_LASTS.toFixed(1)}, age ) ) * smoothstep( 0.0, 0.05, aT ) * max( 0.15, exp( - far / ( 1.5 * uVisibility ) ) );
+	// Out from her palms to the water in a second and a half, then up through it.
+	float drawn = OUT_ * smoothstep( 0.0, 1.5, age ) + ( 1.0 - OUT_ ) * smoothstep( 1.5, 6.0, age );
+	vAlpha = smoothstep( drawn * 1.02, drawn * 1.02 - 0.03, aT ) * ( 1.0 - smoothstep( 10.0, ${WEAVE_LASTS.toFixed(1)}, age ) ) * smoothstep( 1.1, 2.0, far ) * max( 0.15, exp( - far / ( 1.5 * uVisibility ) ) );
 	vEdge = aSide;
 	float e = aSeed.w;
 	vec3 tint = e < 0.2 ? uElements[ 0 ] : e < 0.4 ? uElements[ 1 ] : e < 0.6 ? uElements[ 2 ] : e < 0.8 ? uElements[ 3 ] : uElements[ 4 ];
@@ -333,12 +373,14 @@ vec3 throwAt( int s, float t ) {
 		c2 = top - vec3( 0.0, 0.45 * H, 0.0 ) - d * 0.1 * D - uWindDir * C.y * H * 0.5;
 	}
 	vec3 p = bezier( uHands, c1, c2, top, t );
+	float fromHer = length( p - uHands );
+	p += rootOf( d, aSeed ) * apartFrom( fromHer );
 	// Each thread its own way about the line: a thread frays towards its top; the others keep apart.
 	float spread = style < 0.5 ? 0.6 + 0.05 * D * t * t * t : style > 3.5 ? 0.5 : 0.6 + 0.02 * D * t;
 	float a = aSeed.y * 6.28318 + t * ( 2.0 + 3.0 * aSeed.x ) + uTime * 0.2 * ( aSeed.z - 0.5 );
 	// And the whole of it swaying as it climbs, as water thrown up into a wind does, never straight.
 	float sway = sin( t * ( 2.5 + 2.0 * C.z ) + C.z * 6.28318 + uTime * 0.25 ) * 0.12 * D * t * t;
-	return p + side * sway + ( side * cos( a ) + vec3( 0.0, 1.0, 0.0 ) * sin( a ) ) * spread * sqrt( aSeed.w );
+	return p + ( side * sway + ( side * cos( a ) + vec3( 0.0, 1.0, 0.0 ) * sin( a ) ) * spread * sqrt( aSeed.w ) ) * smoothstep( 0.0, 6.0, fromHer );
 }
 void main() {
 	int s = int( aCell.x + 0.5 );
@@ -354,7 +396,7 @@ void main() {
 	float far = length( here - cameraPosition );
 	float drawn = smoothstep( 0.0, B.y, age );
 	float gone = smoothstep( B.y + B.z, B.y + B.z + B.w, age );
-	vAlpha = smoothstep( drawn * 1.02, drawn * 1.02 - 0.04, aT ) * ( 1.0 - gone ) * smoothstep( 6.0, 20.0, far ) * max( 0.2, exp( - far / ( 1.5 * uVisibility ) ) ) * step( 0.0, age );
+	vAlpha = smoothstep( drawn * 1.02, drawn * 1.02 - 0.04, aT ) * ( 1.0 - gone ) * smoothstep( 1.1, 2.0, far ) * max( 0.2, exp( - far / ( 1.5 * uVisibility ) ) ) * step( 0.0, age );
 	vEdge = aSide;
 	vCore = 1.0 - aSeed.w;
 	mat4 vp = projectionMatrix * viewMatrix;
@@ -403,6 +445,8 @@ ${shared}
 ${ribbonShaderChunk}
 vec3 helperAt( int k, float t ) {
 	vec3 h = uHelperHands[ k ];
+	vec3 faces = uPlace - h;
+	h += rootOf( faces, aSeed ) * apartFrom( t * 40.0 );
 	if ( k == 0 ) {
 		// Each of her threads to its own place in the water, opening there as a root does.
 		vec3 end = uPlace + ( uAcross * ( aSeed.x - 0.5 ) + uAhead * ( aSeed.y - 0.5 ) ) * 24.0 + vec3( 0.0, - 4.0 * aSeed.z, 0.0 );
@@ -424,14 +468,14 @@ void main() {
 	vec3 dir = normalize( next - here + vec3( 1e-5 ) );
 	vec3 n1 = normalize( cross( dir, vec3( 0.0, 1.0, 0.0 ) ) + vec3( 1e-4 ) );
 	vec3 n2 = normalize( cross( n1, dir ) );
-	float girth = ( 0.25 + 0.9 * aT ) * sqrt( aSeed.z ) * ( k == 0 ? 1.0 + 1.5 * smoothstep( 0.8, 1.0, aT ) : 1.0 );
+	float girth = ( 0.25 + 0.9 * aT ) * sqrt( aSeed.z ) * ( k == 0 ? 1.0 + 1.5 * smoothstep( 0.8, 1.0, aT ) : 1.0 ) * smoothstep( 0.0, 0.1, aT );
 	float turn = aSeed.y * 6.28318 + aT * ( 1.5 + aSeed.x ) - uTime * 0.08;
 	vec3 off = ( n1 * cos( turn ) + n2 * sin( turn ) ) * girth;
 	here += off;
 	next += off;
 	float far = length( here - cameraPosition );
 	float cast = uHelperCast[ k ];
-	vAlpha = smoothstep( cast, cast - 0.04, aT ) * smoothstep( 6.0, 18.0, far ) * ( k == 1 ? 0.75 + 0.5 * uSwell : 1.0 );
+	vAlpha = smoothstep( cast, cast - 0.04, aT ) * smoothstep( 1.1, 2.0, far ) * ( k == 1 ? 0.75 + 0.5 * uSwell : 1.0 );
 	vEdge = aSide;
 	vTint = grieved( uHelperTint[ k ], ${GRIEF.toFixed(2)} );
 	vCore = 1.0 - aSeed.z;
@@ -746,6 +790,8 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 		...common,
 		uBurst: { value: Array.from({ length: BURSTS }, () => new THREE.Vector4(0, 0, -1, 1)) },
 		uTop: { value: Array.from({ length: BURSTS }, () => 700) },
+		uBurstHands: { value: Array.from({ length: BURSTS }, () => new THREE.Vector3()) },
+		uSeaHigh: seaHigh,
 		uWind: wind,
 		uElements: { value: elements },
 		uVisibility: visibility,
@@ -902,7 +948,9 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 		ropeUniforms.uStrength.value = THREE.MathUtils.smoothstep(since, 0.5, 3);
 		ROPES.forEach((rope, r) => {
 			const hands = seatOf(rope.who, boat, ahead, across);
-			ropeUniforms.uSeats.value[r]!.copy(hands).addScaledVector(ahead, 6).setY(boat.y - 2.2);
+			ropeUniforms.uSeats.value[r]!.copy(hands);
+			burstUniforms.uBurstHands.value[2 * r]!.copy(hands);
+			burstUniforms.uBurstHands.value[2 * r + 1]!.copy(hands);
 			const cast = THREE.MathUtils.smoothstep(since, rope.joins, rope.joins + 5);
 			ropeUniforms.uRope.value[r]!.set(rope.bearing, rope.far, 1.05 * cast, 1.4 * Math.cbrt(ropeMight(rope.who)));
 			const cycle = pull! + 12 + rope.rest;
@@ -979,8 +1027,8 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 		};
 		toPlace(AKASHA_AT, helperUniforms.uPlace.value);
 		toPlace(CARRIED_TO, helperUniforms.uCarried.value);
-		helperUniforms.uHelperHands.value[0]!.copy(seatOf(LOOM, boat, ahead, across)).addScaledVector(ahead, 3).setY(boat.y - 1.2);
-		helperUniforms.uHelperHands.value[1]!.copy(seatOf(SAIL, boat, ahead, across)).addScaledVector(ahead, 3).setY(boat.y - 1.2);
+		helperUniforms.uHelperHands.value[0]!.copy(seatOf(LOOM, boat, ahead, across));
+		helperUniforms.uHelperHands.value[1]!.copy(seatOf(SAIL, boat, ahead, across));
 		helperUniforms.uHelperCast.value[0] = 1.05 * THREE.MathUtils.smoothstep(since, AKASHA_FROM, AKASHA_FROM + 4);
 		helperUniforms.uHelperCast.value[1] = 1.05 * THREE.MathUtils.smoothstep(since, ASPIRATE_FROM, ASPIRATE_FROM + 4);
 		helperUniforms.uHelperTint.value[0]!.copy(frame.gold);

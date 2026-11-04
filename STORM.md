@@ -1110,3 +1110,15 @@ ocean while another one helps her aspirate the water into weak swells that fly a
   lifted with the storm's waves to the eye's own height, lay along the horizon as hooks (now two metres
   over the water). Not seen: dawn or dusk, a phone, the first minute, Lantern's every kind of throw,
   frame timing; the clouds by night still show as pale columns.
+- Later the same morning, the owner: "I need the flows and threads to actually come from the palms and
+  bodies of the channellers on the boat. Not from the water!!!" They had not: each of the six ropes began
+  six metres out from her seat, Loom's and Sail's three, and every thread was faded in only 8 to 30 m
+  from the eye, so all of them seemed to rise out of the sea; and the bursts' sheaves grew out of the
+  water. Now every thread leaves one of her two open palms, held a shoulder's width apart, or her body
+  behind them, a little apart from the next as fingers are (`rootOf` in ranat.ts), and gathers into
+  her rope within four metres; it is seen from about a metre and a half from the eye, so the front
+  row's ropes come up into the picture from the boat below it, and the others' from beside and behind.
+  Each burst's weave now runs out from her palms beside her rope to the water in a second and a half and
+  only then goes up through it into the cloud. (What rises from the water now is only water: the hauled
+  spray, the cloud, the rain.) Seen once by day about two minutes in. The earlier events' weaves
+  (fresh.ts, tsunami.ts and others) still begin some metres out; none of them is on.
