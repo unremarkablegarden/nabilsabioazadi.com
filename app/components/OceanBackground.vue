@@ -696,6 +696,11 @@ onMounted(async () => {
 		const since = ranatSeconds();
 		return since === undefined ? 0 : ranatRaised(since);
 	};
+	// And how far their practice with the pounamu has taken it (ranatPractised).
+	const ranatPractice = () => {
+		const since = ranatSeconds();
+		return since === undefined ? 0 : ranatPractised(since);
+	};
 	// How far Lantern's calls have brought the rain on over the boat (ranat.ts), for the storm's figures.
 	let ranatCalled = 0;
 	const freshAsked = query.get("fresh");
@@ -732,7 +737,8 @@ onMounted(async () => {
 		if (vesalSeconds() !== undefined && !realNow) return asPretended;
 		// (Ranat's storm before any other.)
 		const ranatRaise = ranatUp();
-		if (ranatRaise > 0 && realNow) return { ...relaxed(ranatStorm(realNow, ranatRaise, ranatCalled), realNow), ...asPretended };
+		const ranatPractising = ranatPractice();
+		if ((ranatRaise > 0 || ranatPractising > 0) && realNow) return { ...relaxed(ranatStorm(realNow, ranatRaise, ranatCalled, ranatPractising), realNow), ...asPretended };
 		const vesal = vesalFigures();
 		vesalRaisedNow.value = !!vesal;
 		// (Worsened as any storm is, storm.json "worse": 12.66 since the owner's "worse by 1166%".)
@@ -913,7 +919,7 @@ onMounted(async () => {
 	(window as unknown as { __fresh?: () => string[] }).__fresh = fresh.describe;
 	// Ranat's storm: the six hauling water in from the horizon and bursting it into rain, Lantern calling
 	// the rain, Loom and Sail flinging the akasha's water across; __ranat() in the console.
-	const ranat = createRanat(scene, SCREEN_LAYER);
+	const ranat = createRanat(scene, SCREEN_LAYER, waveUniforms);
 	(window as unknown as { __ranat?: () => string[] }).__ranat = ranat.describe;
 	const island = createIsland(scene, waveUniforms, camera.position, query.has("island") && query.get("island") !== "off");
 	const noonAsked = query.get("noon");
@@ -1073,7 +1079,8 @@ onMounted(async () => {
 				const bearing = spread(1.2);
 				jennaFoot.set(camera.position.x + Math.sin(bearing) * distance, 0, camera.position.z - Math.cos(bearing) * distance);
 				jennaTop.set(jennaFoot.x + spread(500), 750 + Math.random() * 350, jennaFoot.z + spread(500));
-				drawnDown = jenna.call(jennaTop, jennaFoot, time, strikeAt);
+				// (In Ranat's storm, while they practise, by their strength then.)
+				drawnDown = jenna.call(jennaTop, jennaFoot, time, strikeAt, ranat.practising() ? ranat.mightNow : undefined);
 			}
 		}
 		if (time < strikeAt) return 0;
@@ -1172,6 +1179,7 @@ onMounted(async () => {
 		if (measured) conditions.value = { ...measured, ...pretend };
 	};
 	const stormInterval = setInterval(followSwitch, 30_000);
+	let lastPracticeTick = -1;
 	await breathe();
 	const stars = createStars(scene, camera, PLACE, planetPositions, skyBreath.hole);
 	waveUniforms.weaveCentre.value.set(knotPosition.x, knotPosition.z);
@@ -1292,6 +1300,13 @@ onMounted(async () => {
 		const ranatAt = calmMotion ? undefined : ranatSeconds();
 		const ranatBusyNow = ranatAt === undefined ? 0 : ranatBusy(ranatAt);
 		ranatNow.value = ranatAt !== undefined && ranatAt >= 0;
+		// (While their practice raises the storm, its figures are worked out again every ten seconds,
+		// not thirty, so that the thunder comes when it should.)
+		const practiceTick = ranatAt === undefined || ranatAt < RANAT_PRACTICE || ranatAt > RANAT_PRACTICE + 120 ? -1 : Math.floor((ranatAt - RANAT_PRACTICE) / 10);
+		if (practiceTick !== lastPracticeTick) {
+			lastPracticeTick = practiceTick;
+			if (practiceTick >= 0) followSwitch();
+		}
 		const droppedNow = Math.max(tsunamiBusyNow, freshBusyNow, ranatBusyNow);
 		// (Nor is the sky opened while the strongest is stilling it.)
 		const stillingNow = stillingBegun(new Date(), stillAsked, pageOpened, stormAsked !== null);
@@ -1473,7 +1488,8 @@ onMounted(async () => {
 		camera.rotation.x += (-lookUp(aim.y) + pitch - camera.rotation.x) * 0.03;
 
 		const jennaNow = calmMotion ? 0 : jennaUp();
-		const flash = alive > 0.5 ? lightning(time, sky, fury, liveOnly ? thunderAmount(liveOnly) : 1, extreme, !liveOnly, jennaNow > 0.3, liveOnly?.cape) : 0;
+		// (They draw the bolts down in Jenna's storm, and in Ranat's while they practise.)
+		const flash = alive > 0.5 ? lightning(time, sky, fury, liveOnly ? thunderAmount(liveOnly) : 1, extreme, !liveOnly, jennaNow > 0.3 || ranat.practising(), liveOnly?.cape) : 0;
 		// The storm darkens the day. At night it is lifted instead, or the sea would be lost in black.
 		const steadyExposure = exposure * lerp(1, lerp(2.5, 0.6, daylight), fury);
 		// (AgX is flatter than ACES was: a third of a stop more by day, none by night.)

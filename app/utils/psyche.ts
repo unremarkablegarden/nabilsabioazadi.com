@@ -114,6 +114,17 @@ const LAENI_NOW = LAENI_OVER_ALL * OTHERS_NOW.reduce((sum, one) => sum + one, 0)
 export const TRUE_STRENGTH = OTHERS_NOW.map((strength, i) => (i === STRONGEST_MIND ? LAENI_NOW : strength));
 // How much stronger each is than until 5 November (Leilehua, new, as an ordinary one: 1).
 export const RAISED_SINCE = TRUE_STRENGTH.map((strength, i) => (i === LEILEHUA_MIND ? 1 : strength / TRUE_THEN[i]!));
+// Ranat's practice (the owner, 5 November: "Let the channellers play with creating huge swells on
+// purpose just to practise how strong their terangreal pounamu are, meaning that everyone is suddenly
+// 400+% in strength at least and the strongest four are 8888%+ in strength"): while they practise, each
+// draws on her pounamu to at least 400% of her strength, more the more water-minded she is (pounamu
+// being river stone, as before), up to 800%; and the strongest four (Laeni, Pardis, Manulani, Keel, by
+// TRUE_STRENGTH) to 8888%. Laeni is then still more than 3.5 times all the others together (about 4.1).
+export const STRONGEST_FOUR = TRUE_STRENGTH.map((strength, i) => ({ strength, i }))
+	.sort((a, b) => b.strength - a.strength)
+	.slice(0, 4)
+	.map(({ i }) => i);
+export const PRACTICE_GAIN = TEMPERS.map((temper, i) => (STRONGEST_FOUR.includes(i) ? 88.88 : 4 + 4 * Math.min(1, (temper.water / 0.95) ** 2)));
 
 // Strength as their ropes' measures (MIGHT in channellers.ts): the four mighty, the strongest, Manulani.
 // As it was until 5 November, kept for the storms and the events before then (jenna.ts, parting.ts,

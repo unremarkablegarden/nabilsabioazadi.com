@@ -38,9 +38,35 @@
 // with each weak swell the two lift the water that akasha is in off the sea and fling it right across
 // the view, a few metres up, as rain driven sideways: streaks of water in gusts, one gust to each of the
 // swells they raise, passing within twenty or thirty metres of the eye.
+//
+// And they practise (the owner, the same morning: "make this storm more interesting and robust after
+// about 35 seconds. Let the channellers play with creating huge swells on purpose just to practise how
+// strong their terangreal pounamu are, meaning that everyone is suddenly 400+% in strength at least
+// and the strongest four are 8888%+ in strength, trying to create huge waves, lightning, crazy rain").
+// At 35 s their pounamu wake, over four seconds: each is suddenly at least 400% of her strength, the
+// strongest four (Laeni, Pardis, Manulani, Keel) 8888% (PRACTICE_GAIN in psyche.ts), and it is seen
+// as all strength is, in mass by its cube root: the new threads run out from their palms along their
+// ropes and the ropes broaden, the strongest four's to some four and a half times what they were.
+//   The swells: in turns, every one of them but Lantern, Loom and Sail, who are working the rain, lifts
+//   a dome of the sea on her weave to see how much her pounamu will hold, and lets it fall. Her
+//   threads run out from her palms low over the sea to the dome's near foot and go down into the water
+//   there, spreading under it as roots do, and it rises on them, smooth and glassy, the sea's own
+//   waves stretched out over it; held a moment, she lets go, the threads are gone, the dome falls
+//   back in foam, and a ring of swell runs out from it to the boat
+//   and on (heaveAt in gerstner-waves.ts), which the boat rides. The stronger she is the greater it:
+//   Laeni's dome some thirty-six metres high and three hundred and forty across, its swell over twenty
+//   metres from trough to crest when it reaches the boat; the weakest's six metres, and a swell of
+//   three. Laeni lifts first; after that whoever is free, the strongest and the eager most often.
+//   The lightning: the storm turns to thunder (ranatStorm), and they draw its bolts down to the sea as
+//   in Jenna's storm (jenna.ts), each sending a swell out from where it strikes.
+//   The rain: Lantern, at near six times her strength, throws her water up two and three at a time
+//   and higher, and the rain comes on harder for it; Loom and Sail fling near three times as much water
+//   across the view, higher and wider; the six's bursts broaden, and the storm's rain doubles and more.
 import * as THREE from "three";
+import { RANAT_PRACTICE } from "./channelled-storm";
 import { lines } from "./embroidery";
-import { NAMES, ropeMight, STRONGEST_MIND, TEMPERS } from "./psyche";
+import { heaveAt, heaveChunk, HEAVES, type GerstnerUniforms } from "./gerstner-waves";
+import { LEILEHUA_MIND, NAMES, PRACTICE_GAIN, ropeMight, STRONGEST_MIND, TEMPERS, TRUE_STRENGTH } from "./psyche";
 import { seatOf } from "./treason";
 import { filmLook, filmShaderChunk, pixelRatio, ribbonShaderChunk, WEAVE_RELAX, WEAVE_RENDER_ORDER } from "./weave";
 
@@ -93,8 +119,8 @@ const BURST_SEGMENTS = 110;
 const WEAVE_LASTS = 18;
 const PLUME_LASTS = 80;
 const RAIN_LASTS = 95;
-// Lantern's throws: how many at once, their threads, and when she begins (s).
-const THROWS = 5;
+// Lantern's throws: how many at once (while practising), their threads, and when she begins (s).
+const THROWS = 8;
 const THROW_FILAMENTS = 26;
 const THROW_SEGMENTS = 80;
 const LANTERN_FROM = 50;
@@ -110,8 +136,32 @@ const HELPER_FILAMENTS = 40;
 const HELPER_SEGMENTS = 70;
 const AKASHA_AT = { bearing: 30, far: 36 };
 const CARRIED_TO = { bearing: -45, far: 32 };
-// The water they fling across: how many streaks.
+// The water they fling across: how many streaks (and how many more while they practise).
 const FLUNG = 640;
+const FLUNG_PRACTISING = 1800;
+
+// Their practice: how long the pounamu take to wake (s); and each one's gain (PRACTICE_GAIN), drawn in
+// mass by its cube root: in more threads (by its 0.6th power) and a broader rope (by its 0.4th).
+const WAKING = 4;
+const massOf = (who: number) => Math.cbrt(PRACTICE_GAIN[who]!);
+const moreThreads = (who: number) => massOf(who) ** 0.6;
+const broader = (who: number) => massOf(who) ** 0.4;
+const MOST_MORE = Math.max(...PRACTICE_GAIN.map((_, who) => moreThreads(who)));
+// Lantern's throws at once, before and while practising.
+const THROWS_BEFORE = 5;
+// The swells they lift: who takes turns (all but Lantern, Loom and Sail), how many lift at once, the
+// threads of the mightiest one's weave, and when Laeni lifts the first (s).
+const HEAVERS = [STRONGEST_MIND, 1, 13, 0, 2, 5, 3, 7, 8, 10, 11, LEILEHUA_MIND];
+const LIFTS = 3;
+const LIFT_FILAMENTS = 260;
+const LIFT_SEGMENTS = 72;
+const FIRST_LIFT = RANAT_PRACTICE + 3;
+// How high each lifts her dome: Laeni thirty-six metres, the others as a gentle power of their strength
+// while practising, so that the weakest still lift six.
+const STRONGEST_PRACTISED = Math.max(...TRUE_STRENGTH.map((strength, i) => strength * PRACTICE_GAIN[i]!));
+const domeOf = (who: number) => 36 * ((TRUE_STRENGTH[who]! * PRACTICE_GAIN[who]!) / STRONGEST_PRACTISED) ** 0.147;
+// The weave's threads, for its mass: three to each measure of her strength.
+const liftThreads = (who: number) => Math.min(1, (3 * ropeMight(who) * massOf(who)) / LIFT_FILAMENTS);
 
 const shared = /* glsl */ `
 uniform vec3 uBoat;
@@ -144,6 +194,15 @@ float apartFrom( float fromHer ) {
 	return 1.0 - smoothstep( 0.0, 4.0, fromHer );
 }
 `;
+// The great swells they lift while practising (heaveAt in gerstner-waves.ts), for whatever lies on the
+// sea to ride them; uHeaving is 0 while there are none.
+const onSea = /* glsl */ `
+uniform float uHeaving;
+${heaveChunk("uTime")}
+float seaLift( vec2 p ) {
+	return uHeaving > 0.0 ? heaveHeight( p ) : 0.0;
+}
+`;
 
 // The six ropes, out low over the sea to the horizon.
 const ropeVertex = /* glsl */ `
@@ -159,15 +218,20 @@ uniform vec4 uHaul[ ${R} ];
 // shares of water, air, akasha and fire in her rope
 uniform vec4 uMix[ ${R} ];
 uniform float uWhite[ ${R} ];
+// how much broader her pounamu make her rope out over the sea
+uniform float uBroad[ ${R} ];
 uniform vec3 uElements[ 5 ];
 uniform float uSeaHigh;
 uniform float uVisibility;
 uniform float uDay;
+// 0..1 how far the pounamu have woken: the threads they add (aCell.y 1) run out from her palms.
+uniform float uPractice;
 varying float vAlpha;
 varying float vEdge;
 varying vec3 vTint;
 varying float vCore;
 ${shared}
+${onSea}
 ${ribbonShaderChunk}
 vec3 ropeAt( int r, float t ) {
 	vec4 rope = uRope[ r ];
@@ -192,10 +256,20 @@ vec3 ropeAt( int r, float t ) {
 }
 void main() {
 	int r = int( aCell.x + 0.5 );
+	bool added = aCell.y > 0.5;
+	if ( added && uPractice <= 0.0 ) {
+		vAlpha = 0.0;
+		gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );
+		return;
+	}
 	vec4 rope = uRope[ r ];
 	vec4 haul = uHaul[ r ];
 	vec3 here = ropeAt( r, aT );
 	vec3 next = ropeAt( r, min( aT + 0.01, 1.0 ) ) + ( aT >= 0.99 ? here - ropeAt( r, aT - 0.01 ) : vec3( 0.0 ) );
+	// (Riding the swells they lift, where it lies on the sea.)
+	float lift = seaLift( here.xz ) * smoothstep( 1.0, 40.0, length( here.xz - uBoat.xz ) );
+	here.y += lift;
+	next.y += lift;
 	vec3 dir = normalize( next - here + vec3( 1e-5 ) );
 	vec3 n1 = normalize( cross( dir, vec3( 0.0, 1.0, 0.0 ) ) + vec3( 1e-4 ) );
 	vec3 n2 = normalize( cross( n1, dir ) );
@@ -205,6 +279,8 @@ void main() {
 	// (Broad across the sea and shallow over it, as a rope lying on water is: far out its breadth would
 	// otherwise stand up and down over tens of metres, and its threads be seen winding round it.)
 	float girth = rope.w * ( 0.35 + 0.0025 * min( dist, 2500.0 ) ) * sqrt( aSeed.z ) * ( 1.0 - 0.3 * haul.z + 0.3 * haul.w ) * smoothstep( 0.0, 6.0, dist );
+	// (Broadened by her pounamu out over the sea, not about her on the boat, where it would fill the eye.)
+	girth *= mix( 1.0, uBroad[ r ], smoothstep( 40.0, 400.0, dist ) );
 	float turn = aSeed.y * 6.28318 + log( min( dist, 2500.0 ) + 12.0 ) * ( 1.2 + 0.8 * aSeed.x ) - uTime * 0.05;
 	vec3 off = ( n1 * cos( turn ) + n2 * sin( turn ) * min( 1.0, 3.0 / girth ) ) * girth;
 	here += off;
@@ -215,7 +291,11 @@ void main() {
 	float running = pow( 0.5 + 0.5 * sin( q * 6.0 + uTime * 1.3 + aSeed.x * 6.0 ), 4.0 );
 	float lit = ( 0.7 + 0.6 * haul.z * running ) * ( 1.0 - 0.4 * haul.w );
 	float haze = max( 0.12, exp( - far / ( 1.5 * uVisibility ) ) );
-	vAlpha = smoothstep( rope.z, rope.z - 0.02, aT ) * smoothstep( 1.1, 2.0, far ) * haze * lit;
+	float castTo = added ? min( rope.z, 1.05 * uPractice ) : rope.z;
+	vAlpha = smoothstep( castTo, castTo - 0.02, aT ) * smoothstep( 1.1, 2.0, far ) * haze * lit;
+	// (The threads her pounamu add leave her palms with the rest but are faint there, seen fully only out
+	// over the sea: about her their mass would whiten the whole of the near view.)
+	if ( added ) vAlpha *= mix( 0.25, 1.0, smoothstep( 10.0, 150.0, dist ) );
 	vEdge = aSide;
 	vec4 mixed = uMix[ r ];
 	float e = aSeed.w;
@@ -260,6 +340,8 @@ uniform vec4 uBurst[ ${BURSTS} ];
 uniform float uTop[ ${BURSTS} ];
 // her palms, whose burst it is
 uniform vec3 uBurstHands[ ${BURSTS} ];
+// how many of its threads are hers to weave (0..1; more while she practises)
+uniform float uBurstShare[ ${BURSTS} ];
 uniform float uSeaHigh;
 uniform vec3 uWind;
 uniform vec3 uElements[ 5 ];
@@ -270,6 +352,7 @@ varying float vEdge;
 varying vec3 vTint;
 varying float vCore;
 ${shared}
+${onSea}
 ${ribbonShaderChunk}
 // The weave leaves her palms and body and runs out low over the sea beside her rope to the water she
 // has brought in (the first two thirds of each thread), then goes up through it into the cloud as a sheaf.
@@ -304,7 +387,7 @@ void main() {
 	int s = int( aCell.x + 0.5 );
 	vec4 b = uBurst[ s ];
 	float age = b.z;
-	if ( age < 0.0 || age > ${WEAVE_LASTS.toFixed(1)} ) {
+	if ( age < 0.0 || age > ${WEAVE_LASTS.toFixed(1)} || aCell.y >= uBurstShare[ s ] ) {
 		vAlpha = 0.0;
 		gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );
 		return;
@@ -313,6 +396,10 @@ void main() {
 	float step_ = 1.0 / ${BURST_SEGMENTS}.0;
 	vec3 here = woundAt( b, hands, uTop[ s ], aT, age );
 	vec3 next = woundAt( b, hands, uTop[ s ], min( aT + step_, 1.0 ), age ) + ( aT >= 1.0 - step_ ? here - woundAt( b, hands, uTop[ s ], aT - step_, age ) : vec3( 0.0 ) );
+	// (Out over the sea it rides the swells they lift; it rises from the water wherever that is.)
+	float lift = seaLift( aT < OUT_ ? here.xz : b.xy ) * smoothstep( 1.0, 40.0, length( here.xz - hands.xz ) ) * ( 1.0 - smoothstep( OUT_, 1.0, aT ) );
+	here.y += lift;
+	next.y += lift;
 	float far = length( here - cameraPosition );
 	// Out from her palms to the water in a second and a half, then up through it.
 	float drawn = OUT_ * smoothstep( 0.0, 1.5, age ) + ( 1.0 - OUT_ ) * smoothstep( 1.5, 6.0, age );
@@ -344,10 +431,13 @@ uniform vec3 uHands;
 uniform vec3 uWindDir;
 uniform float uVisibility;
 uniform float uDay;
+// how many of each throw's threads are hers to throw (more while she practises)
+uniform float uThrowShare;
 varying float vAlpha;
 varying float vEdge;
 varying float vCore;
 ${shared}
+${onSea}
 ${ribbonShaderChunk}
 vec3 throwAt( int s, float t ) {
 	vec4 A = uThrowA[ s ];
@@ -386,13 +476,19 @@ void main() {
 	int s = int( aCell.x + 0.5 );
 	vec4 B = uThrowB[ s ];
 	float age = B.x - ( uThrowA[ s ].w > 3.5 ? aSeed.x * 3.0 : 0.0 );
-	if ( B.x < 0.0 ) {
+	if ( B.x < 0.0 || aCell.y >= uThrowShare ) {
 		vAlpha = 0.0;
 		gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );
 		return;
 	}
 	vec3 here = throwAt( s, aT );
 	vec3 next = throwAt( s, min( aT + 0.0125, 1.0 ) ) + ( aT >= 0.9875 ? here - throwAt( s, aT - 0.0125 ) : vec3( 0.0 ) );
+	// (The one laid low over the sea far out rides the swells they lift.)
+	if ( uThrowA[ s ].w > 2.5 && uThrowA[ s ].w < 3.5 ) {
+		float lift = seaLift( here.xz ) * smoothstep( 0.0, 0.15, aT ) * ( 1.0 - smoothstep( 0.5, 0.9, aT ) );
+		here.y += lift;
+		next.y += lift;
+	}
 	float far = length( here - cameraPosition );
 	float drawn = smoothstep( 0.0, B.y, age );
 	float gone = smoothstep( B.y + B.z, B.y + B.z + B.w, age );
@@ -437,11 +533,14 @@ uniform vec3 uPlace;
 uniform vec3 uCarried;
 uniform float uSwell;
 uniform float uDay;
+// how many of the threads are each one's (more while they practise)
+uniform float uHelperShare[ 2 ];
 varying float vAlpha;
 varying float vEdge;
 varying vec3 vTint;
 varying float vCore;
 ${shared}
+${onSea}
 ${ribbonShaderChunk}
 vec3 helperAt( int k, float t ) {
 	vec3 h = uHelperHands[ k ];
@@ -463,8 +562,16 @@ vec3 helperAt( int k, float t ) {
 }
 void main() {
 	int k = int( aCell.x + 0.5 );
+	if ( aCell.y >= uHelperShare[ k ] ) {
+		vAlpha = 0.0;
+		gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );
+		return;
+	}
 	vec3 here = helperAt( k, aT );
 	vec3 next = helperAt( k, min( aT + 0.015, 1.0 ) ) + ( aT >= 0.985 ? here - helperAt( k, aT - 0.015 ) : vec3( 0.0 ) );
+	float lift = seaLift( here.xz ) * smoothstep( 0.0, 0.3, aT );
+	here.y += lift;
+	next.y += lift;
 	vec3 dir = normalize( next - here + vec3( 1e-5 ) );
 	vec3 n1 = normalize( cross( dir, vec3( 0.0, 1.0, 0.0 ) ) + vec3( 1e-4 ) );
 	vec3 n2 = normalize( cross( n1, dir ) );
@@ -474,8 +581,8 @@ void main() {
 	here += off;
 	next += off;
 	float far = length( here - cameraPosition );
-	float cast = uHelperCast[ k ];
-	vAlpha = smoothstep( cast, cast - 0.04, aT ) * smoothstep( 1.1, 2.0, far ) * ( k == 1 ? 0.75 + 0.5 * uSwell : 1.0 );
+	float castTo = uHelperCast[ k ];
+	vAlpha = smoothstep( castTo, castTo - 0.04, aT ) * smoothstep( 1.1, 2.0, far ) * ( k == 1 ? 0.75 + 0.5 * uSwell : 1.0 );
 	vEdge = aSide;
 	vTint = grieved( uHelperTint[ k ], ${GRIEF.toFixed(2)} );
 	vCore = 1.0 - aSeed.z;
@@ -495,25 +602,38 @@ uniform float uSwellPeriod;
 uniform float uFlung;
 uniform vec2 uResolution;
 uniform float uPixelRatio;
+// how many of the streaks are flung (0..1; more while they practise), and 0..1 how far they practise
+uniform float uFlungShare;
+uniform float uPractice;
+attribute vec2 aCell;
 varying float vAlpha;
 varying float vAcross;
 ${shared}
+${onSea}
 vec3 flight( float u ) {
-	vec3 from = uPlace + ( uAcross * ( aSeed.x - 0.5 ) + uAhead * ( aSeed.y - 0.5 ) ) * 22.0 + vec3( 0.0, 0.5, 0.0 );
-	vec3 to = uCarried + ( uAcross * ( aSeed.y - 0.5 ) + uAhead * ( aSeed.x - 0.5 ) ) * 30.0;
+	// (Wider, higher and further while they practise.)
+	vec3 from = uPlace + ( uAcross * ( aSeed.x - 0.5 ) + uAhead * ( aSeed.y - 0.5 ) ) * ( 22.0 + 16.0 * uPractice ) + vec3( 0.0, 0.5, 0.0 );
+	vec3 to = uCarried + ( uAcross * ( aSeed.y - 0.5 ) + uAhead * ( aSeed.x - 0.5 ) ) * ( 30.0 + 24.0 * uPractice );
 	vec3 p = mix( from, to, u );
-	p.y += ( 4.0 + 9.0 * aSeed.z ) * 4.0 * u * ( 1.0 - u );
+	p.y += ( 4.0 + 9.0 * aSeed.z ) * ( 1.0 + 0.8 * uPractice ) * 4.0 * u * ( 1.0 - u );
 	return p;
 }
 void main() {
+	if ( aCell.y >= uFlungShare ) {
+		vAlpha = 0.0;
+		gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );
+		return;
+	}
 	float life = 1.4 + 1.2 * aSeed.w;
 	float clock = uTime / life + aSeed.x * 7.0;
 	float u = fract( clock );
 	// When it was lifted, and how much of a swell that was: one gust to each.
 	float lifted = ( floor( clock ) - aSeed.x * 7.0 ) * life;
 	float swell = pow( max( 0.0, sin( 6.28318 * lifted / uSwellPeriod ) ), 2.0 );
-	vec4 here = projectionMatrix * viewMatrix * vec4( flight( u ), 1.0 );
-	vec4 back = projectionMatrix * viewMatrix * vec4( flight( max( u - 0.035, 0.0 ) ), 1.0 );
+	vec3 at = flight( u );
+	vec3 lift = vec3( 0.0, seaLift( at.xz ), 0.0 );
+	vec4 here = projectionMatrix * viewMatrix * vec4( at + lift, 1.0 );
+	vec4 back = projectionMatrix * viewMatrix * vec4( flight( max( u - 0.035, 0.0 ) ) + lift, 1.0 );
 	float along = position.y * 0.5 + 0.5;
 	vec4 clip = mix( back, here, along );
 	vec2 direction = normalize( ( here.xy / here.w - back.xy / back.w ) * uResolution + vec2( 1e-5, 0.0 ) );
@@ -567,6 +687,7 @@ varying vec2 vAt;
 varying vec3 vColour;
 varying float vFar;
 ${shared}
+${onSea}
 void main() {
 	int r = int( aCell.x + 0.5 );
 	vec4 haul = uHaul[ r ];
@@ -581,7 +702,7 @@ void main() {
 	vec3 d = dirOf( uRope[ r ].x );
 	vec3 side = vec3( - d.z, 0.0, d.x );
 	vec3 c = uBoat + d * dist + side * ( aSeed.y - 0.5 ) * ( 20.0 + 0.012 * dist ) * ( 1.0 + u );
-	c.y = ( 0.5 + 0.4 * uSeaHigh + 20.0 * aSeed.z * aSeed.z * ( 1.0 - 0.5 * u ) ) * ( 0.8 + 0.2 * sin( uTime * ( 0.6 + aSeed.w ) + aSeed.y * 9.0 ) );
+	c.y = ( 0.5 + 0.4 * uSeaHigh + 20.0 * aSeed.z * aSeed.z * ( 1.0 - 0.5 * u ) ) * ( 0.8 + 0.2 * sin( uTime * ( 0.6 + aSeed.w ) + aSeed.y * 9.0 ) ) + seaLift( c.xz );
 	float size = ( 8.0 + 26.0 * aSeed.z ) * ( 1.0 + 0.8 * u ) * ( 1.0 + dist / 3500.0 );
 	vFar = length( c - cameraPosition );
 	vAlpha = pow( 1.0 - u, 1.5 ) * 0.09 * haul.z * smoothstep( 20.0, 80.0, vFar );
@@ -697,6 +818,94 @@ void main() {
 }
 `;
 
+// The swells they lift while practising: her weave out from her palms low over the sea to the dome's
+// near foot, and there down into the water and on under it, spreading as roots do: she holds it from
+// beneath. Let go, it is gone.
+//   uLift      where the dome is (x, z), how long since she began (s; < 0: none), her share of the threads
+//   uLiftForm  its width (m), when it has risen (s after she began), when she lets go, and 1 for Laeni
+//   uLiftMix   shares of water, air, earth and akasha in it (the rest fire)
+const liftVertex = /* glsl */ `
+attribute float aT;
+attribute float aSide;
+attribute vec2 aCell;
+attribute vec4 aSeed;
+uniform vec4 uLift[ ${LIFTS} ];
+uniform vec4 uLiftForm[ ${LIFTS} ];
+uniform vec3 uLiftHands[ ${LIFTS} ];
+uniform vec4 uLiftMix[ ${LIFTS} ];
+uniform vec3 uElements[ 5 ];
+uniform float uSeaHigh;
+uniform float uVisibility;
+uniform float uDay;
+varying float vAlpha;
+varying float vEdge;
+varying vec3 vTint;
+varying float vCore;
+${shared}
+${onSea}
+${ribbonShaderChunk}
+const float REACH_ = 0.6;
+vec3 liftAt( int s, float t, float age ) {
+	vec4 L = uLift[ s ];
+	vec4 F = uLiftForm[ s ];
+	vec3 hands = uLiftHands[ s ];
+	vec3 place = vec3( L.x, 0.0, L.y );
+	vec3 to = place - hands;
+	to.y = 0.0;
+	float span = max( length( to ), 1.0 );
+	vec3 d = to / span;
+	vec3 side = vec3( - d.z, 0.0, d.x );
+	float b = F.x;
+	float low = 1.0 + 0.3 * min( uSeaHigh, 4.0 );
+	float footAt = max( span - 1.5 * b, 0.4 * span );
+	if ( t < REACH_ ) {
+		float dist = 0.4 * pow( footAt / 0.4, t / REACH_ );
+		vec3 p = hands + d * dist + rootOf( d, aSeed ) * apartFrom( dist );
+		float out_ = smoothstep( 1.0, 40.0, dist );
+		p.y = mix( p.y, low + seaLift( p.xz ), out_ );
+		float a = aSeed.y * 6.28318 + log( dist + 2.0 ) * ( 1.0 + aSeed.x );
+		p += ( side * cos( a ) + vec3( 0.0, 0.3, 0.0 ) * sin( a ) ) * ( 0.25 + 0.012 * dist ) * smoothstep( 0.0, 6.0, dist );
+		return p;
+	}
+	float u = ( t - REACH_ ) / ( 1.0 - REACH_ );
+	// Then down into the water at the dome's near foot and on under it, spreading as roots do: she
+	// holds it from beneath.
+	vec3 foot = hands + d * footAt;
+	vec3 under = place - d * b * ( 0.2 + 0.6 * aSeed.z ) + side * ( aSeed.x - 0.5 ) * 1.4 * b;
+	vec3 p = mix( foot, under, u );
+	p.y = seaLift( p.xz ) + mix( low, - 8.0 - 0.15 * b, smoothstep( 0.0, 0.3, u ) );
+	return p;
+}
+void main() {
+	int s = int( aCell.x + 0.5 );
+	vec4 L = uLift[ s ];
+	vec4 F = uLiftForm[ s ];
+	float age = L.z;
+	if ( age < 0.0 || age > F.z + 2.0 || aCell.y >= L.w ) {
+		vAlpha = 0.0;
+		gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );
+		return;
+	}
+	float step_ = 1.0 / ${LIFT_SEGMENTS}.0;
+	vec3 here = liftAt( s, aT, age );
+	vec3 next = liftAt( s, min( aT + step_, 1.0 ), age ) + ( aT >= 1.0 - step_ ? here - liftAt( s, aT - step_, age ) : vec3( 0.0 ) );
+	float far = length( here - cameraPosition );
+	// Out from her palms in a second and a half, over the dome in another; let go.
+	float drawn = REACH_ * smoothstep( 0.0, 1.5, age ) + ( 1.0 - REACH_ ) * smoothstep( 1.5, 2.5, age );
+	float letGo = smoothstep( F.z, F.z + 1.5, age );
+	vAlpha = smoothstep( drawn * 1.02, drawn * 1.02 - 0.03, aT ) * ( 1.0 - letGo ) * smoothstep( 1.1, 2.0, far ) * max( 0.15, exp( - far / ( 1.5 * uVisibility ) ) );
+	vEdge = aSide;
+	vec4 mixed = uLiftMix[ s ];
+	float e = aSeed.w;
+	vec3 tint = e < mixed.x ? uElements[ 0 ] : e < mixed.x + mixed.y ? uElements[ 3 ] : e < mixed.x + mixed.y + mixed.z ? uElements[ 1 ] : e < mixed.x + mixed.y + mixed.z + mixed.w ? uElements[ 4 ] : uElements[ 2 ];
+	tint = mix( tint, vec3( 0.97, 0.96, 0.99 ), 0.7 * F.w );
+	vTint = grieved( tint, ${GRIEF.toFixed(2)} * ( 1.0 - 0.5 * F.w ) );
+	vCore = 1.0 - aSeed.z;
+	mat4 vp = projectionMatrix * viewMatrix;
+	gl_Position = ribbonPosition( vp * vec4( here, 1.0 ), vp * vec4( next, 1.0 ), aSide, mix( 1.0, 1.3, uDay ) );
+}
+`;
+
 export interface RanatFrame {
 	since: number;
 	time: number;
@@ -733,7 +942,8 @@ function sprites(quad: THREE.PlaneGeometry, groups: number, each: number) {
 	const cells = new Float32Array(count * 2);
 	const seeds = new Float32Array(count * 4);
 	for (let i = 0; i < count; i++) {
-		cells.set([Math.floor(i / each), 0], i * 2);
+		// (Which group, and where in it, 0..1: for a share of them.)
+		cells.set([Math.floor(i / each), (i % each) / each], i * 2);
 		seeds.set([Math.random(), Math.random(), Math.random(), Math.random()], i * 4);
 	}
 	geometry.setAttribute("aCell", new THREE.InstancedBufferAttribute(cells, 2));
@@ -742,14 +952,21 @@ function sprites(quad: THREE.PlaneGeometry, groups: number, each: number) {
 	return geometry;
 }
 
-export function createRanat(scene: THREE.Scene, layer: number) {
+export function createRanat(scene: THREE.Scene, layer: number, sea: GerstnerUniforms) {
 	const resolution = { value: new THREE.Vector2(1, 1) };
 	const common = {
 		uBoat: { value: new THREE.Vector3() },
 		uAhead: { value: new THREE.Vector3(0, 0, -1) },
 		uAcross: { value: new THREE.Vector3(1, 0, 0) },
 		uTime: { value: 0 },
+		// The swells they lift (the sea's own uniforms, shared).
+		uHeaving: { value: 0 },
+		heaves: sea.heaves,
+		heaveForm: sea.heaveForm,
+		heaveLife: sea.heaveLife,
 	};
+	// 0..1 how far the pounamu have woken.
+	const practice = { value: 0 };
 	const elements = [new THREE.Color(), EARTH.clone(), FIRE.clone(), new THREE.Color(), new THREE.Color()];
 	const visibility = { value: 20_000 };
 	const day = { value: 0 };
@@ -760,9 +977,12 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 	const mist = { value: new THREE.Color() };
 
 	// The six ropes.
+	// (Her own threads, and those her pounamu add while she practises: 1.)
 	const ropeCells: [number, number][] = [];
 	ROPES.forEach((rope, r) => {
-		for (let f = 0; f < Math.round(FILAMENTS * ropeMight(rope.who)); f++) ropeCells.push([r, 0]);
+		const own = Math.round(FILAMENTS * ropeMight(rope.who));
+		const all = Math.round(own * moreThreads(rope.who));
+		for (let f = 0; f < all; f++) ropeCells.push([r, f < own ? 0 : 1]);
 	});
 	const ropeGeometry = lines(ropeCells.length, SEGMENTS, (i) => ropeCells[i]!);
 	const ropeUniforms = {
@@ -772,6 +992,7 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 		uHaul: { value: ROPES.map(() => new THREE.Vector4(-1, 0, 0, 0)) },
 		uMix: { value: ROPES.map((rope) => new THREE.Vector4(...rope.mix)) },
 		uWhite: { value: ROPES.map((rope) => rope.white) },
+		uBroad: { value: ROPES.map(() => 1) },
 		uElements: { value: elements },
 		uSeaHigh: seaHigh,
 		uVisibility: visibility,
@@ -779,18 +1000,22 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 		uGain: gain,
 		uFilm: filmLook,
 		uStrength: { value: 0 },
+		uPractice: practice,
 		uResolution: resolution,
 		uPixelRatio: pixelRatio,
 	};
 	const ropes = new THREE.Mesh(ropeGeometry, new THREE.ShaderMaterial({ uniforms: ropeUniforms, vertexShader: ropeVertex, fragmentShader: ropeFragment, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
 
 	// The bursts' weaves.
-	const burstGeometry = lines(BURSTS * BURST_FILAMENTS, BURST_SEGMENTS, (i) => [Math.floor(i / BURST_FILAMENTS), 0]);
+	// (As many threads to each as the mightiest practising weaves; her share of them, uBurstShare.)
+	const burstEach = Math.round(BURST_FILAMENTS * MOST_MORE);
+	const burstGeometry = lines(BURSTS * burstEach, BURST_SEGMENTS, (i) => [Math.floor(i / burstEach), (i % burstEach) / burstEach]);
 	const burstUniforms = {
 		...common,
 		uBurst: { value: Array.from({ length: BURSTS }, () => new THREE.Vector4(0, 0, -1, 1)) },
 		uTop: { value: Array.from({ length: BURSTS }, () => 700) },
 		uBurstHands: { value: Array.from({ length: BURSTS }, () => new THREE.Vector3()) },
+		uBurstShare: { value: Array.from({ length: BURSTS }, () => BURST_FILAMENTS / burstEach) },
 		uSeaHigh: seaHigh,
 		uWind: wind,
 		uElements: { value: elements },
@@ -805,9 +1030,11 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 	const bursts = new THREE.Mesh(burstGeometry, new THREE.ShaderMaterial({ uniforms: burstUniforms, vertexShader: burstVertex, fragmentShader: ropeFragment.replace("0.07 * mix( 1.0, 3.0, uDay )", "0.035 * mix( 1.0, 2.0, uDay )"), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
 
 	// Lantern's throws.
-	const throwGeometry = lines(THROWS * THROW_FILAMENTS, THROW_SEGMENTS, (i) => [Math.floor(i / THROW_FILAMENTS), 0]);
+	const throwEach = Math.round(THROW_FILAMENTS * moreThreads(LANTERN));
+	const throwGeometry = lines(THROWS * throwEach, THROW_SEGMENTS, (i) => [Math.floor(i / throwEach), (i % throwEach) / throwEach]);
 	const throwUniforms = {
 		...common,
+		uThrowShare: { value: THROW_FILAMENTS / throwEach },
 		uThrowA: { value: Array.from({ length: THROWS }, () => new THREE.Vector4()) },
 		uThrowB: { value: Array.from({ length: THROWS }, () => new THREE.Vector4(-1, 1, 1, 1)) },
 		uThrowC: { value: Array.from({ length: THROWS }, () => new THREE.Vector4()) },
@@ -836,9 +1063,11 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 	const shafts = new THREE.Mesh(shaftGeometry, new THREE.ShaderMaterial({ uniforms: shaftUniforms, vertexShader: shaftVertex, fragmentShader: shaftFragment, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
 
 	// Loom's akasha and Sail's air, and the water they fling across.
-	const helperGeometry = lines(2 * HELPER_FILAMENTS, HELPER_SEGMENTS, (i) => [Math.floor(i / HELPER_FILAMENTS), 0]);
+	const helperEach = Math.round(HELPER_FILAMENTS * Math.max(moreThreads(LOOM), moreThreads(SAIL)));
+	const helperGeometry = lines(2 * helperEach, HELPER_SEGMENTS, (i) => [Math.floor(i / helperEach), (i % helperEach) / helperEach]);
 	const helperUniforms = {
 		...common,
+		uHelperShare: { value: [HELPER_FILAMENTS / helperEach, HELPER_FILAMENTS / helperEach] },
 		uHelperHands: { value: [new THREE.Vector3(), new THREE.Vector3()] },
 		uHelperCast: { value: [0, 0] },
 		uHelperTint: { value: [new THREE.Color(), new THREE.Color()] },
@@ -853,20 +1082,42 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 		uPixelRatio: pixelRatio,
 	};
 	const helpers = new THREE.Mesh(helperGeometry, new THREE.ShaderMaterial({ uniforms: helperUniforms, vertexShader: helperVertex, fragmentShader: ropeFragment.replace("0.07 * mix( 1.0, 3.0, uDay )", "0.04 * mix( 1.0, 2.5, uDay )"), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
-	const flungGeometry = sprites(quad, 1, FLUNG);
+	const flungGeometry = sprites(quad, 1, FLUNG_PRACTISING);
 	const flungUniforms = {
 		...common,
 		uPlace: helperUniforms.uPlace,
 		uCarried: helperUniforms.uCarried,
 		uSwellPeriod: { value: 6 },
 		uFlung: { value: 0 },
+		uFlungShare: { value: FLUNG / FLUNG_PRACTISING },
+		uPractice: practice,
 		uDrop: { value: new THREE.Color() },
 		uResolution: resolution,
 		uPixelRatio: pixelRatio,
 	};
 	const flung = new THREE.Mesh(flungGeometry, new THREE.ShaderMaterial({ uniforms: flungUniforms, vertexShader: flungVertex, fragmentShader: flungFragment, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
 
-	const meshes = [shafts, plume, stream, ropes, bursts, throws, helpers, flung];
+	// The weaves that lift the swells while they practise.
+	const liftGeometry = lines(LIFTS * LIFT_FILAMENTS, LIFT_SEGMENTS, (i) => [Math.floor(i / LIFT_FILAMENTS), (i % LIFT_FILAMENTS) / LIFT_FILAMENTS]);
+	const liftUniforms = {
+		...common,
+		uLift: { value: Array.from({ length: LIFTS }, () => new THREE.Vector4(0, 0, -1, 0)) },
+		uLiftForm: { value: Array.from({ length: LIFTS }, () => new THREE.Vector4(100, 8, 10, 0)) },
+		uLiftHands: { value: Array.from({ length: LIFTS }, () => new THREE.Vector3()) },
+		uLiftMix: { value: Array.from({ length: LIFTS }, () => new THREE.Vector4(0.5, 0.2, 0.2, 0.1)) },
+		uElements: { value: elements },
+		uSeaHigh: seaHigh,
+		uVisibility: visibility,
+		uDay: day,
+		uGain: gain,
+		uFilm: filmLook,
+		uStrength: { value: 1 },
+		uResolution: resolution,
+		uPixelRatio: pixelRatio,
+	};
+	const lifts = new THREE.Mesh(liftGeometry, new THREE.ShaderMaterial({ uniforms: liftUniforms, vertexShader: liftVertex, fragmentShader: ropeFragment.replace("0.07 * mix( 1.0, 3.0, uDay )", "0.05 * mix( 1.0, 2.5, uDay )"), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+
+	const meshes = [shafts, plume, stream, ropes, bursts, throws, helpers, flung, lifts];
 	for (const mesh of meshes) {
 		mesh.frustumCulled = false;
 		mesh.renderOrder = WEAVE_RENDER_ORDER;
@@ -889,6 +1140,21 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 	let called = 0;
 	let now = { since: -1 };
 	const STYLES = ["a thread", "a sheaf", "up the wind", "far and then up", "a few apart"];
+	// The swells they lift: each weave (whose, its swell's slot in the sea, when she began, in `since`),
+	// and who lifted last and when the next may begin.
+	const lifting = Array.from({ length: LIFTS }, () => ({ who: -1, ring: -1, at: -1, lasts: 0 }));
+	const lifted = Array.from({ length: HEAVES }, () => ({ who: -1, size: 0 }));
+	let nextLift = FIRST_LIFT;
+	let lastLifter = -1;
+	let liftedCount = 0;
+	const clearSea = () => {
+		for (let i = 0; i < HEAVES; i++) {
+			sea.heaves.value[i]!.set(0, 0, 0, 0);
+			sea.heaveLife.value[i] = 0;
+			lifted[i] = { who: -1, size: 0 };
+		}
+		common.uHeaving.value = 0;
+	};
 
 	const off = () => {
 		for (const mesh of meshes) mesh.visible = false;
@@ -897,6 +1163,52 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 		nextThrow = LANTERN_FROM;
 		called = 0;
 		now = { since: -1 };
+		for (const one of lifting) one.at = -1;
+		nextLift = FIRST_LIFT;
+		lastLifter = -1;
+		liftedCount = 0;
+		if (sea.heaves.value.some((q) => q.w > 0)) clearSea();
+	};
+
+	// She lifts a dome of the sea, as great as her strength while practising, out on her own side, and
+	// lets it fall (heaveAt in gerstner-waves.ts).
+	const liftOne = (slot: number, who: number, since: number, time: number, boat: THREE.Vector3) => {
+		const ring = sea.heaves.value.findIndex((q, i) => q.w <= 0 || time - q.z > sea.heaveForm.value[i]!.z + sea.heaveLife.value[i]!);
+		if (ring < 0) return false;
+		const dome = domeOf(who);
+		const rel = dome / 36;
+		const width = 25 + 4 * dome;
+		const out = 1.7 * width + between(20, 160) * (0.6 + 0.4 * rel);
+		// (Off her own side of the boat: Leilehua astern, those at the front and the bow ahead.)
+		const seat = seatOf(who, boat, ahead, across);
+		const lateral = (seat.x - boat.x) * across.x + (seat.z - boat.z) * across.z;
+		const place = new THREE.Vector3();
+		let clear = false;
+		for (let attempt = 0; attempt < 6 && !clear; attempt++) {
+			const bearing = THREE.MathUtils.degToRad(who === LEILEHUA_MIND ? 180 + between(-35, 35) : Math.abs(lateral) < 0.5 ? between(-30, 30) : Math.sign(lateral) * between(8, 40));
+			place.set(boat.x + (ahead.x * Math.cos(bearing) + across.x * Math.sin(bearing)) * out, 0, boat.z + (ahead.z * Math.cos(bearing) + across.z * Math.sin(bearing)) * out);
+			// (Not on another's dome while it stands.)
+			clear = sea.heaves.value.every((q, i) => q.w <= 0 || time - q.z > sea.heaveForm.value[i]!.z + 6 || Math.hypot(q.x - place.x, q.y - place.z) > 1.2 * (width + sea.heaveForm.value[i]!.x));
+		}
+		if (!clear) return false;
+		const rise = between(5, 8) * (0.8 + 0.5 * rel);
+		const hold = between(1, 3);
+		// (Its ring runs on until well past the boat: as far as it is out, at its group speed, and a minute.)
+		const groupSpeed = 0.5 * Math.sqrt((9.8 * 3 * width) / (2 * Math.PI));
+		const life = out / groupSpeed + 60;
+		// (The dome begins to rise as her threads reach it, two seconds after she begins.)
+		sea.heaves.value[ring]!.set(place.x, place.z, time + 2, dome);
+		sea.heaveForm.value[ring]!.set(width, rise, rise + hold, 0.45 * dome);
+		sea.heaveLife.value[ring] = life;
+		lifted[ring] = { who, size: dome };
+		lifting[slot] = { who, ring, at: since, lasts: 2 + rise + hold + 2 };
+		const form = liftUniforms.uLiftForm.value[slot]!;
+		form.set(width, 2 + rise, 2 + rise + hold, who === STRONGEST_MIND ? 1 : 0);
+		liftUniforms.uLift.value[slot]!.set(place.x, place.z, 0, liftThreads(who));
+		liftUniforms.uLiftMix.value[slot]!.set(...((who === STRONGEST_MIND ? [0.35, 0.3, 0, 0.2] : [0.5, 0.2, 0.2, 0.1]) as [number, number, number, number]));
+		lastLifter = who;
+		liftedCount++;
+		return true;
 	};
 
 	const throwOne = (slot: number, since: number) => {
@@ -906,11 +1218,13 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 		if (Math.abs(bearing - lastBearing) < 25) bearing = bearing > 0 ? bearing - 50 : bearing + 50;
 		lastStyle = style;
 		lastBearing = bearing;
-		const far = [between(100, 500), between(150, 600), between(200, 800), between(900, 2200), between(60, 250)][style]!;
+		// (Further and higher while she practises.)
+		const reach = 1 + 0.3 * practice.value;
+		const far = [between(100, 500), between(150, 600), between(200, 800), between(900, 2200), between(60, 250)][style]! * reach;
 		const rise = between(4, 14);
 		const hold = between(4, 18);
 		const fade = between(3, 9);
-		throwUniforms.uThrowA.value[slot]!.set(THREE.MathUtils.degToRad(bearing), far, between(450, 900), style);
+		throwUniforms.uThrowA.value[slot]!.set(THREE.MathUtils.degToRad(bearing), far, between(450, 900) * (1 + 0.4 * practice.value), style);
 		throwUniforms.uThrowC.value[slot]!.set(style === 1 ? between(0.25, 0.6) : style === 4 ? between(0.5, 1.1) : 0, style === 2 ? between(0.3, 0.9) : between(0, 0.15), Math.random(), 0);
 		throwUniforms.uThrowB.value[slot]!.set(0, rise, hold, fade);
 		thrown[slot] = { at: since, lasts: rise + hold + fade + (style === 4 ? 3 : 0), reached: 0 };
@@ -943,6 +1257,10 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 		elements[3]!.copy(frame.air);
 		elements[4]!.copy(frame.gold);
 		if (pull === undefined) pull = THREE.MathUtils.clamp(4 * (frame.swellPeriod || 10), 30, 52);
+		// Their pounamu waking, and how much more of each one's weaving there is for it.
+		practice.value = THREE.MathUtils.smoothstep(since, RANAT_PRACTICE, RANAT_PRACTICE + WAKING);
+		const more = (who: number) => 1 + (moreThreads(who) - 1) * practice.value;
+		const broad = (who: number) => 1 + (broader(who) - 1) * practice.value;
 
 		// The six: each casts out, then hauls, bursts it, and is still, in her own time.
 		ropeUniforms.uStrength.value = THREE.MathUtils.smoothstep(since, 0.5, 3);
@@ -951,8 +1269,10 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 			ropeUniforms.uSeats.value[r]!.copy(hands);
 			burstUniforms.uBurstHands.value[2 * r]!.copy(hands);
 			burstUniforms.uBurstHands.value[2 * r + 1]!.copy(hands);
+			burstUniforms.uBurstShare.value[2 * r] = burstUniforms.uBurstShare.value[2 * r + 1] = (BURST_FILAMENTS * more(rope.who)) / burstEach;
 			const cast = THREE.MathUtils.smoothstep(since, rope.joins, rope.joins + 5);
 			ropeUniforms.uRope.value[r]!.set(rope.bearing, rope.far, 1.05 * cast, 1.4 * Math.cbrt(ropeMight(rope.who)));
+			ropeUniforms.uBroad.value[r] = broad(rope.who);
 			const cycle = pull! + 12 + rope.rest;
 			const phase = since - (rope.joins + 5);
 			const haul = ropeUniforms.uHaul.value[r]!;
@@ -985,7 +1305,7 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 						boat.x + (ahead.x * Math.cos(bearing) + across.x * Math.sin(bearing)) * out,
 						boat.z + (ahead.z * Math.cos(bearing) + across.z * Math.sin(bearing)) * out,
 						since - (rope.joins + 5 + m * cycle + pull!),
-						0.6 + 0.6 * rope.size,
+						(0.6 + 0.6 * rope.size) * broad(rope.who),
 					);
 					burstUniforms.uTop.value[slot] = 650 + 250 * rope.size;
 				}
@@ -995,6 +1315,9 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 		// Lantern's throws of water into the sky, each unlike the last.
 		throwUniforms.uHands.value.copy(seatOf(LANTERN, boat, ahead, across)).setY(boat.y - 1.4);
 		throwUniforms.uWater.value.copy(frame.water);
+		throwUniforms.uThrowShare.value = (THROW_FILAMENTS * more(LANTERN)) / throwEach;
+		// (While she practises, more at once and quicker after each other.)
+		const open = practice.value > 0 ? THROWS : THROWS_BEFORE;
 		let reaching = 0;
 		thrown.forEach((one, slot) => {
 			const b = throwUniforms.uThrowB.value[slot]!;
@@ -1010,10 +1333,10 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 					reaching += one.reached;
 				}
 			}
-			if (one.at < 0 && since >= nextThrow) {
+			if (one.at < 0 && slot < open && since >= nextThrow) {
 				throwOne(slot, since);
 				// (Unsteady: sometimes two close together, sometimes a long wait.)
-				nextThrow = since + (Math.random() < 0.3 ? between(1, 4) : between(6, 20));
+				nextThrow = since + (practice.value > 0 ? (Math.random() < 0.5 ? between(0.5, 2.5) : between(2.5, 7)) : Math.random() < 0.3 ? between(1, 4) : between(6, 20));
 			}
 		});
 		const want = THREE.MathUtils.clamp(reaching / 2, 0, 1);
@@ -1033,6 +1356,9 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 		helperUniforms.uHelperCast.value[1] = 1.05 * THREE.MathUtils.smoothstep(since, ASPIRATE_FROM, ASPIRATE_FROM + 4);
 		helperUniforms.uHelperTint.value[0]!.copy(frame.gold);
 		helperUniforms.uHelperTint.value[1]!.copy(frame.air);
+		helperUniforms.uHelperShare.value[0] = (HELPER_FILAMENTS * more(LOOM)) / helperEach;
+		helperUniforms.uHelperShare.value[1] = (HELPER_FILAMENTS * more(SAIL)) / helperEach;
+		flungUniforms.uFlungShare.value = (FLUNG + (FLUNG_PRACTISING - FLUNG) * practice.value) / FLUNG_PRACTISING;
 		const swellPeriod = THREE.MathUtils.clamp((frame.swellPeriod || 10) / 2, 3, 7);
 		helperUniforms.uSwell.value = Math.max(0, Math.sin((2 * Math.PI * frame.time) / swellPeriod)) ** 2;
 		flungUniforms.uSwellPeriod.value = swellPeriod;
@@ -1049,10 +1375,43 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 		shaftUniforms.uRain.value.copy(frame.mist).multiplyScalar(THREE.MathUtils.lerp(0.8, 0.72, frame.day));
 		shaftUniforms.uShaft.value = THREE.MathUtils.lerp(0.5, 1, frame.day);
 
+		// The swells they lift while practising, in turns: Laeni first, then whoever is free, the
+		// strongest and the eager most often, never the same one twice running.
+		lifting.forEach((one, slot) => {
+			if (one.at >= 0 && since - one.at > one.lasts) one.at = -1;
+			liftUniforms.uLift.value[slot]!.setZ(one.at >= 0 ? since - one.at : -1);
+			if (one.at >= 0) liftUniforms.uLiftHands.value[slot]!.copy(seatOf(one.who, boat, ahead, across));
+		});
+		if (practice.value >= 1 && since >= nextLift) {
+			const slot = lifting.findIndex((one) => one.at < 0);
+			if (slot >= 0) {
+				const busy = lifting.filter((one) => one.at >= 0).map((one) => one.who);
+				let who = STRONGEST_MIND;
+				if (liftedCount > 0 || busy.includes(who)) {
+					const weights = HEAVERS.map((one) => (one === lastLifter || busy.includes(one) ? 0 : massOf(one) * (0.5 + TEMPERS[one]!.eager)));
+					let pick = Math.random() * weights.reduce((a, b) => a + b, 0);
+					who = HEAVERS[weights.findIndex((w) => (pick -= w) <= 0)] ?? HEAVERS[1]!;
+				}
+				// (If the sea has no room for it just now, she waits a moment.)
+				nextLift = liftOne(slot, who, since, frame.time, boat) ? since + between(6, 13) : since + 1;
+			}
+		}
+		common.uHeaving.value = sea.heaves.value.some((q, i) => q.w > 0 && frame.time - q.z <= sea.heaveForm.value[i]!.z + sea.heaveLife.value[i]!) ? 1 : 0;
+
 		const blending = frame.day > 0.5 ? THREE.NormalBlending : THREE.AdditiveBlending;
-		for (const mesh of [ropes, bursts, throws, helpers]) (mesh.material as THREE.ShaderMaterial).blending = blending;
+		for (const mesh of [ropes, bursts, throws, helpers, lifts]) (mesh.material as THREE.ShaderMaterial).blending = blending;
 		for (const mesh of meshes) mesh.visible = true;
 		now = { since };
+	};
+
+	// (For the console: how far their swells lift the sea at the boat just now, m.)
+	const seaAtBoat = () => {
+		let h = 0;
+		for (let i = 0; i < HEAVES; i++) {
+			const heave = heaveAt(sea, i, common.uBoat.value.x, common.uBoat.value.z, common.uTime.value);
+			if (heave) h += heave.dome + heave.a * Math.sin(heave.f);
+		}
+		return h;
 	};
 
 	// 0..1 how far Lantern's calls have brought the rain on over the boat, eased.
@@ -1070,6 +1429,16 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 					}),
 					`${NAMES[LOOM]}: akasha into the sea ${AKASHA_AT.far} m out at ${AKASHA_AT.bearing}°${now.since >= AKASHA_FROM ? "" : " (not yet)"} · ${NAMES[SAIL]}: lifting it across to ${CARRIED_TO.bearing}°, ${Math.round(flungUniforms.uFlung.value * 100)}%`,
 					...thrown.map((one, slot) => (one.at < 0 ? `Lantern ${slot + 1}: free` : `Lantern ${slot + 1}: ${STYLES[throwUniforms.uThrowA.value[slot]!.w]!} at ${Math.round(THREE.MathUtils.radToDeg(throwUniforms.uThrowA.value[slot]!.x))}°, ${Math.round(throwUniforms.uThrowA.value[slot]!.y)} m out, ${Math.round(now.since - one.at)} s`)),
+					practice.value <= 0
+						? `practising from ${RANAT_PRACTICE} s (not yet)`
+						: `practising, the pounamu ${Math.round(practice.value * 100)}% woken: ${liftedCount} swells lifted; their swells lift the sea at the boat ${seaAtBoat().toFixed(1)} m`,
+					...lifting.map((one, slot) => (one.at < 0 ? `lift ${slot + 1}: free` : `lift ${slot + 1}: ${NAMES[one.who]} (×${PRACTICE_GAIN[one.who]!.toFixed(2)}), a dome ${lifted[one.ring]!.size.toFixed(0)} m high, ${Math.round(Math.hypot(sea.heaves.value[one.ring]!.x - common.uBoat.value.x, sea.heaves.value[one.ring]!.y - common.uBoat.value.z))} m out, ${Math.round(now.since - one.at)} s`)),
+					...lifted.flatMap((one, ring) => {
+						const q = sea.heaves.value[ring]!;
+						if (one.who < 0 || q.w <= 0) return [];
+						const after = common.uTime.value - q.z - sea.heaveForm.value[ring]!.z;
+						return after < 0 || after > sea.heaveLife.value[ring]! ? [] : [`swell ${ring + 1}: ${NAMES[one.who]}'s, let fall ${Math.round(after)} s ago, ${sea.heaveForm.value[ring]!.w.toFixed(1)} m`];
+					}),
 				];
 
 	const dispose = () => {
@@ -1077,8 +1446,14 @@ export function createRanat(scene: THREE.Scene, layer: number) {
 			scene.remove(mesh);
 			(mesh.material as THREE.Material).dispose();
 		}
-		for (const geometry of [ropeGeometry, burstGeometry, throwGeometry, streamGeometry, plumeGeometry, shaftGeometry, helperGeometry, flungGeometry, quad]) geometry.dispose();
+		for (const geometry of [ropeGeometry, burstGeometry, throwGeometry, streamGeometry, plumeGeometry, shaftGeometry, helperGeometry, flungGeometry, liftGeometry, quad]) geometry.dispose();
+		clearSea();
 	};
 
-	return { update, rainCalled, describe, dispose };
+	// Whether they are practising (for the lightning they draw down, jenna.ts), and each one's strength
+	// as drawn while they do.
+	const practising = () => now.since >= 0 && practice.value > 0;
+	const mightNow = (who: number) => ropeMight(who) * (1 + (massOf(who) - 1) * practice.value);
+
+	return { update, rainCalled, practising, mightNow, describe, dispose };
 }

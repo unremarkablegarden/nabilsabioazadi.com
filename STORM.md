@@ -1122,3 +1122,53 @@ ocean while another one helps her aspirate the water into weak swells that fly a
   only then goes up through it into the cloud. (What rises from the water now is only water: the hauled
   spray, the cloud, the rain.) Seen once by day about two minutes in. The earlier events' weaves
   (fresh.ts, tsunami.ts and others) still begin some metres out; none of them is on.
+
+## 42. Practising with the pounamu, in Ranat's storm (5 November)
+
+The owner, the same day: "Can we make this storm more interesting and robust after about 35 seconds?
+Let the channellers play with creating huge swells on purpose just to practise how strong their
+terangreal pounamu are — meaning that everyone is suddenly 400+% in strength at least and the strongest
+four are 8888%+ in strength, trying to create huge waves, lightning, crazy rain."
+
+- At 35 s (`RANAT_PRACTICE`) their pounamu wake, over four seconds. Read, as "she is at 4000%" was, as
+  that share of her own strength: each at least 400%, more the more water-minded she is (pounamu being
+  river stone, as on 23 October), up to 800% (Reef, Mohabat); the strongest four by `TRUE_STRENGTH`,
+  Laeni, Pardis, Manulani and Keel, 8888% (`PRACTICE_GAIN`, `STRONGEST_FOUR` in psyche.ts). Laeni is then
+  still 4.1 times all the others together, so the rule of 5 November holds. Drawn as all strength is, by
+  its cube root (about 4.5 times the mass for the four, 1.6 to 2 for the rest): the six ropes gain
+  threads that run out from their palms along them and broaden out over the sea (not about the boat,
+  where at that mass they whitened the whole near view: there the added threads are faint and the
+  ropes no broader); the bursts take more threads and broaden; Lantern, Loom and Sail weave more.
+- The swells: from 38 s, in turns, everyone but Lantern, Loom and Sail (who are working the rain) lifts a
+  dome of the sea on her weave and lets it fall: Laeni first, then whoever is free, the strongest and the
+  eager most often, never the same one twice running, a new one every 6 to 13 s, three at most at once.
+  Her rope runs out from her palms low over the sea to the dome's near foot and goes down into the water
+  there, spreading under it as roots do. The dome rises over 5 to 11 s, its surface smooth and glassy
+  (the sea's own waves drawn out over it), the sea about it drawn down by as much as it holds; she holds
+  it a moment and lets go; it falls back in foam, and a ring of swell runs out from it (Cauchy and
+  Poisson's problem, as Jenna's strike rings, but waves three times the dome's width long), lowering as
+  it spreads, which the boat rides (`heaveAt` and `heaveChunk` in gerstner-waves.ts, ten at a time,
+  `seaSurfaceAt`). Sizes go by a gentle power of strength while practising: Laeni's dome 36 m high and
+  some 340 m across, about 300 to 450 m out, its swell about 22 m trough to crest at the boat 30 s after
+  she lets go; Pardis's 26 m, Manulani's and Keel's 24 and 23 (swells of 14 to 16 m); Mohabat's and
+  Listener's 14 m (8 m); the rest 6 to 9 m (3 to 5 m). Each on her own side of the boat; Leilehua's astern.
+  Everything of the storm's that lies on the sea (the ropes, the hauled spray, the bursts' runs out, the
+  throw laid low, Loom's and Sail's threads, the flung water) rides these swells.
+- The lightning: their practice raises the storm sooner (`ranatPractised`, over 90 s from 35 s, worked
+  out every ten seconds then) and turns it to a thunderstorm (code 95, the air's energy to 5000 J/kg,
+  gusts 1.9 times the wind); they draw its bolts down to the sea as in Jenna's storm (jenna.ts), by their
+  practising strengths (Laeni first), each bolt's swell 9 m for the strongest. (Jenna's weave is drawn
+  no broader than the strongest's was in her storm: given the practising strengths it had swollen into
+  white masses over the whole view.)
+- The rain: Lantern throws two and three at a time (eight at most, every half second to seven seconds),
+  further and higher, and the rain comes on harder for it; Loom and Sail fling near three times as much
+  water across the view, wider and higher; the storm's own rain is 2.5 times what it was, the haze
+  closer.
+- Found on the way: a variable named `cast` (a reserved word in GLSL) had kept Loom's and Sail's threads
+  from being drawn at all in this browser since §41; renamed, they are drawn now.
+- Seen at 1280 by 720 in the in-app browser, by day, between 60 and 140 s: the domes rising (Laeni's as
+  a glassy hill across the right of the view), the swells reaching the boat (the sea there from 11 m
+  under to 9 m over its mean), a bolt drawn down by Laeni, no errors. Not seen: night, dawn or dusk, a
+  phone, frame timing (the pane was in the background), the lift weave's roots at close range.
+  `__ranat()` in the console lists the lifts, the swells running and how far they lift the sea at the
+  boat.

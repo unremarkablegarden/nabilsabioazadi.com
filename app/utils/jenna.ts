@@ -264,8 +264,9 @@ export function createJenna(scene: THREE.Scene, layer: number, rings: THREE.Vect
 	let lastCalled = -Infinity;
 	const ready = (time: number, cape: number) => freeSlot(time) >= 0 && freeRing(time) >= 0 && time - lastCalled > 40 / (0.5 + Math.max(cape, 0) / 2000);
 
-	// She calls the bolt: from `top` in the cloud to `foot` on the sea, striking at `strikeAt`.
-	const call = (top: THREE.Vector3, foot: THREE.Vector3, time: number, strikeAt: number) => {
+	// She calls the bolt: from `top` in the cloud to `foot` on the sea, striking at `strikeAt`. (In
+	// Ranat's storm, practising, by their strength then: `mightOf`, ranat.ts.)
+	const call = (top: THREE.Vector3, foot: THREE.Vector3, time: number, strikeAt: number, mightOf: (who: number) => number = ropeMightThen) => {
 		const slot = freeSlot(time);
 		const ring = freeRing(time);
 		if (slot < 0 || ring < 0) return false;
@@ -273,7 +274,7 @@ export function createJenna(scene: THREE.Scene, layer: number, rings: THREE.Vect
 		let who = STRONGEST_MIND;
 		if (!first || busy.includes(who)) {
 			// Whoever is free, most often those of both air and water.
-			const weights = TEMPERS.slice(0, STORM_MINDS).map((t, i) => (busy.includes(i) ? 0 : (t.air * t.water) ** 2 * ropeMightThen(i)));
+			const weights = TEMPERS.slice(0, STORM_MINDS).map((t, i) => (busy.includes(i) ? 0 : (t.air * t.water) ** 2 * mightOf(i)));
 			let pick = Math.random() * weights.reduce((a, b) => a + b, 0);
 			who = weights.findIndex((w) => (pick -= w) <= 0);
 			if (who < 0) who = 0;
@@ -281,10 +282,11 @@ export function createJenna(scene: THREE.Scene, layer: number, rings: THREE.Vect
 		first = false;
 		lastCalled = time;
 		holder[slot] = who;
-		const might = ropeMightThen(who);
+		const might = mightOf(who);
 		const height = Math.min(9, 2 + 0.9 * might);
 		uniforms.uFoot.value[slot]!.set(foot.x, 0, foot.z, height);
-		uniforms.uWhen.value[slot]!.set(time, strikeAt, Math.max(0.3, might / MOST), 1);
+		// (Her share no more than the whole: the weave is drawn no broader than the strongest's was.)
+		uniforms.uWhen.value[slot]!.set(time, strikeAt, THREE.MathUtils.clamp(might / MOST, 0.3, 1), 1);
 		// (Until it strikes, the channel is taken to run straight.)
 		for (let i = 0; i < 4; i++) uniforms.uAxis.value[slot * 4 + i]!.lerpVectors(top, foot, i / 3);
 		rings[ring]!.set(foot.x, foot.z, strikeAt + PRESS, height);

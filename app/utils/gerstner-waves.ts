@@ -277,6 +277,106 @@ export function breathRing(uniforms: GerstnerUniforms, x: number, z: number, tim
 	return { a, f: k * r - omega * tau, k, dirX: r > 1 ? rx / r : 0, dirZ: r > 1 ? rz / r : 0 };
 }
 
+// Ranat's practice (ranat.ts): the great swells they raise on purpose. Each is a dome of the sea she
+// lifts on her weave, holds, and lets fall. Water lifted must come from somewhere, so the sea about it
+// is drawn down by as much as the dome holds (a shallow ring twice as wide). When she lets it fall the
+// sea answers as deep water answers any sudden rise or fall (Cauchy and Poisson's problem, as
+// strikeRing): a ring of swell running out from it, sorted by length as it goes, the longest first;
+// waves some three times the dome's width long, so a dome a few hundred metres across sends out a
+// swell of twenty seconds. Lowering as one over the root of how far it has spread round and how long
+// its train has drawn out, and never steeper than a long swell stands. The water falling back leaves
+// foam in a ring about where the dome stood. (The same in the water shader, heaveAt.)
+//   heaves:     where (x, z), when it began to rise (in waveTime), and how high the dome stands (m)
+//   heaveForm:  its width (m, the dome's e-folding radius), how long it takes to rise (s), when she lets
+//               it fall (s after it began), and how high its ring of swell is (m)
+//   heaveLife:  how long its ring runs on after she lets it fall (s)
+export const HEAVES = 10;
+const HEAVE_FALL = 5;
+const HEAVE_STEEP = 0.15;
+// (Its swell sways sideways less than the sea's own trains, as a swell from far off does.)
+const HEAVE_SWAY = 0.5;
+export function heaveAt(uniforms: GerstnerUniforms, i: number, x: number, z: number, time: number) {
+	const q = uniforms.heaves.value[i]!;
+	const form = uniforms.heaveForm.value[i]!;
+	const t = time - q.z;
+	if (q.w <= 0 || t <= 0) return undefined;
+	const after = t - form.z;
+	const life = uniforms.heaveLife.value[i]!;
+	if (after > life) return undefined;
+	const rx = x - q.x;
+	const rz = z - q.y;
+	const r2 = rx * rx + rz * rz;
+	const b = form.x;
+	const up = THREE.MathUtils.smoothstep(t, 0, form.y) * (1 - THREE.MathUtils.smoothstep(after, 0, HEAVE_FALL));
+	const dome = up > 0 ? ((q.w * up) / 0.75) * (Math.exp(-r2 / (b * b)) - 0.25 * Math.exp(-r2 / (4 * b * b))) : 0;
+	const tr = after - 1.5;
+	if (tr <= 0) return { dome, a: 0, f: 0, k: 1, dirX: 0, dirZ: 0 };
+	const r = Math.sqrt(r2);
+	const L0 = 3 * b;
+	const reach = Math.sqrt(r2 + b * b);
+	const k = (9.8 * tr * tr) / (4 * reach * reach);
+	const sorted = Math.exp(-((Math.log((2 * Math.PI) / k / L0) / 0.55) ** 2));
+	const a = Math.min(((form.w * sorted) / Math.sqrt((1 + r / (1.5 * L0)) * (1 + tr / (60 * Math.sqrt(L0 / 200))))) * THREE.MathUtils.smoothstep(tr, 0, 3) * (1 - THREE.MathUtils.smoothstep(after, life - 30, life)), HEAVE_STEEP / k);
+	const f = (3 * Math.PI) / 4 - (9.8 * tr * tr) / (4 * reach);
+	return { dome, a, f, k, dirX: r > 1 ? rx / r : 0, dirZ: r > 1 ? rz / r : 0 };
+}
+// The same for the weaves that lie on the sea (ranat.ts): every heave's height at p (no sway), in GLSL,
+// against the time uniform named.
+export const heaveChunk = (time: string) => /* glsl */ `
+uniform vec4 heaves[ ${HEAVES} ];
+uniform vec4 heaveForm[ ${HEAVES} ];
+uniform float heaveLife[ ${HEAVES} ];
+bool heaveAt( int i, vec2 p, out float dome, out vec2 slope, out float a, out float f, out float k, out vec2 d, out float churn ) {
+	dome = 0.0;
+	slope = vec2( 0.0 );
+	a = 0.0;
+	f = 0.0;
+	k = 1.0;
+	d = vec2( 0.0 );
+	churn = 0.0;
+	vec4 q = heaves[ i ];
+	vec4 form = heaveForm[ i ];
+	float t = ${time} - q.z;
+	if ( q.w <= 0.0 || t <= 0.0 ) return false;
+	float after = t - form.z;
+	float life = heaveLife[ i ];
+	if ( after > life ) return false;
+	vec2 rel = p - q.xy;
+	float r2 = dot( rel, rel );
+	float b = form.x;
+	float up = smoothstep( 0.0, form.y, t ) * ( 1.0 - smoothstep( 0.0, ${HEAVE_FALL.toFixed(1)}, after ) );
+	if ( up > 0.0 ) {
+		float e1 = exp( - r2 / ( b * b ) );
+		float e2 = exp( - r2 / ( 4.0 * b * b ) );
+		float h = q.w * up / 0.75;
+		dome = h * ( e1 - 0.25 * e2 );
+		slope = h * rel * ( 0.125 * e2 - 2.0 * e1 ) / ( b * b );
+	}
+	float r = sqrt( r2 );
+	// (The water falling back: foam in a ring about where it stood.)
+	churn = smoothstep( 0.0, 1.0, after ) * ( 1.0 - smoothstep( 2.0, 14.0, after ) ) * exp( - pow( ( r - 1.1 * b ) / ( 0.45 * b ), 2.0 ) );
+	float tr = after - 1.5;
+	if ( tr <= 0.0 ) return true;
+	float L0 = 3.0 * b;
+	float reach = sqrt( r2 + b * b );
+	k = 9.8 * tr * tr / ( 4.0 * reach * reach );
+	float sorted = exp( - pow( log( 6.28318 / k / L0 ) / 0.55, 2.0 ) );
+	a = min( form.w * sorted * inversesqrt( ( 1.0 + r / ( 1.5 * L0 ) ) * ( 1.0 + tr / ( 60.0 * sqrt( L0 / 200.0 ) ) ) ) * smoothstep( 0.0, 3.0, tr ) * ( 1.0 - smoothstep( life - 30.0, life, after ) ), ${HEAVE_STEEP} / k );
+	f = 2.35619 - 9.8 * tr * tr / ( 4.0 * reach );
+	d = r > 1.0 ? rel / r : vec2( 0.0 );
+	return true;
+}
+float heaveHeight( vec2 p ) {
+	float h = 0.0;
+	for ( int i = 0; i < ${HEAVES}; i ++ ) {
+		float dome, a, f, k, churn;
+		vec2 slope, d;
+		if ( heaveAt( i, p, dome, slope, a, f, k, d, churn ) ) h += dome + a * sin( f );
+	}
+	return h;
+}
+`;
+
 // The freshening (fresh.ts): how many places they work the water at, and how far round the boat
 // the strongest's light falls and the water is made fresh (m).
 export const FRESH_PLACES = 14;
@@ -340,6 +440,8 @@ export function crestLimitFor(uniforms: GerstnerUniforms) {
 	for (const q of uniforms.strikeRings.value) if (q.w > 0) sum += 0.6 * 0.12;
 	// (And the sea's breathing, at its steepest.)
 	if (uniforms.breath.value.w > 0) sum += 0.6 * BREATH_STEEP;
+	// (And Ranat's practice swells, each at its steepest.)
+	for (const q of uniforms.heaves.value) if (q.w > 0) sum += HEAVE_SWAY * HEAVE_STEEP;
 	sum *= 1 + 0.5 * uniforms.lensCurrent.value.w;
 	return Math.min(1, 0.8 / Math.max(sum, 1e-6));
 }
@@ -383,6 +485,14 @@ export function seaSurfaceAt(uniforms: GerstnerUniforms, x: number, z: number, t
 			dx += breathing.dirX * breathing.a * 0.6 * Math.cos(breathing.f);
 			dz += breathing.dirZ * breathing.a * 0.6 * Math.cos(breathing.f);
 			h += breathing.a * Math.sin(breathing.f);
+		}
+		for (let i = 0; i < HEAVES; i++) {
+			const heave = heaveAt(uniforms, i, px, pz, time);
+			if (!heave) continue;
+			h += heave.dome;
+			dx += heave.dirX * heave.a * HEAVE_SWAY * Math.cos(heave.f);
+			dz += heave.dirZ * heave.a * HEAVE_SWAY * Math.cos(heave.f);
+			h += heave.a * Math.sin(heave.f);
 		}
 		h += tsunamiHeight(uniforms, px, pz);
 		return { dx: dx * limit, dz: dz * limit, h };
@@ -568,6 +678,10 @@ export interface GerstnerUniforms {
 	// height at the boat (m); its wavenumber and angular frequency, and when it rose from and to its full.
 	breath: THREE.IUniform<THREE.Vector4>;
 	breathForm: THREE.IUniform<THREE.Vector4>;
+	// Ranat's practice swells (ranat.ts, heaveAt): each dome, its form, and how long its ring runs on.
+	heaves: THREE.IUniform<THREE.Vector4[]>;
+	heaveForm: THREE.IUniform<THREE.Vector4[]>;
+	heaveLife: THREE.IUniform<number[]>;
 	// The strongest's light (fresh.ts): where it is (world) and how bright at the boat, before tone
 	// mapping; the boat (x, z), how far round it the beam falls (m) and how soft its edge (m); its
 	// colour, and its distance from the boat squared (m²).
@@ -826,6 +940,32 @@ void breathRing( vec2 p, inout vec3 offset, inout vec3 tangent, inout vec3 binor
 	binormal += vec3( - 0.6 * d.x * d.y * s * sin( f ), d.y * s * cos( f ), - 0.6 * d.y * d.y * s * sin( f ) );
 	crest += 0.3 * s * sin( f );
 }
+// Ranat's practice swells, as heaveAt in gerstner-waves.ts: each dome she holds up, and the ring of
+// swell its fall sends out.
+${heaveChunk("waveTime")}
+void heaveRing( int i, vec2 p, inout vec3 offset, inout vec3 tangent, inout vec3 binormal, inout float crest ) {
+	float dome, a, f, k, churn;
+	vec2 slope, d;
+	if ( ! heaveAt( i, p, dome, slope, a, f, k, d, churn ) ) return;
+	// (The water she holds up lies smooth, stretched over the dome as it rises: the sea's own waves are
+	// drawn out on it, so that it shows as one glassy hill.)
+	float keep = 1.0 - 0.7 * clamp( dome / max( heaves[ i ].w, 0.01 ), 0.0, 1.0 );
+	offset *= keep;
+	tangent = mix( vec3( 1.0, 0.0, 0.0 ), tangent, keep );
+	binormal = mix( vec3( 0.0, 0.0, 1.0 ), binormal, keep );
+	crest *= keep;
+	offset.y += dome;
+	tangent.y += slope.x;
+	binormal.y += slope.y;
+	crest += 0.7 * churn;
+	if ( a < 0.002 ) return;
+	float s = a * k;
+	float w = ${HEAVE_SWAY.toFixed(2)};
+	offset += vec3( w * d.x * a * cos( f ), a * sin( f ), w * d.y * a * cos( f ) );
+	tangent += vec3( - w * d.x * d.x * s * sin( f ), d.x * s * cos( f ), - w * d.x * d.y * s * sin( f ) );
+	binormal += vec3( - w * d.x * d.y * s * sin( f ), d.y * s * cos( f ), - w * d.y * d.y * s * sin( f ) );
+	crest += 0.4 * s * sin( f );
+}
 vec2 windFrame( vec2 p ) {
 	return vec2( - windHeading.y * p.x + windHeading.x * p.y, - dot( windHeading, p ) );
 }
@@ -941,6 +1081,8 @@ vec3 gerstner( vec3 p, out vec3 normal, out float crest, out float gust ) {
 	for ( int i = 0; i < ${STRIKE_RINGS}; i ++ ) strikeRing( strikeRings[ i ], p.xz, offset, tangent, binormal, crest );
 	// And the sea breathing out from the boat while they make its water fresh.
 	breathRing( p.xz, offset, tangent, binormal, crest );
+	// And the great swells they raise on purpose in Ranat's storm, practising.
+	for ( int i = 0; i < ${HEAVES}; i ++ ) heaveRing( i, p.xz, offset, tangent, binormal, crest );
 	// And Leane's four drive a current against the swell there: waves meeting a current shorten
 	// and stand up (as off the Agulhas), so the sea about the place grows taller and sheerer, and
 	// breaks. (Never at the boat.)
@@ -1631,6 +1773,9 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		tsuRemain: { value: Array.from({ length: TSUNAMI_PARTS }, () => new THREE.Vector2(1, 0)) },
 		breath: { value: new THREE.Vector4() },
 		breathForm: { value: new THREE.Vector4(0.04, 0.63, 0, 1) },
+		heaves: { value: Array.from({ length: HEAVES }, () => new THREE.Vector4(0, 0, 0, 0)) },
+		heaveForm: { value: Array.from({ length: HEAVES }, () => new THREE.Vector4(100, 8, 10, 0)) },
+		heaveLife: { value: new Array<number>(HEAVES).fill(0) },
 		torch: { value: new THREE.Vector4() },
 		torchFoot: { value: new THREE.Vector4(0, 0, FRESH_RADIUS, 30) },
 		torchTint: { value: new THREE.Vector4(1, 1, 1, 1) },

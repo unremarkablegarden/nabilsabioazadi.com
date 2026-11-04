@@ -561,16 +561,22 @@ export function freshSince(now: Date) {
 // doubled; the pressure falling; and rain, heavy, as much as Lantern's calls have brought on over the
 // boat (`called`, 0..1), the haze thickening with it. No thunder: what they do is mourning, not striking.
 // `raised`: 0 the day as it is, 1 the storm in full.
-export function ranatStorm(real: SeaConditions, raised: number, called: number): Partial<SeaConditions> {
-	const k = ease(clamp01(raised));
+// And while they practise with their pounamu (ranat.ts; `practised` 0..1, ranatPractised) it is raised
+// sooner, and turns to thunder: the air given the energy of a great thunderstorm, so that there is
+// lightning for them to draw down (as in Jenna's storm), the gusts harder, the rain heavier and the
+// haze closer.
+export function ranatStorm(real: SeaConditions, raised: number, called: number, practised = 0): Partial<SeaConditions> {
+	const k = ease(clamp01(Math.max(raised, practised)));
+	const p = ease(clamp01(practised));
 	const to = (from: number, storm: number) => from + (storm - from) * k;
 	const wind = Math.max(real.windSpeed, Math.min(120, 75 + 2 * real.windSpeed));
 	const windSea = 0.048 * wind;
 	const swell = Math.max(real.swellHeight, Math.min(7, 2.2 * real.swellHeight));
-	const rain = (8 + 3 * real.precipitation) * (0.4 + 0.6 * clamp01(called));
+	const rain = (8 + 3 * real.precipitation) * (0.4 + 0.6 * clamp01(called)) * (1 + 1.5 * p);
 	return {
 		windSpeed: to(real.windSpeed, wind),
-		windGusts: to(real.windGusts, 1.6 * wind),
+		windGusts: to(real.windGusts, (1.6 + 0.3 * p) * wind),
+		cape: real.cape + (Math.max(real.cape, 5000) - real.cape) * p,
 		windTrend: to(real.windTrend, 20),
 		pressure: to(real.pressure, real.pressure - 16),
 		pressureTrend: to(real.pressureTrend, -6),
@@ -585,8 +591,8 @@ export function ranatStorm(real: SeaConditions, raised: number, called: number):
 		cloudHigh: to(real.cloudHigh, Math.max(real.cloudHigh, 80)),
 		cloudCover: to(real.cloudCover, 100),
 		precipitation: to(real.precipitation, Math.max(real.precipitation, rain)),
-		weatherCode: k > 0.4 ? 65 : real.weatherCode,
-		visibility: Math.exp(to(Math.log(Math.max(real.visibility, 1)), Math.log(Math.min(real.visibility, 4000 - 1800 * clamp01(called))))),
+		weatherCode: p > 0.15 ? 95 : k > 0.4 ? 65 : real.weatherCode,
+		visibility: Math.exp(to(Math.log(Math.max(real.visibility, 1)), Math.log(Math.min(real.visibility, 4000 - 1800 * clamp01(called) - 1000 * p)))),
 		humidity: to(real.humidity, Math.max(real.humidity, 98)),
 	};
 }
@@ -600,6 +606,10 @@ export function ranatSince(now: Date) {
 }
 // How far it is raised (0..1): from their first bursts, over five minutes.
 export const ranatRaised = (since: number) => clamp01((since - 45) / 300);
+// And how far their practice has taken it (0..1): from when the pounamu wake (RANAT_PRACTICE, 35 s),
+// over a minute and a half.
+export const RANAT_PRACTICE = 35;
+export const ranatPractised = (since: number) => clamp01((since - RANAT_PRACTICE) / 90);
 
 // Noon at night (noon.ts): storm.json "noon": { "from": ISO time, "until": ISO time }, seconds
 // since it began, and since they let it go (undefined until then).
