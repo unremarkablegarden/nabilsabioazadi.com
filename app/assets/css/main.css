@@ -66,7 +66,14 @@
 	visibility: hidden;
 }
 
-/* What shows for the moment before the ocean is drawn: night, not a white flash. */
+/* What shows for the moment before the ocean is drawn: night, not a white flash. Pulling past
+   the top or bottom of a page neither rubber-bands nor reloads it: on a phone, a finger drawn
+   down over the sea is looking about, not asking for the page again. */
 html {
 	background: #05090e;
+	overscroll-behavior: none;
+}
+
+body {
+	overscroll-behavior: none;
 }

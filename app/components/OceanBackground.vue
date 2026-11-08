@@ -319,6 +319,12 @@ onMounted(async () => {
 		dragged = true;
 		if (touchStart.axis === "x" || touchStart.tilt) aim.x = THREE.MathUtils.clamp(aim.x - (dx / window.innerWidth) * DRAG, -1, 1);
 		if (touchStart.tilt) aim.y = THREE.MathUtils.clamp(aim.y - (dy / window.innerHeight) * DRAG, -1, 1);
+		// A drag that moves the view is the view's, not the browser's: left to the browser, a finger
+		// pulled down over the sea pulled the page down and reloaded it (the owner, 8 November:
+		// "a scroll down to update function that doesn't need to exist"), and a sideways drag
+		// could nudge the page along too. Only a drag up or down on a page long enough to scroll
+		// is left to the scrolling.
+		if (touchStart.axis === "x" || touchStart.tilt) event.preventDefault();
 		touchStart.x = touch.clientX;
 		touchStart.y = touch.clientY;
 	};
@@ -326,7 +332,8 @@ onMounted(async () => {
 		touchStart = null;
 	};
 	window.addEventListener("touchstart", onTouchStart, { passive: true });
-	window.addEventListener("touchmove", onTouchMove, { passive: true });
+	// Not passive: the move handler stops the browser scrolling or reloading on a drag it takes.
+	window.addEventListener("touchmove", onTouchMove, { passive: false });
 	window.addEventListener("touchend", onTouchEnd, { passive: true });
 	window.addEventListener("touchcancel", onTouchEnd, { passive: true });
 	// How far the view turns with the pointer (the owner's, October: "viewing higher than we do
