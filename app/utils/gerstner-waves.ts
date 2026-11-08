@@ -381,6 +381,8 @@ float heaveHeight( vec2 p ) {
 // the strongest's light falls and the water is made fresh (m).
 export const FRESH_PLACES = 14;
 export const FRESH_RADIUS = 300;
+// The sea-anchors (anchor.ts): how many may be out at once.
+export const ANCHORS = 3;
 
 // The rogue's tsunami (tsunami.ts). A wall of water raised by the rogue some kilometres off and
 // running at the boat, drawn as a height on the sea (nothing in it folds over): its crest a long arc
@@ -692,6 +694,10 @@ export interface GerstnerUniforms {
 	// 0..1 how fresh; and 0..1 how far it has run together over the whole of the water round the boat.
 	freshAt: THREE.IUniform<THREE.Vector4[]>;
 	freshWhole: THREE.IUniform<number>;
+	// The sea-anchors (anchor.ts): for each, where its cup is (x, z), the cup's mouth (m across) and 0..1
+	// how far it has taken hold of the water; and how bright its rim shows through the water, before tone mapping.
+	anchorAt: THREE.IUniform<THREE.Vector4[]>;
+	anchorGlow: THREE.IUniform<number>;
 }
 
 const pressedChunk = /* glsl */ `
@@ -1252,6 +1258,8 @@ uniform vec4 torchFoot;
 uniform vec4 torchTint;
 uniform vec4 freshAt[ ${FRESH_PLACES} ];
 uniform float freshWhole;
+uniform vec4 anchorAt[ ${ANCHORS} ];
+uniform float anchorGlow;
 // Smooth noise for the bodies of fresh and salt water, 0..1.
 float sweetHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
 float sweetNoise( vec2 p ) {
@@ -1358,6 +1366,15 @@ const fragmentNormal = /* glsl */ `
 	}
 	float slick = smoothstep( 0.55, 0.95, 0.5 + 0.5 * sin( place.x * 0.011 + place.y * 0.021 - waveTime * 0.22 ) );
 	float rippled = 1.5 * ripple * mix( 1.0, mix( 0.4, 2.0, vGust ), gustiness ) * ( 1.0 - 0.5 * internalWaves * slick ) * ( 1.0 - 0.6 * sweetFront );
+	// The sea-anchors (anchor.ts): over each cup the surface water is drawn in from every side and down,
+	// and lies in a glassy slick, as the sea does over any convergence.
+	float anchored = 0.0;
+	for ( int i = 0; i < ${ANCHORS}; i ++ ) {
+		vec4 a = anchorAt[ i ];
+		// (Its edge wanders, as a slick's does: no slick on the sea is a true oval.)
+		if ( a.w > 0.0 ) anchored += a.w * ( 1.0 - smoothstep( 0.4 * a.z, a.z * ( 0.95 + 0.4 * sweetNoise( place / 7.0 + waveTime * 0.03 ) ), length( place - a.xy ) ) );
+	}
+	rippled *= 1.0 - 0.85 * min( anchored, 1.0 );
 	// The place as the wind sees it (x across the wind, y against it), for what the wind carries.
 	// (The ripples lie on the water where it came from, before the waves moved it, so each swell carries them
 	// round and back as it passes; and they gather on the face a wave turns to the wind and at its crest, and thin behind it.)
@@ -1608,6 +1625,20 @@ const fragmentFoam = /* glsl */ `
 		}
 	}
 
+	// The sea-anchors (anchor.ts): each cup's rim, a ring of water and earth just under the surface, glows
+	// faintly up through the water, and the water within it is a shade deeper, drawn down.
+	if ( anchorGlow > 0.0 ) {
+		for ( int i = 0; i < ${ANCHORS}; i ++ ) {
+			vec4 a = anchorAt[ i ];
+			if ( a.w <= 0.0 ) continue;
+			// (Seen through the surface, shifted by its tilt.)
+			float r = length( worldPosition.xz - a.xy + surfaceNormal.xz * 5.0 );
+			float rim = exp( - pow( ( r - 0.5 * a.z ) / ( 0.08 * a.z ), 2.0 ) ) * ( 0.6 + 0.4 * sin( atan( worldPosition.z - a.y, worldPosition.x - a.x ) * 5.0 - channelTime * 0.4 ) );
+			float within = 1.0 - smoothstep( 0.25 * a.z, 0.5 * a.z, r );
+			outgoingLight += ( vec3( 0.3, 0.5, 0.9 ) * rim * 0.45 + vec3( 0.02, 0.08, 0.3 ) * within * 0.5 ) * a.w * anchorGlow * ( 1.0 - reflectance ) * ( 1.0 - foamMask );
+		}
+	}
+
 	// The small boat's electric lamps: a little warm light on the water close round it.
 	if ( boatLamp > 0.0 ) {
 		vec2 fromBoat = worldPosition.xz - channelBoat;
@@ -1781,6 +1812,8 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		torchTint: { value: new THREE.Vector4(1, 1, 1, 1) },
 		freshAt: { value: Array.from({ length: FRESH_PLACES }, () => new THREE.Vector4()) },
 		freshWhole: { value: 0 },
+		anchorAt: { value: Array.from({ length: ANCHORS }, () => new THREE.Vector4()) },
+		anchorGlow: { value: 0 },
 	};
 	useDialSea(uniforms);
 	Object.assign(material.uniforms, uniforms, { giantWaves: { value: GIANT_WAVES } });

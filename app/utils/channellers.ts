@@ -2775,7 +2775,8 @@ export function createChannellers(scene: THREE.Scene, camera: THREE.Camera, sea:
 		const pull = weaving.some(Boolean) ? Math.max(...gate) * (called ? strength : lastStrength) * (0.5 + 0.5 * Math.max(need, control, gathering)) * (1 - hold) : 0;
 		// (`anything`: 1 while any weave at all is out, the scout's and the soundings' too. The boat's
 		// lamps are only the light there is when nobody is channelling.)
-		return { told, working: any ? 1 : 0, anything: any || scoutMesh.visible || soundingMesh.visible ? 1 : 0, surge: surge * (1 - masters), pull, flowPoint, masters };
+		// (`front`: who is at the front just now, as minds (psyche.ts), for the weaves that want those who are not.)
+		return { told, working: any ? 1 : 0, anything: any || scoutMesh.visible || soundingMesh.visible ? 1 : 0, surge: surge * (1 - masters), pull, flowPoint, masters, front: atFront.map(mindOf) };
 	};
 
 	// The elements' colours, as the owner picks them (CSS colours, as seen on a screen). Eased

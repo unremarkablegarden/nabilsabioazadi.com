@@ -53,7 +53,7 @@ useHead({
 // Shared with OceanBackground, which stops drawing while this is true.
 const paused = useState("motion-paused", () => false);
 // Filled in by OceanBackground. This slab shows it, so the floating caption is turned off.
-const readout = useState<{ place?: string; time: string; waves?: string; wind?: string; weather?: string; whales?: string }>("scene-readout", () => ({ time: "" }));
+const readout = useState<{ place?: string; time: string; waves?: string; wind?: string; weather?: string; holding?: string; calling?: string; bow?: string; whales?: string }>("scene-readout", () => ({ time: "" }));
 const captionInNavigation = useState("caption-in-navigation", () => false);
 captionInNavigation.value = true;
 onBeforeUnmount(() => (captionInNavigation.value = false));
@@ -349,6 +349,18 @@ const elsewhere = [
 					<div v-if="readout.weather" class="row rule">
 						<dt class="key">Weather</dt>
 						<dd class="reading">{{ readout.weather }}</dd>
+					</div>
+					<div v-if="readout.holding" class="row rule">
+						<dt class="key">Holding</dt>
+						<dd class="reading">{{ readout.holding }}</dd>
+					</div>
+					<div v-if="readout.calling" class="row rule">
+						<dt class="key">Calling</dt>
+						<dd class="reading">{{ readout.calling }}</dd>
+					</div>
+					<div v-if="readout.bow" class="row rule">
+						<dt class="key">Spray-bow</dt>
+						<dd class="reading">{{ readout.bow }}</dd>
 					</div>
 					<div v-if="readout.whales" class="row rule">
 						<dt class="key">Whales</dt>

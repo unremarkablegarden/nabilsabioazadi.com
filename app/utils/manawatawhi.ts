@@ -247,6 +247,22 @@ export function planetPositions(date: Date) {
 	});
 }
 
+// One hour of the forecast ahead.
+export interface ComingHour {
+	// Hours from the figures' moment (observedAt) to the top of this hour (0 for the hour now running).
+	inHours: number;
+	// Wind speed and gusts in km/h and the compass direction it comes from; pressure in hPa; rain in
+	// the hour in mm; cloud cover in percent; WMO weather code; visibility in metres.
+	windSpeed: number;
+	windGusts: number;
+	windDirection: number;
+	pressure: number;
+	precipitation: number;
+	cloudCover: number;
+	weatherCode: number;
+	visibility: number;
+}
+
 export interface SeaConditions {
 	// When the models say this was true, as the clock in Aotearoa shows it ("2026-10-11T16:15").
 	observedAt: string;
@@ -303,6 +319,10 @@ export interface SeaConditions {
 	// will come from. What the scout weave reaches up to feel for.
 	tomorrowWindSpeed: number;
 	tomorrowWindDirection: number;
+	// The hours ahead as the forecast has them, this hour first (inHours 0) and then the next six:
+	// what the calling of the weather reads (comingChange, forecast-call.ts). Missing in figures kept
+	// from before these were asked for.
+	coming?: ComingHour[];
 	// The wind higher up, now: its speed in km/h and the compass direction it comes from at four
 	// heights above the sea (about 750 m, 1.5 km, 3 km and 5.5 km: where the air's pressure is
 	// 925, 850, 700 and 500 hPa). What the sky-scanning weave parts into, one flow to each height.
@@ -494,7 +514,7 @@ export async function fetchSeaConditions(at: { latitude: number; longitude: numb
 	const haze = $fetch<Current>(`https://air-quality-api.open-meteo.com/v1/air-quality?${place}&current=aerosol_optical_depth`).catch(() => undefined);
 	const [marine, weather, ...models] = await Promise.all([
 		$fetch<Current>(`https://marine-api.open-meteo.com/v1/marine?${place}&current=${Object.values(MARINE).join(",")}${ahead}wave_height`),
-		$fetch<Current>(`https://api.open-meteo.com/v1/forecast?${place}&current=${[...Object.values(WEATHER), ...Object.values(ALOFT)].join(",")}${dayAhead}wind_speed_10m,wind_direction_10m,pressure_msl`),
+		$fetch<Current>(`https://api.open-meteo.com/v1/forecast?${place}&current=${[...Object.values(WEATHER), ...Object.values(ALOFT)].join(",")}${dayAhead}wind_speed_10m,wind_direction_10m,pressure_msl,wind_gusts_10m,precipitation,cloud_cover,weather_code,visibility`),
 		// A model that cannot be reached is left out of the blend.
 		...WEATHER_MODELS.map((model) => forecast(BLENDED, model).catch(() => undefined)),
 	]);
@@ -523,6 +543,27 @@ export async function fetchSeaConditions(at: { latitude: number; longitude: numb
 	if (aerosolDepth != null) conditions.aerosolDepth = aerosolDepth;
 	conditions.tomorrowWindSpeed = tomorrow("wind_speed_10m", conditions.windSpeed);
 	conditions.tomorrowWindDirection = tomorrow("wind_direction_10m", conditions.windDirection);
+	// The hours ahead: this hour (the same model's figure for now, so that a change is a change in the
+	// forecast and not a disagreement between models) and the six after it.
+	const minutesIn = Number(weather.current.time.slice(14, 16)) || 0;
+	const hourly = (name: string, i: number) => weather.hourly?.[name]?.[i] ?? undefined;
+	conditions.coming = [0, 1, 2, 3, 4, 5, 6].flatMap((i): ComingHour[] => {
+		const windSpeed = hourly("wind_speed_10m", i);
+		if (windSpeed == null) return [];
+		return [
+			{
+				inHours: i === 0 ? 0 : i - minutesIn / 60,
+				windSpeed,
+				windGusts: hourly("wind_gusts_10m", i) ?? windSpeed,
+				windDirection: hourly("wind_direction_10m", i) ?? conditions.windDirection,
+				pressure: hourly("pressure_msl", i) ?? conditions.pressure,
+				precipitation: hourly("precipitation", i) ?? 0,
+				cloudCover: hourly("cloud_cover", i) ?? conditions.cloudCover,
+				weatherCode: hourly("weather_code", i) ?? conditions.weatherCode,
+				visibility: hourly("visibility", i) ?? conditions.visibility,
+			},
+		];
+	});
 	for (const [key, name] of Object.entries(ALOFT) as [keyof typeof ALOFT, string][]) {
 		const figure = weather.current[name];
 		if (figure != null) conditions[key] = figure;
@@ -748,3 +789,110 @@ export function unusual(conditions: SeaConditions) {
 
 // A compass direction in degrees as a word.
 export const compassPoint = (degrees: number) => COMPASS[Math.round((((degrees % 360) + 360) % 360) / 45) % 8]!;
+
+// What the forecast says is about to change, for the channellers to call (forecast-call.ts).
+export type ComingKind = "thunder" | "front" | "wind" | "rain" | "clearing";
+export interface Coming {
+	kind: ComingKind;
+	// Hours until it is due (0 when it is due now).
+	due: number;
+	// The compass direction it comes from: the quarter the channellers turn to.
+	from: number;
+	// 0..1 how great a change it is.
+	size: number;
+	// What it will be when it comes, to tell afterwards whether it did.
+	windSpeed: number;
+	windDirection: number;
+	precipitation: number;
+	cloudCover: number;
+	// Whether the wind change is one of direction (and not of speed alone).
+	veer: boolean;
+	// "the south-westerly", "the rain", "the sky clear": what is called.
+	words: string;
+}
+// Degrees between two compass directions, 0..180.
+const turned = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
+export const windName = (from: number) => `the ${compassPoint(from)}erly`;
+// The hour now running, as the model has it, or failing that as the blend has it.
+const thisHour = (c: SeaConditions): ComingHour =>
+	c.coming?.[0]?.inHours === 0
+		? c.coming[0]
+		: { inHours: 0, windSpeed: c.windSpeed, windGusts: c.windGusts, windDirection: c.windDirection, pressure: c.pressure, precipitation: c.precipitation * 4, cloudCover: c.cloudCover, weatherCode: c.weatherCode, visibility: c.visibility };
+function changeBetween(now: ComingHour, then: ComingHour): Omit<Coming, "due"> | undefined {
+	const will = { windSpeed: then.windSpeed, windDirection: then.windDirection, precipitation: then.precipitation, cloudCover: then.cloudCover };
+	const veer = turned(then.windDirection, now.windDirection);
+	// (A light air's direction means little.)
+	const breezy = Math.max(now.windSpeed, then.windSpeed) >= 12;
+	if (then.weatherCode >= 95 && now.weatherCode < 95) return { kind: "thunder", from: then.windDirection, size: 1, veer: false, words: "the thunder", ...will };
+	if (veer >= 50 && breezy && then.pressure - now.pressure <= -1.5) return { kind: "front", from: then.windDirection, size: clamp01(veer / 90), veer: true, words: `the front from the ${compassPoint(then.windDirection)}`, ...will };
+	if (veer >= 40 && breezy) return { kind: "wind", from: then.windDirection, size: clamp01(veer / 90), veer: true, words: windName(then.windDirection), ...will };
+	if (then.windSpeed - now.windSpeed >= 15) return { kind: "wind", from: then.windDirection, size: clamp01((then.windSpeed - now.windSpeed) / 30), veer: false, words: "the rising wind", ...will };
+	if (now.windSpeed - then.windSpeed >= 15) return { kind: "wind", from: then.windDirection, size: clamp01((now.windSpeed - then.windSpeed) / 30), veer: false, words: "the easing wind", ...will };
+	if (now.precipitation < 0.2 && then.precipitation >= 0.4) return { kind: "rain", from: then.windDirection, size: clamp01(then.precipitation / 4), veer: false, words: "the rain", ...will };
+	// (Clear air comes from upwind.)
+	if ((now.cloudCover >= 75 && then.cloudCover <= 35) || (now.precipitation >= 0.4 && then.precipitation < 0.1 && then.cloudCover <= 60))
+		return { kind: "clearing", from: now.windDirection, size: clamp01((now.cloudCover - then.cloudCover) / 60), veer: false, words: "the sky clear", ...will };
+	return undefined;
+}
+// The soonest change the forecast has coming within three hours, or none. A change is read against the
+// same model's figure for this hour, so that it is a change in the weather and not a disagreement
+// between models; the hours count down from the figures' moment.
+export function comingChange(c: SeaConditions, now = Date.now()): Coming | undefined {
+	if (!c.coming?.length) return undefined;
+	const elapsed = (now - Date.parse(`${c.observedAt}Z`)) / 3_600_000;
+	if (!Number.isFinite(elapsed)) return undefined;
+	const base = thisHour(c);
+	for (const hour of c.coming) {
+		if (hour.inHours <= 0) continue;
+		const due = hour.inHours - elapsed;
+		// (An hour well gone is not coming; the present has caught up with it, or has not.)
+		if (due < -0.5) continue;
+		if (due > 3) break;
+		const change = changeBetween(base, hour);
+		if (change) return { ...change, due: Math.max(0, due) };
+	}
+	return undefined;
+}
+// Whether what was called has come: the present against what the forecast said.
+export function cameTrue(called: Coming, c: SeaConditions) {
+	switch (called.kind) {
+		case "thunder":
+			return c.weatherCode >= 95;
+		case "rain":
+			return c.precipitation * 4 >= 0.3;
+		case "clearing":
+			return c.cloudCover <= 50;
+		default:
+			return called.veer ? turned(c.windDirection, called.windDirection) <= 30 : Math.abs(c.windSpeed - called.windSpeed) <= 8;
+	}
+}
+export const dueWords = (due: number) =>
+	due <= 0.2 ? "due now" : due <= 0.75 ? "due within the hour" : due <= 1.5 ? "due in about an hour" : due <= 2.5 ? "due in about two hours" : "due in about three hours";
+// What the side bar says once the hour has come.
+export function cameWords(called: Coming, came: boolean) {
+	if (called.kind === "clearing") return came ? "The sky cleared, as called" : "The sky did not clear";
+	const name = called.words.charAt(0).toUpperCase() + called.words.slice(1);
+	return came ? `${name} came, as called` : `${name} did not come`;
+}
+// Hours ahead for trying the calling when nothing is coming: ?coming=rain:1.2 (rain due 1.2 hours from
+// when the page was opened), wind:0.8:250 (the wind going round to 250°), front:1:240, clearing:2,
+// thunder:1.5. The hours count down from when the page was opened.
+export function pretendComing(spec: string, c: SeaConditions, openedAt: number): ComingHour[] {
+	const [kind, hoursGiven, directionGiven] = spec.split(":");
+	const hours = Math.max(0.02, Number(hoursGiven) || 1);
+	const elapsed = (openedAt - Date.parse(`${c.observedAt}Z`)) / 3_600_000;
+	const base = thisHour(c);
+	const direction = Number(directionGiven) || (c.windDirection + 110) % 360;
+	const before: Partial<ComingHour> = kind === "clearing" ? { cloudCover: 95, precipitation: 0 } : {};
+	const changed: Partial<ComingHour> =
+		kind === "rain"
+			? { precipitation: 2, cloudCover: 95 }
+			: kind === "clearing"
+				? { precipitation: 0, cloudCover: 10 }
+				: kind === "thunder"
+					? { weatherCode: 95, precipitation: 3, cloudCover: 100 }
+					: kind === "front"
+						? { windDirection: direction, windSpeed: Math.max(25, c.windSpeed + 10), pressure: c.pressure - 3 }
+						: { windDirection: direction, windSpeed: Math.max(18, c.windSpeed) };
+	return [0, 1, 2, 3, 4, 5, 6].map((i) => ({ ...base, ...before, ...(i > 0 ? changed : {}), inHours: i === 0 ? 0 : hours + (Number.isFinite(elapsed) ? elapsed : 0) + (i - 1) }));
+}

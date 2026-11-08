@@ -7,7 +7,7 @@ import { boatAt, fetchSeaConditions } from "~~/app/utils/manawatawhi";
 
 export default defineCachedEventHandler(() => fetchSeaConditions(boatAt(new Date())), {
 	// (The name is changed whenever figures are added, so that no copy kept from before is served without them.)
-	name: "sea-conditions-layers",
+	name: "sea-conditions-coming",
 	maxAge: 600,
 	// An answer a little out of date is sent at once while a fresh one is fetched behind it.
 	swr: true,

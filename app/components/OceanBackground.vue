@@ -56,7 +56,7 @@ const seaShown = useState("sea-shown", () => false);
 // The navigation's drawer; while it is open the view holds still.
 const menuOpen = useState("menu-open", () => false);
 // The navigation can show the place, time and conditions itself, in which case the caption here is left out.
-const readout = useState<{ place?: string; time: string; waves?: string; wind?: string; weather?: string; whales?: string }>("scene-readout", () => ({ time: "" }));
+const readout = useState<{ place?: string; time: string; waves?: string; wind?: string; weather?: string; holding?: string; calling?: string; bow?: string; whales?: string }>("scene-readout", () => ({ time: "" }));
 // When the weather is not the measured weather (a channelled storm, or ?pretend=), the menu says so.
 const channelled = ref(false);
 // Peta's storm (wrath.ts), whose words the menu gives in place of the storm's.
@@ -75,6 +75,14 @@ const tsunamiNow = ref(false);
 const freshNow = ref(false);
 // Ranat's storm (ranat.ts), while it lasts.
 const ranatNow = ref(false);
+// The sea-anchors that read the air (anchor.ts), while any is out.
+const anchorNow = ref(false);
+const ANCHOR_WORDS = "The boat held back by Ballast's sea-anchor, its telltales reading the wind";
+// Calling the weather (forecast-call.ts): what the six are calling and when it is due, or whether it came.
+const callingNow = ref<string>();
+// The spray-bow (spray-bow.ts), while the spray is thrown.
+const bowNow = ref(false);
+const BOW_WORDS = "Loom, Sail and Lantern throw spray down-sun, and a bow stands in it";
 // The whales who greet it, where they were last heard (server/api/whales.get.ts).
 const whalesLine = ref<string>();
 const captionInNavigation = useState("caption-in-navigation", () => false);
@@ -174,7 +182,7 @@ const liveFigures = computed(() => {
 
 watchEffect(() => {
 	shownAt.value = dateAtBoatHour(hour.value, pretendDate.value ?? new Date()).getTime();
-	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: ranatNow.value ? RANAT_WORDS : tsunamiNow.value ? TSUNAMI_WORDS : freshNow.value ? FRESH_WORDS : channelled.value ? (jennaRaisedNow.value ? JENNA_WORDS : siuanRaisedNow.value ? SIUAN_WORDS : vesalRaisedNow.value ? VESAL_WORDS : fiveRaised.value && wrathRaised.value ? BOTH_WORDS : fiveRaised.value ? FIVE_WORDS : wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined, whales: channelled.value && fiveRaised.value ? whalesLine.value : undefined };
+	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: ranatNow.value ? RANAT_WORDS : tsunamiNow.value ? TSUNAMI_WORDS : freshNow.value ? FRESH_WORDS : channelled.value ? (jennaRaisedNow.value ? JENNA_WORDS : siuanRaisedNow.value ? SIUAN_WORDS : vesalRaisedNow.value ? VESAL_WORDS : fiveRaised.value && wrathRaised.value ? BOTH_WORDS : fiveRaised.value ? FIVE_WORDS : wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined, holding: anchorNow.value ? ANCHOR_WORDS : undefined, calling: callingNow.value, bow: bowNow.value ? BOW_WORDS : undefined, whales: channelled.value && fiveRaised.value ? whalesLine.value : undefined };
 });
 
 onMounted(async () => {
@@ -711,6 +719,28 @@ onMounted(async () => {
 	// How far Lantern's calls have brought the rain on over the boat (ranat.ts), for the storm's figures.
 	let ranatCalled = 0;
 	const freshAsked = query.get("fresh");
+	// The sea-anchors (anchor.ts): whenever the boat has to be held back; or ?anchor for this visit as if
+	// it needed holding 60%, ?anchor=0.3 for 30%, ?anchor=off for none.
+	const anchorAsked = query.get("anchor");
+	const anchorHold = (held: number) => (anchorAsked === "off" ? 0 : anchorAsked === null ? held : anchorAsked === "" ? 0.6 : THREE.MathUtils.clamp(Number(anchorAsked) || 0, 0, 1));
+	// Calling the weather (forecast-call.ts): whenever the forecast has a change coming within three hours;
+	// or ?coming=rain:1.2 for this visit as if rain were due in 1.2 hours (wind:0.8:250 the wind going round
+	// to 250°, front:1:240, clearing:2, thunder:1.5), counting down from now.
+	const comingAsked = query.get("coming");
+	let comingFor: SeaConditions | undefined;
+	let comingPretended: SeaConditions | undefined;
+	const withComing = (c: SeaConditions) => {
+		if (!comingAsked) return c;
+		if (comingFor !== c) {
+			comingFor = c;
+			comingPretended = { ...c, coming: pretendComing(comingAsked, c, pageOpened) };
+		}
+		return comingPretended!;
+	};
+	// The spray-bow (spray-bow.ts): whenever the sun is low and the sky clear; ?bow for this visit as if the
+	// sun allowed it, ?bow=off for none.
+	const bowAsked = query.get("bow");
+	const bowForced = bowAsked === "off" ? false : bowAsked !== null ? true : undefined;
 	const freshSeconds = () => {
 		const here = (Date.now() - pageOpened) / 1000;
 		if (freshAsked === "off") return undefined;
@@ -924,6 +954,25 @@ onMounted(async () => {
 	// The freshening: the strongest's light, the others making the water fresh, the sea breathing; __fresh() in the console.
 	const fresh = createFresh(scene, SCREEN_LAYER, waveUniforms);
 	(window as unknown as { __fresh?: () => string[] }).__fresh = fresh.describe;
+	// The sea-anchors that read the air (anchor.ts): Ballast's new way of holding the boat back, taken up
+	// by Reef and Glass; __anchor() in the console.
+	const anchor = createAnchor(scene, SCREEN_LAYER, waveUniforms);
+	(window as unknown as { __anchor?: () => string[] }).__anchor = anchor.describe;
+	// Calling the weather (forecast-call.ts): the six strongest turn to the quarter a coming change in the
+	// forecast will come from and call it; __calling() in the console.
+	const forecastCall = createCalling(scene, SCREEN_LAYER);
+	(window as unknown as { __calling?: () => string[] }).__calling = forecastCall.describe;
+	// The spray-bow (spray-bow.ts): Loom, Sail and Lantern throw spray down-sun when the sun is low, and a
+	// bow stands in it; __bow() in the console.
+	const sprayBow = createBow(scene, SCREEN_LAYER);
+	(window as unknown as { __bow?: () => string[] }).__bow = sprayBow.describe;
+	// The way out over the sea towards a compass direction (unit, world): the boat's bearing is straight
+	// ahead, scene azimuth 180°.
+	const towardsCompass = (compass: number) => {
+		const a = THREE.MathUtils.degToRad(compass - PLACE.bearing);
+		return towardsHeld.set(Math.sin(a), 0, -Math.cos(a));
+	};
+	const towardsHeld = new THREE.Vector3();
 	// Ranat's storm: the six hauling water in from the horizon and bursting it into rain, Lantern calling
 	// the rain, Loom and Sail flinging the akasha's water across; __ranat() in the console.
 	const ranat = createRanat(scene, SCREEN_LAYER, waveUniforms);
@@ -1669,7 +1718,8 @@ onMounted(async () => {
 		);
 		// The weaker channellers' deep weaves round the boat, slowing it: by day or night, as much as it needs.
 		// (More of it, and more of the sea round the boat, when the strongest have taken it over.)
-		waveUniforms.deepWeave.value = (0.3 * Math.max(holdLevel, 0.6 * channelling.masters) * alive * (1 - Math.max(freshBusyNow, ranatBusyNow))) / steadyExposure;
+		// (The weaker ones' hidden plaits give way to the sea-anchors as those are cast, anchor.ts.)
+		waveUniforms.deepWeave.value = (0.3 * Math.max(holdLevel * (1 - 0.8 * anchor.level()), 0.6 * channelling.masters) * alive * (1 - Math.max(freshBusyNow, ranatBusyNow))) / steadyExposure;
 		waveUniforms.deepMaster.value = channelling.masters;
 		waveUniforms.channelLoss.value = lightIsLoss;
 		waveUniforms.channelBalm.value = 0.9 * channelling.working * tending * lerp(0.5, 1, day) * alive;
@@ -1990,6 +2040,83 @@ onMounted(async () => {
 				: undefined,
 		);
 		ranatCalled = ranat.rainCalled();
+		// The sea-anchors that read the air: Ballast, Reef and Glass hold the boat back with ropes into the
+		// water that open as cups, and read the wind with telltales at their crests.
+		// How far their hands are free for the weaves of their own devising: not in the dawn and dusk link, in a
+		// storm, or when everyone has dropped everything for something else.
+		const handsFree = (1 - THREE.MathUtils.smoothstep(gathering, 0.05, 0.3)) * (1 - THREE.MathUtils.smoothstep(controlLevel, 0.05, 0.3)) * (1 - droppedNow) * alive;
+		anchor.update(
+			liveOnly && !calmMotion
+				? {
+						time,
+						delta,
+						boat: camera.position,
+						ahead: skyAhead,
+						hold: anchorHold(holdLevel),
+						front: channelling.front,
+						free: handsFree,
+						wind: rainWind,
+						gusty: gustiness,
+						gust: gustiness * Math.max(0, gustNow),
+						pressure: THREE.MathUtils.clamp(liveOnly.pressureTrend / 1.5, -1, 1),
+						thermal: thermal(liveOnly),
+						day: daylight,
+						gain: 1.5 / steadyExposure,
+						exposure: steadyExposure,
+						air: skySheath[0]!,
+						water: skySheath[1]!,
+					}
+				: undefined,
+		);
+		anchorNow.value = anchor.level() > 0.3;
+		// Calling the weather: the six turn to the quarter the forecast's coming change will come from.
+		const comingNow = liveOnly ? comingChange(withComing(liveOnly)) : undefined;
+		forecastCall.update(
+			liveOnly && !calmMotion
+				? {
+						time,
+						delta,
+						boat: camera.position,
+						ahead: skyAhead,
+						coming: comingNow,
+						present: liveOnly,
+						towards: towardsCompass,
+						free: handsFree,
+						visibility: liveOnly.visibility,
+						seaHigh: liveOnly.waveHeight,
+						day: daylight,
+						gain: 1.5 / steadyExposure,
+						air: skySheath[0]!,
+						water: skySheath[1]!,
+						akasha: skySheath[2]!,
+						white: skySheath[3]!,
+					}
+				: undefined,
+		);
+		callingNow.value = forecastCall.words();
+		// The spray-bow: with the sun low and the sky clear, Loom, Sail and Lantern throw spray down-sun on
+		// each swell, and a bow stands in it.
+		sprayBow.update(
+			liveOnly && !calmMotion
+				? {
+						time,
+						delta,
+						boat: camera.position,
+						ahead: skyAhead,
+						sun: sunFrom,
+						sunlight: 1 - THREE.MathUtils.smoothstep(liveOnly.cloudCover, 45, 85),
+						windSpeed: liveOnly.windSpeed,
+						wind: rainWind,
+						heave: seaAtBoat,
+						free: handsFree,
+						force: bowForced,
+						day: daylight,
+						gain: 1.5 / steadyExposure,
+						water: skySheath[1]!,
+					}
+				: undefined,
+		);
+		bowNow.value = sprayBow.level() > 0.3;
 		// The freshening: the strongest's light, the others' ropes into the water, the sea breathing.
 		fresh.update(
 			freshAt !== undefined && liveOnly
@@ -2169,6 +2296,9 @@ onMounted(async () => {
 		parting.dispose();
 		tsunami.dispose();
 		fresh.dispose();
+		anchor.dispose();
+		forecastCall.dispose();
+		sprayBow.dispose();
 		ranat.dispose();
 		rings.dispose();
 		plumes.dispose();
