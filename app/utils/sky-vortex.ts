@@ -15,9 +15,6 @@ export interface SkyVortexUniforms {
 	vortexSpin: THREE.IUniform<number>;
 	// Light added to the sky around the knot, before tone mapping.
 	vortexGlow: THREE.IUniform<THREE.Color>;
-	// Radians the whole deck about the knot has turned (the cyclone's, cyclone.ts: it turns as a whole as well as
-	// being wound).
-	vortexTurn: THREE.IUniform<number>;
 }
 
 const pars = /* glsl */ `
@@ -26,7 +23,6 @@ uniform float vortex;
 uniform float vortexTwist;
 uniform float vortexSpin;
 uniform vec3 vortexGlow;
-uniform float vortexTurn;
 `;
 
 // Clouds near the knot turn further than clouds far from it, which winds them into spiral arms.
@@ -34,7 +30,7 @@ const twist = /* glsl */ `
 	vec2 knotUV = knotDirection.xz / ( max( knotDirection.y, 0.05 ) * elevation );
 	vec2 fromKnot = cloudUV - knotUV;
 	float vortexDistance = length( fromKnot );
-	float turn = vortexTwist / ( 1.0 + vortexDistance * vortexDistance / 9.0 ) + vortexTurn;
+	float turn = vortexTwist / ( 1.0 + vortexDistance * vortexDistance / 9.0 );
 	cloudUV = knotUV + mat2( cos( turn ), sin( turn ), - sin( turn ), cos( turn ) ) * fromKnot;
 	cloudUV *= cloudScale;
 `;
@@ -59,7 +55,6 @@ export function addSkyVortex(sky: Sky): SkyVortexUniforms {
 		vortexTwist: { value: 0 },
 		vortexSpin: { value: 0 },
 		vortexGlow: { value: new THREE.Color(0, 0, 0) },
-		vortexTurn: { value: 0 },
 	};
 	Object.assign(material.uniforms, uniforms);
 

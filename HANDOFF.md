@@ -31,78 +31,6 @@ see it, and the one the owner singled out on 12 October.
   10 October 2026 and reaches Honolulu on 1 July 2027, always facing Hawaiʻi. It is a pilgrimage.
 - **The sea and sky as they are**, from live forecast data for the boat's position (Open-Meteo,
   four models blended): real swells, wind, cloud, rain; real sun, moon, stars, planets, Milky Way.
-- **Clouds as volumes (10 November, the owner's; off for some hours on 14 November and rebuilt, below: "make something up that uses this library that
-  is even better, that better reflects our visual standards and need to obey meteo data", of
-  mjurczyk's three-openvdb):** `clouds.ts` and `workers/cloud-shapes.worker.ts`. The cloud base is
-  the lifting condensation level (125 m a degree of dew-point spread) of the air of the lowest
-  150 m, mixed between the figures at the sea and at 925 hPa (`condensationLevel`; the owner's
-  "Improve on the model", 10 November). Tried against ICON's own shallow cumulus bases from its
-  own figures, August to November 2026: at Manawatāwhi 58% within 100 m from the sea's air alone,
-  70% mixed over 150 m; where the boat was on 10 November, 64% and 80%; deeper mixing comes out
-  ever too high. Its large misses are layered, humid skies (95% at 925 hPa), where ICON's base is
-  that of cumulus above a low stratus deck. A sheet reaches up to the forecast's boundary layer
-  top (`mixedDepth`, Open-Meteo's `boundary_layer_height`), where its lid is; no model there gives
-  a cloud base itself (`cloud_base` is empty for all of them); the low cloud's depth is how far rising air climbs through the layers that cool fast
-  enough (`lapseAloft`) to the first lid, with CAPE sending towers up through it; it is a cumulus
-  field when the cover is broken, a stratocumulus or stratus sheet when near full and shallow or
-  held under a lid, in streets along the wind when unstable air lies under a near lid in a fresh
-  wind; middle cloud stands where the air between 3 and 7 km is nearest saturation (the humidity
-  at 700, 600, 500 and 400 hPa, `moistLayer`), as deep as the air near that is moist, and is
-  altocumulus cells or an altostratus sheet; the high cloud stays the sky shader's thin veil; rain, thunder and a channelled storm grey and lower it; each
-  deck drifts with the wind at its own height (`windsAloft`); the visibility sets how far cloud is
-  seen. Shapes are voxel grids made in a worker (cells on a flat base eroded into billows, tops
-  spread and cut under a lid; sheets as tiles that add up to one), placed as instances and lit by
-  a sun or moon light and a hemisphere light that nothing else in the scene answers, with
-  three-openvdb's frame renderer (one froxel grid, multiple scattering, four shadow cascades).
-  Each cloud hides the stars behind it. The water's mirror still sees the sky shader's full cloud
-  layer (the volumes are hidden from it, or the renderer would do all its work twice). A new deck
-  comes in over the old in 25 s when the plan's buckets change. Cover is matched seen from above,
-  as the forecast's is (tightened the same day, at the owner's word "Tighten them"): every deck
-  lays each volume's columns on a grid over the field, a column counting as cloud from an optical
-  depth of 0.5 (`SEEN_AT`); cumulus are placed until the grid's share is the forecast's, kept apart
-  less as the cover closes, and past 140 of them each is a wider bank of more cells of the usual
-  size (up to 2.5 times); a sheet's gaps are cut by the worker at the level that gives its cover.
-  Measured (`__clouds()` says it): 14% for 14%, 31 for 30, 50 for 50, a stratus 91 for 90, an
-  altostratus 64 for 60 (tiles overlapping add a little). Before this a 50% forecast drew 15%:
-  everything above about 15% was short. Extinction is now per metre (0.058 in cumulus, 0.027 in a
-  sheet, 0.01 in middle cloud), so a bigger box is no thinner. **Off by default since 14 November** (the
-  owner, seeing them under that morning's real overcast and rain: "Your clouds look fake as fuck"). Seen
-  then, they were dark, blurred puffs like cotton balls hanging in the air, all one size, with no lit tops
-  and no flat bases, against the sky shader's paler overcast; doubling the renderer's grid (720 by 640 by
-  64) sharpened them but left them puffs, and lifting the light from the overcast sky did not lighten
-  them. What would be needed: shapes with flat bases and ragged, fractal edges at several scales, and
-  light that makes low cloud under an overcast grey on grey. **Rebuilt the same day** (the owner: "Yes, rebuild
-  them"), on again for everyone since the owner saw them ("Yes, switch them on"); `?clouds=off` shows the sky shader's clouds: each cumulus is a rounded body
-  cut flat at the condensation level, a little narrower than its widest, its top heaped into billows on
-  billows at three scales (turrets a third of a tall cell across), the sides torn a little, crisp where it is
-  heaped; in rain the billows sink and the base frays into scud (`ragged`, from the greyness); cells kept
-  clear of their box's walls and the joining between a bank's cells capped (both had made straight sides and
-  flat tops, loaves); 128 voxels across a usual cloud and 64 up, where it was 80 and 48. The light: sun 52
-  (was 24), the sky's light from 4.5 under a blue sky to 18 under a full overcast (was 4.5 always), its colour
-  turning from blue to the overcast's grey with the cover, and the light reaching the bases from below lifted
-  to stand for what passes down through the cloud. Haze: each cloud fades by Koschmieder's law against the
-  visibility (the renderer has none), so in rain the low cloud dissolves into the grey within a few
-  kilometres. The renderer's grid 480 by 384 by 40 (was 320 by 256 by 32) and no blending of one frame into
-  the next (with the eye moving every frame it smeared near clouds into pillars). Cost, one headless page
-  alternating second by second: about 9.7 frames a second against 10.7 before (640 by 512 by 48 was 9);
-  not measured in a real window. Seen in stills only: today's rain (grey on grey, real), a 10:00 fair-weather
-  field (soft cumulus with flat bases and turrets), 16:30 broken cumulus (distant tall narrow cells still
-  smooth round-topped "tombstones"; a gap between two clouds once showed as a dark funnel, like a
-  waterspout), 22:00 (dark masses over the stars). Not watched in motion (without the blending, slices may
-  shimmer); not on a phone. `?cloudgrid=640x512x48`, `?cloudset=temporal:true`, `?cloudquality=0.625` to
-  compare; `__cloudTune` in the console. `?clouds=on` shows them; `?clouds=off` was the picture as
-  before; `__clouds()` in the console; the row "cloud deck" in `?controls`. The sky-vortex over the
-  knot still twists only the shader's layer, so it is now faint. Cost, headless at 1280 by 860,
-  three rounds taken in turn: about 14.5 fps without the volumes, about 8 with them, at 14% and at
-  50% alike (the first day's single runs, 18.7 with and without, were the noise of a loaded
-  machine). In a real window (the in-app browser, M1, the clouds switched on and off in turn in
-  one page): about 17 ms a frame. Where it goes, each change tried against the setting in use the
-  same way: one shadow cascade instead of four saves about 8 ms, no multiple scattering about 5,
-  16 depth slices instead of 32 some 3 to 7, a grid of a quarter the cells about 2, a 48 shadow
-  grid about 1; half the volumes hidden, the drift frozen, jitter off (which lets the renderer
-  keep its lighting between frames) save nothing. So the cost is the renderer's fixed grids, the
-  same for 10 clouds or 140 and at any sharpness, and every saving found changes the picture.
-  Drawing with fewer pixels (watchFrameRate) barely helps it. On a phone unmeasured.
 - **Thirteen channellers** on the boat, weaving. Four are at the front at a time; the others rest,
   take turns, sound the water, or weave deep round the boat to slow it.
 - **The site**: Klein Blue top bar, moon-edged menu, About, Contact (a letter that opens the
@@ -220,8 +148,6 @@ All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerst
 | `/?controls` | every live figure, including rows "unusual", "strongest", "storm" |
 | `/?fresh`, `/?fresh=150`, `/?fresh=off` | the freshening (STORM.md §39), on for everyone for a day from 22:30 on 4 November: the strongest's torch-like light over 300 m round the boat, the others making the water fresh and dappled, the sea breathing out from the boat |
 | `/?ranat`, `/?ranat=150`, `/?ranat=off` | Ranat's storm (STORM.md §41), on for everyone for a day from 09:30 on 5 November (the freshening gives way to it): the six hauling water in from the horizon at 35° apart and bursting it into rain, Lantern calling the rain with water alone, Loom's akasha and Sail's air flinging the water across the view; from 35 s their pounamu wake and they practise (§42): domes of sea lifted and let fall, their swells riding under the boat, lightning drawn down, wilder rain; the side bar reads "Channelling for Ranat"; `__ranat()` in the console |
-| `/?alarm`, `/?alarm=150`, `/?alarm=off` | the alarm (STORM.md §43; alarm.ts), on for everyone for a day from 01:58 on 9 November (NZDT): Laeni's light in the sky; Leane · Ember bound in air, lifted over the bow, stilled, beheaded (vaguely) and let fall into the water in view; mineralised by the four's akasha, water and earth; the six's linked stream into the sky, the stars faint behind it; Mohabat's storm spreading her blood round the boat; the sharks punched off with akasha and air. All through it the six's flows of light run from their palms out towards the left bow, the light moving as heat does, and stand lamps up along them, tall weaves of light that light the sea and warn other channellers off, with ambient light for 8 km about the furthest. The side bar reads "Alarm: a strange boat sensed off the left bow; a sister stilled and beheaded"; `__alarm()` in the console. The shed rings and the thermal plumes are no longer made (the owner: "remove all the circle weaves in the distance") |
-| `/?cyclone`, `/?cyclone=110`, `/?cyclone=300`, `/?cyclone=off` | the cyclone (STORM.md §44; cyclone.ts), on for everyone for a day from 08:25 on 14 November (NZDT), the menu's weather row reading "Cyclone channelled for many, especially Dahlia" (the owner's words): everyone ceases weaving; the others link to Laeni, strongest first, their threads running into hers; she runs the linked rope out over the sea, a river of light near the boat, twelve kilometres to near the horizon and up into the cloud; the swells arise from there (some twelve metres at seventeen seconds); then every degree of the compass is given a flow of fire and akasha into the sky and one of water and akasha into the sea, each channeller holding a sector by the square root of her strength, the permeation passing round from Laeni's degrees, clockwise south of the equator, and a wave of light going on round, quicker each time; then the weather becomes a cyclone centred where the rope went up (its wind round and in, clockwise here, the glass falling, rain in bands, thunder in them). `__cyclone()` in the console says what they are at. The alarm, Ranat's storm and the freshening give way to it |
 | `/?anchor`, `/?anchor=0.3`, `/?anchor=off` | the sea-anchor that reads the air (anchor.ts; the owner, 8 November: "innovate a new way of weaving to slow down the boat, whilst also reading the air"): whenever the sea and wind would carry the boat faster than its pace, Ballast, then Reef and Glass as more holding is needed, each send a rope of water and earth from her palms in a low arch out to her own side and down into the sea, where it opens as a drogue's cup in the slower water beneath; the sea above each cup lies in a glassy slick; at the arch's crest air filaments stream as telltales, the way the real wind blows, drooping in a light air, torn in gusts, lifting on thermals, golden with a rising glass and grey with a falling one; the rope tautens as the holding grows. Nobody at the front casts one; in the dawn and dusk link, in a storm, and when everyone drops everything they haul in. `?anchor` is as if the boat needed holding 60%; the side bar reads "Holding"; `__anchor()` in the console. Today (8 November) the boat is carried 0.08 km/h against a pace of 1.13, so nothing is held and no anchor is out without `?anchor` |
 | `/?coming=rain:1.2`, `/?coming=wind:0.8:250`, `/?coming=front:1:240`, `/?coming=clearing:2`, `/?coming=thunder:1.5` | calling the weather (forecast-call.ts; the owner, 8 November, of the ways offered to show the public "their ability to call weather": "I love 1 and 2"): the conditions now carry the forecast's next six hours (`coming` in manawatawhi.ts, the cache renamed `sea-conditions-coming`), and when a change is coming within three hours (`comingChange`: the wind going round 40° or more, rising or easing 15 km/h, rain where there was none, the sky clearing, thunder, a front) the six strongest turn to the quarter it will come from and call it, Laeni from three hours out and the others joining as the hour nears, each a rope from her palms out low over the sea 440 to 570 m and sweeping up into the sky at its end, higher the nearer the hour, its light running outward and quickening; air for wind, water for rain, gold for clearing, fire's colour for thunder, akasha for a front, Laeni's white at heart. The side bar reads "Calling the south-westerly, due within the hour: Laeni, Pardis and Manulani"; when the hour comes it says for twenty minutes whether what was called came (`cameTrue`, `cameWords`), so that the calling can be seen to fail. `?coming=` pretends a change due so many hours from when the page was opened; `__calling()` in the console. Today (8 November) the forecast is a steady north-easterly and nothing is coming. A quarter astern is out of the view until it is turned |
 | `/?bow&hour=18`, `/?bow=off` | the spray-bow (spray-bow.ts; the second of the two the owner chose): when the sun is up and under about 35° and the sky clear enough (cloud under 45 to 85%) and the wind under 30 to 50 km/h, Loom, Sail and Lantern throw spray down-sun on each swell that passes under the boat, each a thread of water from her palms to the foot of a curtain 20 m off, and a bow stands in the spray where the eye's line makes 42° with the line away from the sun: primary with supernumeraries, fainter secondary, Alexander's band between, all from the drawn sun's place, so it stands where a real bow would and moves with the view. The curtain is as high as the bow's top needs. On this leg the evening bow stands about 45° off the right bow (the sun sets west-south-west), the morning one behind the left beam. The side bar reads "Spray-bow"; `__bow()` in the console. `?bow` throws whatever the sun says (by night, spray and no bow) |
@@ -231,7 +157,6 @@ All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerst
 | `/?pretend=windTrend:20` | weather that is not there (names as in `SeaConditions`); this one is an unusual wind |
 | `/?pretend=waveTrend:1.2` | an unusual sea |
 | `/?hour=19.7&pretend=aerosolDepth:0.35,visibility:9000` | dusk on a hazy evening (the twilight sky follows the live air) |
-| `/?clouds=off`, `/?hour=10&pretend=cloudCover:45,cloudLow:40`, `/?pretend=cloudCover:95,cloudLow:92,precipitation:0.5` | the sky shader's clouds alone, as before the volumes (which are on by default again since their rebuilding on 14 November); a morning of broken cumulus; a grey overcast in rain (clouds.ts reads `cloudLow`, `cloudMid`, `cloudHigh`, `airTemperature`, `humidity`, `cape`, `precipitation`, `visibility`, `weatherCode`, the winds and temperatures aloft) |
 | `/?show=soundings`, `/?show=masters` | a sounding, or the strongest's deep weaving, at once |
 | `/?colours` | a strip of four swatches at the foot of the page (air, water, akasha, the strongest's edge); a change shows at once and is kept in the address as `&air=9e7bf3&water=00b0a2&akasha=e0b065&strongest=0050cb`, so an address is a palette |
 | `/?show=pressure`, `wind`, `water`, `healing` | all four at the front at that one thing |
@@ -256,13 +181,7 @@ All in `app/utils/channellers.ts`, `app/utils/channel-path.ts`, `app/utils/gerst
 6. **Soundings read as wisps, not obvious plaits.**
 7. **September's old threads**: put away (12 October), except at `/?look=september`, in the story
    and by the dev slider.
-8. Older flaws, now in the volumes (10 November): each cloud hides its own stars; overcast is a grey
-   deck in rain. Seen in stills by day: broken cumulus at 50%, a stratus under a lid at 90%, an
-   altostratus at 60% at 3.9 km (pretend figures take the temperatures and humidity aloft too:
-   `airLowTemperature:14,airCloudTemperature:16` makes a lid, `moistUpper:95` a wet layer). Not yet
-   seen: streets, altocumulus, a channelled storm's deck, dawn and dusk with the sun low behind the
-   clouds, a phone. The volumes cost some 40% of the frame rate headless (the owner has not said
-   whether that stands).
+8. Older flaws: heavy overcast too dark and brown; clouds dim all stars alike.
 9. **The new twilight sky** (`twilight-sky.ts`, see the README): not yet looked at under cloud or
    storm, and its drawing cost on a phone is unmeasured. The owner has seen none of it yet.
 
@@ -356,9 +275,7 @@ on, and show whenever there is real thunder at the boat (the owner's choice).
 ## Not verified
 
 Almost everything in the weaving was checked in still pictures from a headless browser, never
-watched in motion. Pages were photographed at desktop width only. The cloud volumes were seen in
-stills by day (morning and afternoon), at night and in a rainy overcast, all cumulus decks; never
-a sheet, a storm, a phone, nor the drift. No screen reader or automated
+watched in motion. Pages were photographed at desktop width only. No screen reader or automated
 accessibility audit has been run; contrast was measured.
 
 ## How the owner likes to work
