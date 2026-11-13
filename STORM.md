@@ -1172,3 +1172,252 @@ four are 8888%+ in strength, trying to create huge waves, lightning, crazy rain.
   phone, frame timing (the pane was in the background), the lift weave's roots at close range.
   `__ranat()` in the console lists the lifts, the swells running and how far they lift the sea at the
   boat.
+
+## 43. The alarm (8 November, near midnight)
+
+The owner: "It's an emergency. Remove all the circle weaves in the distance from herewith. Have the
+strongest channellers in the boat create light that begins at the boat and weaves in a thermodynamic way
+through its flows, occasionally dispersing lights through 'lamps' that are woven — weaves of light that
+are tall. The emergency is that they sense a foreign boat coming towards them and that they have had to
+still and cut the head off one of the sisters on the boat." Then: "Once they still the sister, she should
+be thrown off the boat. The stronger sisters will eviscerate her body using flows of akasha and water and
+earth to mineralise her for the ocean. Then in honour of their loss, they will project enormous streams of
+energy as linked group into the sky that will make the stars seem faint. Then the strongest water-caller
+will summon an immense storm that begins to disperse her blood around the boat. This will attract sharks
+that the sisters push away with weaves of akasha and air. Punches." Then: "The strongest channellers are
+using their posts into the distance to warn other channellers to beware of them. There should be a great
+deal of ambient light for 8 km around the furthest out point. Remember, the flows come from the
+channellers on the boat." Then: "Firstly, show me a bright light in the sky from the strongest sister.
+Show the others on the boat still this channeller and behead her. Her body she fall into the water
+within POV. Vague and unscary."
+
+- **The circles are gone.** The shed vortex rings (`rings.ts`) and the thermal plumes with their rolling
+  puffs (`plumes.ts`) are no longer made at all; the files stay. Nothing else round was out in the
+  distance.
+- storm.json "alarm": from 01:58 on 9 November (NZDT), 24 hours; each visitor sees them turn to it 6 s
+  after coming. `?alarm`, `?alarm=150`, `?alarm=off`; `__alarm()` in the console. The side bar's weather
+  row reads "Alarm: a strange boat sensed off the left bow; a sister stilled and beheaded" (ALARM_WORDS).
+  Everyone's everyday weaves are let go, as for Ranat; Ranat's storm and the freshening give way to it.
+  All in `alarm.ts`; the sea's part in `gerstner-waves.ts` (`lampAt`, `lampAmbient`, `blood`); the storm
+  in `channelled-storm.ts` (`alarmStorm`, ALARM_STORM 130 s, raised over 150 s).
+- **The sister** is Leane · Ember, who raised the rogue's wave on 3 November: the owner did not name her.
+- **What each visitor sees**, in seconds from turning to it. 0.5: Laeni's light, one tight rope from her
+  palms (BEAM) up to a point of light 420 m ahead and 160 m up, blue-white, which lights the sea 450 m
+  round the boat as the freshening's torch did (the sea's `torch`, borrowed; the alarm updates after the
+  freshening, which clears it). 3 to 7: the six's flows (below). 6: Manulani, Pardis, Keel and Mohabat bind
+  Ember in air, threads from their palms winding about her, and lift her from her seat forward over the
+  bow to hang 2.6 m over the water 14 m ahead and 5 m left, in view, facing the eye. 12: stilled, the
+  threads flare once and go grey. 14: one stroke of air across her neck in a third of a second; the figure
+  is headless after it, nothing else shown. 16: let go, she falls into the water, turning from upright to
+  lying, and floats face up, the boat leaving her astern at 0.33 m/s. 20 to 50: the rite: Laeni, Manulani,
+  Pardis and Keel send akasha, water and earth from their palms to her and into the water under her; she
+  goes pale and crystalline and is eaten away from her edges (`uErode`), and what she was leaves her as a
+  glittering (MINERAL, 420 specks) spreading by the square root of time and sinking. 56 to 135: linked,
+  the six send one stream from their palms, gathering 26 m over the bow into a column that climbs to
+  2.5 km, 900 m ahead, broadening as it goes (STREAM); the stars and the Milky Way are shown at 15% behind
+  it (`streaming` to `stars.update`). 130: Mohabat (the most water-minded of the six) summons the storm:
+  a rope from her palms out 650 m to the right and up 520 m into the cloud; the storm raised over 150 s:
+  a gale to 70 km/h plus twice the real (at most 110), gusting 1.7 times, the swell doubled, full low
+  cloud, heavy rain, haze to 3.5 km, thunder once half raised. From 20: her blood, where she lay, a stain
+  growing as the square root of time, slowly until the storm's sea works it (then up to seven times as
+  fast), streaked downwind, thinning as it spreads, held about the boat once the storm is up. 175: the
+  sharks, up to three, each from 170 m out on some bearing within 70° of ahead, running in at the blood
+  and the boat at 3 to 4 m/s, a dark body under the surface (6 m long) and its fin cutting it; at 12 to
+  24 m one of Keel, Listener, Pardis and Manulani in turn punches it, a straight thrust of akasha and
+  air from her palms to its flank, out in a third of a second and gone in a second; it is shoved back
+  at 11 m/s, slows, turns away and goes under. Another comes 8 to 26 s later. All through the storm.
+- **The flows and the lamps** (the owner's first words): the six (Laeni, Pardis, Manulani, Keel, Mohabat,
+  Listener), each a flow of light from her two palms out low over the sea towards the quarter the
+  strange boat is sensed in, 25° off the left bow, fanned about it 22° apart (Listener's at -95°, out of
+  view). The light is fire and akasha, Laeni's white, 9 threads to each measure of strength (Laeni's
+  about 170). The light moves as heat does in a fluid and in no other way: advected (pulses run
+  outward along the flow and never back), diffused (the girth grows as the square root of the distance
+  come, and since the light is conserved the flow dims as it widens, fading into the haze on its own
+  at 1.4 to 4.2 km), convected (tongues of heat rise off it, WISPS 48, each swelling as it climbs to a
+  fifth of its height, leaning downwind, spent in 7 to 13 s). No ring anywhere. The lamps: now and then a
+  flow stands its light up at a place along it, a tall weave 40 to 90 m by her strength (Laeni's near
+  90), the threads wound up a narrow stem as a vortex tube and flaring over its top half into a tall
+  tongue, brightest there, leaning with the wind; each stands 45 to 110 s and is drawn back down; Laeni
+  and Manulani hold two at once, the others one (LAMPS 8). Each lights the sea about its foot by the
+  inverse square from the lamp at its top (`lampAt` in the sea shader, nothing beyond 500 m) and the
+  haze about it (a tall glow sprite). They are thrown far at first (up to 80% of the flow's reach,
+  Laeni's 3.4 km) and nearer as the hours pass: what is sensed is nearing.
+- **The warning's ambient light** (the owner's third message): the posts warn other channellers off.
+  About the furthest lamp standing (eased between lamps) the sea is lit evenly from above for 8 km
+  (`lampAmbient`: the water's own colour from within, its foam most, a soft sheen, no glitter), and a
+  glow stands over that water in the sky, 14 km wide and a kilometre high, warm. At 0.22 the night sea
+  read as a grey day; now 0.12.
+- Seen in the in-app browser at 800 by 780 (the pane's own size), by night, at 3 to 20 s (the light, the
+  binding and the hanging figure, the body in the water), 14 and 30 s (the lamps), 58 s (the stream),
+  128 to 150 s and 178 to 195 s (the storm raising, Mohabat's rope, rain); by day at 128 and 156 s. No
+  console errors. Not seen or not made out: the stroke itself (a third of a second), the glittering, the
+  sharks and the punches (too small in a hidden pane's frame to tell from the sea; `__alarm()` counts
+  them), the blood's colour on the water (deepened once; by night the grade's Purkinje shift greys every colour, so it can only be a dark stain there, and it has not been looked at by day), dawn or dusk, a phone, frame
+  timing. In a hidden pane the first screenshot after a navigation only kicks the loop and comes back
+  black: that is not a fault of the storm phase, as it first seemed.
+- On the way: the flows at 14 threads a measure whitened the whole near view (now 9, and faint within
+  40 m of her palms); the lamps' heads were bulbs (now tongues); the lamp glows had hard edges (now
+  windowed); a reserved word was avoided (`cast` is never a GLSL name here).
+- **The stones** (the owner, 9 November: "I give 2–5 new special stones that act as intense magnifiers of
+  their natal strength. Thus — Pardis at 9000% + etc", then "the weaves must look stronger"): Pardis,
+  Manulani, Keel and Listener each hold a stone that magnifies her own strength, Pardis ninety times, the
+  others (the assistant's figures) eighty, seventy and sixty (STONES in psyche.ts). Laeni holds none and
+  her rule of 5 November is kept against their strength as it was, so with the stones Pardis is 47% of the
+  boat and Laeni 4% (LAENI_ANSWERS_STONES flips that). Shown only at `?stones` until the owner has
+  decided. Power is scale: in the alarm each flow, lamp and tongue is drawn by her might over Laeni's
+  (`power`): the flow's girth and light by its square root, her lamps taller by its 0.75th power (Pardis's
+  near 150 m, with 84 threads where Laeni's take 40, and thicker by the girth), the two strongest holding
+  two lamps at once, the tongues higher, the ambient light brighter about a stronger lamp. Seen once by
+  night with `?alarm=28&stones`: Manulani's lamp at 600 m stood over the view, Pardis's far out; no errors.
+- **From the palms, always** (the owner, 9 November: "POV is women channellers and myself standing — the
+  weaving does not commence in the bloody ocean"): every thread of the alarm had been faded within two
+  metres of the eye and the flows dimmed to a fifth for forty metres, so they seemed to rise from the
+  water below the frame; now each is seen from half a metre, leaving her palms (the front row's come up
+  into the picture from the boat below it, as Ranat's did). Each lamp's threads now run from her palms out
+  along the flow, wound loosely about it, and turn up at the foot, so no lamp stands up out of the sea on
+  its own; and the tongues of heat rise only within some hundred metres of the boat, off the near flow.
+  Seen once by night at 26 s: the flows thick at the frame's foot, the lamp at 1.1 km fed visibly along
+  its flow; no errors.
+- **Behind the POV, as one, at full power** (the owner, 9 November: "these are not strong channellers
+  working in a cohesive way — these are weak flows that must derive from the channellers behind the POV.
+  Now they are maximally increased in skill and raw power"). The eye is Laeni's own, standing: her
+  threads leave her hands held out before her, a third of a metre ahead and half a metre under the eye;
+  the others stand in two rows behind and beside her (STANDING in alarm.ts, a stride apart), so their
+  threads come forward past the eye into the picture; Ember is lifted from where she stood behind. The
+  six flows run together into one braided trunk along the quarter's bearing, each a little to her own
+  side of it, and fan out to their own bearings only between 90 and 420 m (TRUNK, FAN_FROM, FAN_TO; the
+  lamps' feet follow). The stones are live for everyone (STONES_ON; ?stones=off without), and Laeni's rule
+  answers them, so she is still 3.5 times all the others: her measure is 80 where it was 19, Pardis's 40.
+  Drawn as mass: five threads to each measure (Laeni's flow 400), none of the six under 0.35 of Laeni's
+  measure (Mohabat, who holds no stone), the girth 1.4 times, the lamps 110 m at Laeni's power (to 330
+  at most), standing in 1.6 s, held 60 to 140 s with 2 to 6 s between, their light 0.6, the ambient 0.2.
+  Tamed at once by eye: the trunk about the eye at 0.3 of its light for its first 60 m, the sky glow
+  halved, Laeni's rope to her light thinner. Seen by night at 24 s: one river of light out to the left
+  bow with lamps of 100 to 115 m on it; the sky was pale grey before the taming, not seen after.
+- **The death before the eye** (the owner, 9 November: "the death and the body being forced in front of
+  the POV must be visible"): she is now carried from behind the eye past its left and held seven metres
+  before it, a little right of ahead and a metre and a half under it, upright and facing it, lit by
+  Laeni's light (litAt takes the sea's torch), her gown and shawl lighter; stilled at 12 s; the stroke at
+  15 s over 0.55 s with sixteen threads and the binding flaring with it; headless from a third of the way
+  through it; let fall at 17.5 s into the water just there, where the rite holds her alongside (drifting
+  0.05 m/s) until it has mineralised her, and only then is she left astern. Seen by night at 8 to 22 s:
+  the figure large before the eye, pale in the light, with her head and then without; the fallen body
+  was lost in the trunk's glare at 7 m left, so she is now held and falls to the right of ahead (not
+  seen since). A 503 on one resource in the console was the dev server's, not the picture's.
+- **Her body made real, and much more blood** (the owner, 9 November: "Much more blood around the boat,
+  firstly. The body, we will have to make more real", with two photographs of a body floating face up on
+  dark water, pale, arms spread, the water's rings about it). The body is drawn with its form now: skin
+  (head, neck, hands), hair, gown and shawl each their own distance field, shaded as rounded forms by a
+  light from above, the gown in folds; the cut dark where her head was; awash once she lies in the water,
+  the sea over her lower parts; her arms spread wide as a floating body's once she is in it. She is held
+  eight metres before the eye; the water under her there is below the frame's foot, so as she is let go
+  the air carries her out to lie thirteen metres off, three to the right, where the water is in view, and
+  the rite holds her there. Drawn with no depth test, so a wave is never drawn over her. The blood falls
+  from the stroke itself: a pool under her at once, spreading as the square root of time from where she
+  lies over the water round the whole boat, 3 + 3.5√t m, the storm's sea working it to four times as
+  fast; deeper and fuller in the water (gerstner-waves.ts). Seen by night at 10 to 16 s: the figure large
+  before the eye with form, white gown, fringed shawl, dark hair, then headless; at 200 s the water round
+  the boat red-brown through the lamps' light. Then seen at 14 to 24 s: she hangs eight metres before the eye to the
+  right, and as she is let go is carried out to lie thirteen metres off, where the water is in view, a pale
+  figure face up with her arms spread on the reddened water, the rite's threads coming to her from behind
+  the eye. The 503 in the console is one of the dev server's resources, not the picture's.
+
+## 44. The cyclone (14 November, morning)
+
+The owner: "All channellers must cease weaving. The strongest will lead the formation of a cyclone.
+Innovate how the others lead or follow." Then, while it was being made: "For the cyclone weaving, have the
+channellers link to the strongest channeller and begin weaving from the boat to extremely far away —
+almost out of line of sight into the clouds. Then, as the 'ocean narrative' goes, enormous swells arise.
+Then it should become more evident that flows of water anf akasha are permeating the ocean at the same time
+as flows of fire and akasha are permeating the sky at almost every point separated by degree and by
+channeller — physically meaning the the sky is overrun with weaving anf then the weather should become like
+a cyclone." And, seeing the volume clouds of 10 November in that morning's real rain: "Your clouds look fake
+as fuck, dear Claude."
+
+- storm.json "cyclone": from 08:25 on 14 November (NZDT), 24 hours (first 07:49; restarted when the owner said to "turn this cyclone on"); each visitor sees them cease 6 s after
+  coming. `?cyclone`, `?cyclone=110`, `?cyclone=off`; `__cyclone()` in the console. The menu's weather
+  row reads "Cyclone channelled for many, especially Dahlia" (the owner: "in the menu have it be 'Cyclone
+  chanelled for many, especially Dahlia'"; spelled as the site's other rows are) all through it
+  (`CYCLONE_WORDS`); it first said what they were at, stage by stage. The alarm, Ranat's storm and the
+  freshening give way to it. All in `cyclone.ts`; its weather in `channelled-storm.ts` (`cycloneStorm`); the
+  flows' light under the sea in `gerstner-waves.ts` (`permeate`); the shader sky wound about its centre in
+  `sky-vortex.ts` (`vortexTurn`) and `OceanBackground.vue`.
+- **Fourteen.** Ember was stilled and beheaded on 9 November (§43), so she is not among them.
+- **What each visitor sees**, in seconds from turning to it:
+  - 0: everyone ceases. Every weave out is let go over three seconds (`cycloneBusy`, as for the alarm and
+    Ranat): the tending, the anchors, the calling, the spray-bow, the deep weaves. Four seconds of nothing.
+  - 4: Laeni opens her hands. From 6, the others link to her, strongest first (Pardis, Manulani, Keel,
+    Listener, Mohabat, Leilehua, then the eight), one every 0.85 s: each one's threads come forward from
+    where she stands behind or beside the eye, low, and run into Laeni's within 9 to 25 m, and the rope
+    broadens as each joins (its girth by the root of the strength joined in it).
+  - 17 to 39: Laeni runs the linked rope out over the sea, riding the swells two metres over the water,
+    twelve kilometres to near the horizon. It leaves the boat towards the right bow and comes round in one
+    long curve to the far place, 4° right of ahead. Near the boat it is a river of light some tens of metres
+    across on the water; its light is conserved as it spreads, so it thins as it goes. 37 to 49: at its far
+    end it goes up, opening, and is lost in the cloud base, almost out of sight. That is the cyclone's centre.
+  - 46 to 126: the swells arise from there, long and enormous: the swell from the centre at 22 m and 17 s
+    before the relaxing by half, so about 12 m drawn (`cycloneSwelled`); the sea's own swell kept as the
+    crossing one. The boat rides them: the horizon tilts and drops, and from a trough the far rope is hidden.
+  - 78 to 144: the permeation. Every degree of the compass is given a flow of fire and akasha into the sky
+    and one of water and akasha into the sea, and the degrees are shared out by channeller, each holding a
+    sector by the square root of her strength: Laeni 73° centred ahead; round to the right as they stand,
+    Manulani 47, Mohabat 18, Loom 10, Sail 9, Glass 10, Ballast 11; Leilehua 15 astern; round the left coming
+    forward, Mist 10, Reef 12, Lantern 11, Listener 40, Keel 43, Pardis 51. Every flow leaves her own palms.
+    The sky's: up from her hands at once, steeper as they go, reaching the cloud 0.8 to 2.6 km out and going
+    on 0.6 to 3 km into it, where their filaments go apart; each winds 40 to 80° round the boat as it
+    climbs, the way the air will turn, so the sky fills with strands sweeping across it. Four threads to
+    each of Laeni's degrees, three to Pardis's, Manulani's, Keel's and Listener's, two to Mohabat's and
+    Leilehua's, one to the weakest; one thread in three shows from the palms, the rest run out along it and
+    show 60 to 240 m out. The sea's: down from her hands into the water 8 to 28 m off (a thread each), and
+    on under it out to 220 to 740 m by her strength, deeper as they go, wound 80° by 700 m; seen as their
+    light from below, shifted by the surface's tilt, dimmer under a crest and brighter in a trough. Light is
+    carried outward along all of them in pulses.
+  - 140 to 320: the weather becomes a cyclone (`cycloneRaised`), out of the day's own and relaxed by half
+    as every storm is: centred where the rope went up, 12 km off; its wind round the centre and in across
+    the circles by 32°, clockwise south of the equator (anticlockwise north of it: the boat's real
+    latitude decides), so here it comes from some 120° round from the centre's bearing, behind the right
+    beam, at storm force (100 km/h with the real wind added in, about 60 drawn), gusting half as much again;
+    the glass 24 hPa down and falling fast; its own sea; full cloud; rain in bands, one passing over every
+    150 s (`cycloneBandAt`; with the volumes on, as much as their band cloud is over the boat), thunder in
+    them once well formed, the air clearer between; the air given 3200 J/kg. The sky's flows are carried
+    by its air, in and round low down and out and the other way round aloft, as a cyclone's air goes. The
+    shader's clouds are wound about the place over the centre and turn slowly the way it turns (no rings and
+    no eye: the sky vortex's rings are kept off).
+- **How the others lead and follow** (the owner: "innovate"). Laeni leads; the others follow her in two
+  ways. By linking, in the order of their strength. And by taking the turn from the one before: the
+  permeation does not begin everywhere at once but in Laeni's own degrees, and passes round the compass from
+  sector to sector, each channeller taking it up as it reaches her, as a turn passes through a starling
+  flock at a steady speed (Attanasi et al., 2014). Once round, a wave of light keeps going round through all
+  the flows, from a minute a round to twenty seconds as the cyclone forms. It goes the way the air will, so
+  the order in which they follow her is what sets the sky turning.
+- **The clouds.** The volume clouds of 10 November (clouds.ts) are now off unless `?clouds=on`. Seen that
+  morning under the real overcast and rain they were dark, blurred puffs like cotton balls, all one size,
+  with no lit tops and no flat bases; doubling the renderer's grid sharpened them but left them puffs, and
+  more light from the overcast sky did not lighten them. The sky shader's overcast in the same weather read
+  as real. The cyclone has its own deck for the volumes (cells born on three log-spiral arms and in a core
+  about the centre, rising as towers over a minute, carried round by its wind, faster near the eye, dying
+  and re-forming so the arms keep their place, the low deck giving way to it once it is a third formed),
+  which is seen only at `?clouds=on&cyclone` and has not been looked at. Without the volumes the cyclone's
+  cloud is the shader's overcast wound about the centre: there is no towering wall of cloud at the centre.
+- **On the way** (each a lesson): a rope run straight away from the eye laid all twelve kilometres of its
+  light on one spot (a white ball), so it curves; the rope's near end, where all its threads leave Laeni's
+  hands just under the eye, is seen end on whatever its bearing and stood as a white post, so near the boat
+  it is broad and flat across the water, and every thread is dimmed where it is seen end on (`sideOn`);
+  sky flows laid low over the sea before rising made a bright band on the horizon, so they rise at once;
+  flows running straight out from under the eye stand on the picture as a comb of upright strokes, and on
+  a swell's face seen from a trough as a fence of posts, so they wind round; the rope's tip lit brightly as
+  it ran out made a ball, so it has none; the band rain at first whitened half the view, so it is halved.
+- Seen in the in-app browser by day (the real morning's overcast and rain), at 560 by 669 and 1280 by 720,
+  in a hidden pane with frames forced, at 12, 34, 104 to 150, 200 and 330 s; no errors from it. Not seen:
+  night, dawn or dusk, a phone, the first link close up, the sea's flows on a calm patch, the volumes'
+  cyclone deck, anything in motion. Frame cost not measured (a hidden pane's timing means nothing); it
+  draws some 270 rope threads of 220 segments, 974 sky threads of 96 and 360 sea threads of 28, and the
+  rope and the sea's flows look up the sea's height in the shader; the volumes being off saves about 17 ms
+  a frame on the M1 (measured 10 November).
+- **The clouds rebuilt** (the owner, the same morning: "Yes, rebuild them"). HANDOFF.md has the detail: flat
+  bases, billows on billows, ragged in rain, room in their boxes, the light of the sky rising with the overcast
+  (the first ones were ink in rain because it was held low), the haze between the eye and each cloud, a finer
+  grid without frame blending. Switched on again for everyone at the owner's word ("Yes, switch them on"). In the
+  cyclone, with them on, its own deck builds fully (26 walls, 40 towers, 60 band cells), but from inside a
+  rain band the haze hides it entirely at twelve kilometres, as it would; between bands it has not been seen.
+

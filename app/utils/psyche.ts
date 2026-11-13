@@ -108,9 +108,23 @@ const TRUE_THEN = [...BEGAN.map((strength, i) => strength * (MIGHTY_MINDS.includ
 // What the owner raised on 5 November (by mind).
 const RAISED: Record<number, number> = { 1: 6, 2: 1.8 };
 export const LAENI_OVER_ALL = 3.5;
-const OTHERS_NOW = [...TRUE_THEN.map((strength, i) => strength * (RAISED[i] ?? 1)), 0.5 * TER_ANGREAL[LEILEHUA_MIND]!];
-OTHERS_NOW[STRONGEST_MIND] = 0;
-const LAENI_NOW = LAENI_OVER_ALL * OTHERS_NOW.reduce((sum, one) => sum + one, 0);
+// The stones (the owner, 9 November: "I give 2–5 new special stones that act as intense magnifiers of their
+// natal strength. Thus — Pardis at 9000% + etc"): the second to fifth strongest, Pardis, Manulani, Keel and
+// Listener, each a stone that magnifies her own strength: Pardis ninety times; the others' figures are the
+// assistant's, falling away from hers, until the owner gives them. Read as "she is at 4000%" was, as that
+// share of her own strength. Laeni holds no stone, but her rule of 5 November answers them: she is still
+// 3.5 times all the others together (the owner, 9 November, of the six: "now they are maximally increased
+// in skill and raw power"). Off for everyone since 14 November, when the cyclone came back alone after that
+// day's build broke browsers: every weave's threads are made by strength when the page opens, so the stones
+// add some 118 MB to every visitor's memory (1,026 MB of buffers for 908). ?stones=on shows them.
+export const STONES: Record<number, number> = { 1: 90, 13: 80, 0: 70, 5: 60 };
+export const STONES_ON = typeof location !== "undefined" && new URLSearchParams(location.search).get("stones") === "on";
+const LAENI_ANSWERS_STONES = true;
+const stoneOf = (i: number) => (STONES_ON ? (STONES[i] ?? 1) : 1);
+const OTHERS_BEFORE = [...TRUE_THEN.map((strength, i) => strength * (RAISED[i] ?? 1)), 0.5 * TER_ANGREAL[LEILEHUA_MIND]!];
+OTHERS_BEFORE[STRONGEST_MIND] = 0;
+const OTHERS_NOW = OTHERS_BEFORE.map((strength, i) => strength * stoneOf(i));
+const LAENI_NOW = LAENI_OVER_ALL * (LAENI_ANSWERS_STONES ? OTHERS_NOW : OTHERS_BEFORE).reduce((sum, one) => sum + one, 0);
 export const TRUE_STRENGTH = OTHERS_NOW.map((strength, i) => (i === STRONGEST_MIND ? LAENI_NOW : strength));
 // How much stronger each is than until 5 November (Leilehua, new, as an ordinary one: 1).
 export const RAISED_SINCE = TRUE_STRENGTH.map((strength, i) => (i === LEILEHUA_MIND ? 1 : strength / TRUE_THEN[i]!));
