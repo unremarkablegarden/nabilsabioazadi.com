@@ -341,6 +341,19 @@ export interface SeaConditions {
 	airCloudTemperature?: number;
 	airMidTemperature?: number;
 	airHighTemperature?: number;
+	// The relative humidity of the air in percent at about 760 m (925 hPa), with the air at the sea
+	// what a rising parcel condenses from (condensationLevel in clouds.ts); and how deep in metres
+	// the air is that the sea's turbulence keeps mixed (the boundary layer), whose top is a
+	// sheet of cloud's lid. Missing in figures kept from before these were asked for.
+	moistLow?: number;
+	mixedDepth?: number;
+	// The relative humidity of the air in percent at about 3, 4.2, 5.6 and 7.2 km (where its
+	// pressure is 700, 600, 500 and 400 hPa): middle cloud forms where it is nearest saturation
+	// (clouds.ts). Missing in figures kept from before these were asked for.
+	moistMid?: number;
+	moistUpper?: number;
+	moistHigh?: number;
+	moistTop?: number;
 	// How much haze (dust, salt, smoke) stands in the whole depth of air overhead: its optical
 	// depth for green light. About 0.05 is very clean sea air, 0.3 hazy. From the Copernicus
 	// atmosphere model; missing if that could not be reached.
@@ -455,6 +468,12 @@ const ALOFT = {
 	airCloudTemperature: "temperature_850hPa",
 	airMidTemperature: "temperature_700hPa",
 	airHighTemperature: "temperature_500hPa",
+	moistLow: "relative_humidity_925hPa",
+	mixedDepth: "boundary_layer_height",
+	moistMid: "relative_humidity_700hPa",
+	moistUpper: "relative_humidity_600hPa",
+	moistHigh: "relative_humidity_500hPa",
+	moistTop: "relative_humidity_400hPa",
 } as const;
 
 // The wind at five heights, lowest first: at the sea, then the four heights above it. A height

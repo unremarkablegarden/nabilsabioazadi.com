@@ -383,6 +383,10 @@ export const FRESH_PLACES = 14;
 export const FRESH_RADIUS = 300;
 // The sea-anchors (anchor.ts): how many may be out at once.
 export const ANCHORS = 3;
+// The alarm's lamps (alarm.ts): how many light the sea at once.
+export const LAMPS = 8;
+// The cyclone's channellers, one sector of the compass each (cyclone.ts).
+export const PERMEATE_SECTORS = 14;
 
 // The rogue's tsunami (tsunami.ts). A wall of water raised by the rogue some kilometres off and
 // running at the boat, drawn as a height on the sea (nothing in it folds over): its crest a long arc
@@ -698,6 +702,27 @@ export interface GerstnerUniforms {
 	// how far it has taken hold of the water; and how bright its rim shows through the water, before tone mapping.
 	anchorAt: THREE.IUniform<THREE.Vector4[]>;
 	anchorGlow: THREE.IUniform<number>;
+	// The alarm's lamps (alarm.ts): for each, where the lamp is (world) and how bright on the sea beneath it at
+	// a metre, before tone mapping (0: none); their light's colour. And her blood: where its stain is centred
+	// (x, z), how far it has spread (m) and how thick it is (0..1); which way the waves streak it (unit, x z).
+	lampAt: THREE.IUniform<THREE.Vector4[]>;
+	lampTint: THREE.IUniform<THREE.Color>;
+	// The ambient light about the furthest lamp (the owner: "a great deal of ambient light for 8 km around the
+	// furthest out point"): where (x, z), how far it reaches (m) and how bright, before tone mapping.
+	lampAmbient: THREE.IUniform<THREE.Vector4>;
+	blood: THREE.IUniform<THREE.Vector4>;
+	bloodDrift: THREE.IUniform<THREE.Vector2>;
+	// The cyclone's flows into the sea (cyclone.ts), seen from under the water: the boat (x, z) and the way
+	// ahead (x, z); how bright before tone mapping, how far round the permeation has come (degrees), where its
+	// wave is (degrees), Laeni's width (degrees); which way it goes round (1 clockwise), how far the cyclone
+	// has formed, and the way its air carries things at the boat (unit, x z). Each channeller's sector: where
+	// it begins (degrees from Laeni's left edge), how wide, how far her flows run (m), how much light in them;
+	// and her colour.
+	permeateA: THREE.IUniform<THREE.Vector4>;
+	permeateB: THREE.IUniform<THREE.Vector4>;
+	permeateC: THREE.IUniform<THREE.Vector4>;
+	permeateSectors: THREE.IUniform<THREE.Vector4[]>;
+	permeateTints: THREE.IUniform<THREE.Color[]>;
 }
 
 const pressedChunk = /* glsl */ `
@@ -1260,6 +1285,16 @@ uniform vec4 freshAt[ ${FRESH_PLACES} ];
 uniform float freshWhole;
 uniform vec4 anchorAt[ ${ANCHORS} ];
 uniform float anchorGlow;
+uniform vec4 lampAt[ ${LAMPS} ];
+uniform vec3 lampTint;
+uniform vec4 lampAmbient;
+uniform vec4 blood;
+uniform vec2 bloodDrift;
+uniform vec4 permeateA;
+uniform vec4 permeateB;
+uniform vec4 permeateC;
+uniform vec4 permeateSectors[ ${PERMEATE_SECTORS} ];
+uniform vec3 permeateTints[ ${PERMEATE_SECTORS} ];
 // Smooth noise for the bodies of fresh and salt water, 0..1.
 float sweetHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
 float sweetNoise( vec2 p ) {
@@ -1625,6 +1660,55 @@ const fragmentFoam = /* glsl */ `
 		}
 	}
 
+	// The cyclone's flows of water and akasha into the sea (cyclone.ts): one to each degree of the compass, each
+	// gone down into the water some metres from the boat and running on under it, deeper as it goes, out to
+	// hundreds of metres; seen as their light from below, shifted by the surface's tilt (as the deep plaits
+	// are), dimmer the deeper they are and under a crest, brighter in a trough where the water is thin; the
+	// light running out along them, and the wave going round through them. Where the degrees are finer
+	// than a pixel they are seen as the light they give together, not as lines.
+	if ( permeateB.x > 0.0 ) {
+		vec2 fromBoatP = worldPosition.xz - permeateA.xy;
+		float clearP = 1.0 - smoothstep( - 0.12, 0.1, vCrest );
+		vec2 seenP = fromBoatP + surfaceNormal.xz * 9.0 * ( 1.0 - clearP );
+		float rP = length( seenP );
+		// (The cyclone's air carries them, the further out the more.)
+		seenP -= permeateC.zw * 0.25 * rP * permeateC.y;
+		rP = length( seenP );
+		if ( rP > 4.0 && rP < 1400.0 ) {
+			vec2 aheadP = permeateA.zw;
+			vec2 acrossP = vec2( - aheadP.y, aheadP.x );
+			float bearingP = degrees( atan( dot( seenP, acrossP ), dot( seenP, aheadP ) ) );
+			// Each wanders a little its own way as it goes.
+			// (Wound round as they go, the way it turns: eighty degrees by seven hundred metres. Lines running straight
+			// out from under the eye stand on the picture as a comb of upright strokes; wound, they sweep across it.)
+			float dP = mod( bearingP - permeateC.x * 80.0 * log( 1.0 + rP / 40.0 ) / log( 18.5 ) + 0.5 * permeateB.w + 0.35 * sin( rP * 0.013 + floor( bearingP ) * 1.7 ), 360.0 );
+			float n = floor( dP );
+			float acrossM = ( dP - n - 0.5 ) * 0.017453 * rP;
+			int o = 0;
+			for ( int i = 1; i < ${PERMEATE_SECTORS}; i ++ ) if ( dP >= permeateSectors[ i ].x ) o = i;
+			vec4 sector = permeateSectors[ o ];
+			float h = fract( sin( n * 12.9898 ) * 43758.5453 );
+			float into = 8.0 + 20.0 * h;
+			float sweptP = permeateC.x > 0.0 ? n : mod( permeateB.w - 1.0 - n, 360.0 );
+			float grownP = clamp( ( permeateB.y - sweptP ) / 10.0, 0.0, 1.0 );
+			float reachP = sector.z * ( 0.65 + 0.35 * fract( h * 7.1 ) ) * grownP;
+			float shownP = grownP * smoothstep( into, into + 6.0, rP ) * ( 1.0 - smoothstep( 0.85 * reachP, reachP, rP ) );
+			float depthP = 1.5 + 0.035 * rP;
+			float widthP = 0.25 + 0.004 * rP + 0.12 * depthP;
+			float lineP = exp( - acrossM * acrossM / ( widthP * widthP ) );
+			float fineP = fwidth( bearingP );
+			lineP = mix( lineP, min( 1.0, 1.77 * widthP / max( 0.017453 * rP, 1e-3 ) ), smoothstep( 0.3, 0.9, fineP ) );
+			float runningP = pow( 0.5 + 0.5 * sin( log( rP + 10.0 ) * 6.0 - channelTime * 1.2 + h * 6.28 ), 3.0 );
+			float behindP = mod( permeateB.z - sweptP, 360.0 );
+			float waveP = 0.5 + 1.1 * ( exp( - behindP / 40.0 ) + exp( - ( 360.0 - behindP ) / 3.0 ) );
+			// (Fainter where the eye looks straight along one, up a swell's face, where it would stand as a post.)
+			float alongP = abs( dot( normalize( seenP ), normalize( worldPosition.xz - cameraPosition.xz + vec2( 1e-3 ) ) ) );
+			float throughP = exp( - depthP / 7.0 ) * mix( 0.12, 1.0, clearP ) * ( 1.0 - 0.6 * smoothstep( 0.9, 1.0, alongP ) * smoothstep( 0.0, 0.25, vCrest ) );
+			vec3 toneP = mix( vec3( 0.16, 0.62, 0.55 ), permeateTints[ o ], 0.65 );
+			outgoingLight += toneP * lineP * shownP * ( 0.35 + 0.65 * runningP ) * waveP * throughP * sector.w * permeateB.x * ( 1.0 - foamMask ) * mix( 1.0 - reflectance, 1.0, clearP );
+		}
+	}
+
 	// The sea-anchors (anchor.ts): each cup's rim, a ring of water and earth just under the surface, glows
 	// faintly up through the water, and the water within it is a shade deeper, drawn down.
 	if ( anchorGlow > 0.0 ) {
@@ -1712,6 +1796,49 @@ const fragmentFoam = /* glsl */ `
 			outgoingLight += torchTint.rgb * vec3( 0.12, 0.8, 0.75 ) * 0.1 * fall * facing * thinWater * ( 1.0 - reflectance );
 			vec3 bounce = reflect( - eyeDirection, surfaceNormal );
 			outgoingLight += torchTint.rgb * fall * ( 1.5 * pow( max( dot( bounce, toward ), 0.0 ), 600.0 ) + 0.04 * pow( max( dot( bounce, toward ), 0.0 ), 30.0 ) ) * reflectance * ( 1.0 - foamMask );
+		}
+	}
+	// The alarm's lamps (alarm.ts): each a tall weave of light standing on the sea, lighting the water about
+	// its foot as any bright thing does, by how squarely each face of the water is turned to it and by the
+	// inverse square of its distance, its glitter running over the water towards it; nothing beyond half a
+	// kilometre of it.
+	for ( int i = 0; i < ${LAMPS}; i ++ ) {
+		vec4 lamp = lampAt[ i ];
+		if ( lamp.w <= 0.0 ) continue;
+		vec3 toLamp = lamp.xyz - worldPosition.xyz;
+		float r2 = dot( toLamp, toLamp );
+		if ( r2 > 250000.0 ) continue;
+		vec3 towardLamp = toLamp * inversesqrt( r2 );
+		float lampFall = lamp.w / r2 * ( 1.0 - smoothstep( 160000.0, 250000.0, r2 ) );
+		float lampFacing = max( dot( surfaceNormal, towardLamp ), 0.0 );
+		vec3 lampWithin = mix( vec3( 0.02, 0.07, 0.17 ), vec3( 0.06, 0.17, 0.15 ), sweet );
+		outgoingLight += lampTint * lampFall * lampFacing * ( lampWithin * ( 1.0 - reflectance ) + 0.55 * foamMask );
+		vec3 lampBounce = reflect( - eyeDirection, surfaceNormal );
+		outgoingLight += lampTint * lampFall * ( 1.5 * pow( max( dot( lampBounce, towardLamp ), 0.0 ), 600.0 ) + 0.04 * pow( max( dot( lampBounce, towardLamp ), 0.0 ), 30.0 ) ) * reflectance * ( 1.0 - foamMask );
+	}
+	// The ambient light about the furthest lamp (alarm.ts): the sky over that water is lit for kilometres, and
+	// the sea under a lit sky is lit evenly from above, its faces turned up most, its foam most of all, with a
+	// soft sheen and no glitter; falling away towards the edge of the lit country.
+	if ( lampAmbient.w > 0.0 ) {
+		float offAmbient = length( worldPosition.xz - lampAmbient.xy );
+		float ambient = lampAmbient.w * ( 1.0 - smoothstep( lampAmbient.z * 0.5, lampAmbient.z, offAmbient ) );
+		if ( ambient > 0.0 ) {
+			float upward = max( surfaceNormal.y, 0.0 );
+			outgoingLight += lampTint * ambient * ( vec3( 0.03, 0.09, 0.17 ) * ( 1.0 - reflectance ) * upward + 0.5 * foamMask + 0.12 * reflectance * upward );
+		}
+	}
+	// Her blood (alarm.ts): a stain in the water spreading from where she lay, as a dye diffuses, drawn out
+	// along the drift by the waves and broken into streaks and bodies as any dye in moving water is, thinner
+	// as it spreads; the water's own light reddened and darkened by it, less in the foam and the glare.
+	if ( blood.w > 0.0 ) {
+		vec2 offBlood = worldPosition.xz - blood.xy;
+		vec2 alongBlood = vec2( dot( offBlood, bloodDrift ), dot( offBlood, vec2( - bloodDrift.y, bloodDrift.x ) ) );
+		vec2 stretched = vec2( alongBlood.x / 2.0, alongBlood.y ) / max( blood.z, 1.0 );
+		float withinBlood = 1.0 - smoothstep( 0.55, 1.15, length( stretched ) );
+		if ( withinBlood > 0.0 ) {
+			float grain = 0.55 * sweetNoise( alongBlood / ( 0.16 * blood.z + 2.0 ) + vec2( waveTime * 0.012, 0.0 ) ) + 0.45 * sweetNoise( alongBlood * vec2( 0.45, 1.0 ) / ( 0.05 * blood.z + 1.0 ) - vec2( 0.0, waveTime * 0.02 ) );
+			float dye = blood.w * withinBlood * smoothstep( 0.02, 0.55, grain + 0.45 * withinBlood );
+			outgoingLight = mix( outgoingLight, outgoingLight * vec3( 0.85, 0.09, 0.05 ) + vec3( 0.035, 0.002, 0.0 ) * ( 1.0 - reflectance ), min( 1.0, 1.7 * dye ) * ( 1.0 - 0.5 * foamMask ) * ( 1.0 - 0.4 * reflectance ) );
 		}
 	}
 `;
@@ -1814,6 +1941,16 @@ export function addGerstnerWaves(water: Water): GerstnerUniforms {
 		freshWhole: { value: 0 },
 		anchorAt: { value: Array.from({ length: ANCHORS }, () => new THREE.Vector4()) },
 		anchorGlow: { value: 0 },
+		lampAt: { value: Array.from({ length: LAMPS }, () => new THREE.Vector4()) },
+		lampTint: { value: new THREE.Color(1, 0.86, 0.62) },
+		lampAmbient: { value: new THREE.Vector4(0, 0, 8000, 0) },
+		blood: { value: new THREE.Vector4(0, 0, 1, 0) },
+		bloodDrift: { value: new THREE.Vector2(0, -1) },
+		permeateA: { value: new THREE.Vector4(0, 0, 0, -1) },
+		permeateB: { value: new THREE.Vector4() },
+		permeateC: { value: new THREE.Vector4(1, 0, -1, 0) },
+		permeateSectors: { value: Array.from({ length: PERMEATE_SECTORS }, () => new THREE.Vector4(400, 0, 0, 0)) },
+		permeateTints: { value: Array.from({ length: PERMEATE_SECTORS }, () => new THREE.Color()) },
 	};
 	useDialSea(uniforms);
 	Object.assign(material.uniforms, uniforms, { giantWaves: { value: GIANT_WAVES } });

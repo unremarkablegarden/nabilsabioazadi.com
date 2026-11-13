@@ -75,8 +75,14 @@ const tsunamiNow = ref(false);
 const freshNow = ref(false);
 // Ranat's storm (ranat.ts), while it lasts.
 const ranatNow = ref(false);
+// The alarm (alarm.ts), while it lasts.
+const alarmNow = ref(false);
+// The cyclone (cyclone.ts): what it is at, in words, while it lasts.
+const cycloneWords = ref<string>();
 // The sea-anchors that read the air (anchor.ts), while any is out.
 const anchorNow = ref(false);
+// The clouds as the forecast has them (clouds.ts), in words, for the figures.
+const cloudWords = ref("");
 const ANCHOR_WORDS = "The boat held back by Ballast's sea-anchor, its telltales reading the wind";
 // Calling the weather (forecast-call.ts): what the six are calling and when it is due, or whether it came.
 const callingNow = ref<string>();
@@ -157,6 +163,7 @@ const liveFigures = computed(() => {
 		["current", `${c.currentSpeed.toFixed(1)} km/h to ${compassPoint(c.currentDirection)}`],
 		["tide", `${c.tide.toFixed(2)} m`],
 		["cloud", `low ${c.cloudLow.toFixed(0)}%${between(c.doubt.cloudLow)} · mid ${c.cloudMid.toFixed(0)}% · high ${c.cloudHigh.toFixed(0)}%`],
+		["cloud deck", cloudWords.value || "—"],
 		["rain", `${(c.precipitation * 4).toFixed(1)} mm/h`],
 		["visibility", `${(c.visibility / 1000).toFixed(1)} km`],
 		["thunder", `code ${c.weatherCode} · ${c.cape.toFixed(0)} J/kg`],
@@ -182,7 +189,7 @@ const liveFigures = computed(() => {
 
 watchEffect(() => {
 	shownAt.value = dateAtBoatHour(hour.value, pretendDate.value ?? new Date()).getTime();
-	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: ranatNow.value ? RANAT_WORDS : tsunamiNow.value ? TSUNAMI_WORDS : freshNow.value ? FRESH_WORDS : channelled.value ? (jennaRaisedNow.value ? JENNA_WORDS : siuanRaisedNow.value ? SIUAN_WORDS : vesalRaisedNow.value ? VESAL_WORDS : fiveRaised.value && wrathRaised.value ? BOTH_WORDS : fiveRaised.value ? FIVE_WORDS : wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined, holding: anchorNow.value ? ANCHOR_WORDS : undefined, calling: callingNow.value, bow: bowNow.value ? BOW_WORDS : undefined, whales: channelled.value && fiveRaised.value ? whalesLine.value : undefined };
+	readout.value = { place: placeLabel.value, time: timeLabel.value, waves: wavesLabel.value, wind: windLabel.value, weather: cycloneWords.value ? cycloneWords.value : alarmNow.value ? ALARM_WORDS : ranatNow.value ? RANAT_WORDS : tsunamiNow.value ? TSUNAMI_WORDS : freshNow.value ? FRESH_WORDS : channelled.value ? (jennaRaisedNow.value ? JENNA_WORDS : siuanRaisedNow.value ? SIUAN_WORDS : vesalRaisedNow.value ? VESAL_WORDS : fiveRaised.value && wrathRaised.value ? BOTH_WORDS : fiveRaised.value ? FIVE_WORDS : wrathRaised.value ? WRATH_WORDS : CHANNELLED_WORDS) : undefined, holding: anchorNow.value ? ANCHOR_WORDS : undefined, calling: callingNow.value, bow: bowNow.value ? BOW_WORDS : undefined, whales: channelled.value && fiveRaised.value ? whalesLine.value : undefined };
 });
 
 onMounted(async () => {
@@ -400,6 +407,30 @@ onMounted(async () => {
 	skyUniforms.cloudElevation.value = 0.5;
 	const vortexUniforms = addSkyVortex(sky);
 	const twilightUniforms = addTwilightSky(sky);
+	// The clouds (clouds.ts): volumes of real cloud, read from the forecast, unless ?clouds=off (then the sky
+	// shader's clouds, as before 10 November). Off for some hours on 14 November (the owner, seeing them in the
+	// day's rain as dark puffs like cotton balls: "Your clouds look fake as fuck"), rebuilt, and on again at the
+	// owner's word ("Yes, switch them on"). With them, the sky shader keeps only the high veil. The water's
+	// mirror is drawn with its own camera, and the frame renderer would do all its work again for it, so the
+	// volumes are hidden from it and it sees the shader's whole cloud layer instead.
+	const clouds = createClouds(scene, { on: query.get("clouds") !== "off" });
+	(window as unknown as { __clouds?: () => string[] }).__clouds = clouds.describe;
+	const skyClouds = { picture: { coverage: 0, density: 0.3, elevation: 0.5 }, mirror: { coverage: 0, density: 0.3, elevation: 0.5 } };
+	const showSkyClouds = (which: "picture" | "mirror") => {
+		skyUniforms.cloudCoverage.value = skyClouds[which].coverage;
+		skyUniforms.cloudDensity.value = skyClouds[which].density;
+		skyUniforms.cloudElevation.value = skyClouds[which].elevation;
+	};
+	if (clouds.on) {
+		const stockMirror = water.onBeforeRender;
+		water.onBeforeRender = (...args) => {
+			clouds.hide(true);
+			showSkyClouds("mirror");
+			stockMirror.apply(water, args);
+			clouds.hide(false);
+			showSkyClouds("picture");
+		};
+	}
 	await breathe();
 
 	// The moon's face, drawn for its phase with the lit edge to the right; the disc is then turned
@@ -556,7 +587,8 @@ onMounted(async () => {
 		// Stars need a dark sky. As it darkens the brightest come out first, and a bright moon
 		// drowns the faint ones (faintestSeen in stars.ts). Cloud hides them. (The cloud here dims
 		// them all alike; it cannot yet hide the ones behind each cloud.)
-		starsOut = staged ? 0 : 1 - sky ** 0.8;
+		// (With the volumes on, each cloud hides the stars behind it; the dimming here is halved.)
+		starsOut = staged ? 0 : 1 - (clouds.on ? 0.5 : 1) * sky ** 0.8;
 		faintestStar = faintestSeen(sunElevation, moonlight);
 		// The Milky Way needs full night and goes with any moon worth the name.
 		milkyWayOut = starsOut * THREE.MathUtils.smoothstep(-sunElevation, 12, 18) * (1 - Math.min(1, 4 * moonlight));
@@ -588,8 +620,15 @@ onMounted(async () => {
 		skyUniforms.turbidity.value = lerp(2, 20, sky);
 		skyUniforms.rayleigh.value = lerp(2, 0.5, sky);
 		skyUniforms.mieCoefficient.value = lerp(0.002, 0.05, sky);
-		skyUniforms.cloudCoverage.value = sky ** 0.8;
-		skyUniforms.cloudDensity.value = lerp(0.3, 1, sky);
+		skyClouds.mirror.coverage = sky ** 0.8;
+		skyClouds.mirror.density = lerp(0.3, 1, sky);
+		skyClouds.mirror.elevation = 0.5;
+		// In the picture the volumes are the cloud; the shader draws only the high veil, thin and far up.
+		skyClouds.picture.coverage = clouds.on ? clouds.veil() * 0.85 : skyClouds.mirror.coverage;
+		skyClouds.picture.density = clouds.on ? 0.22 : skyClouds.mirror.density;
+		skyClouds.picture.elevation = clouds.on ? 0.1 : skyClouds.mirror.elevation;
+		showSkyClouds("picture");
+		clouds.light({ sun, moon: moonDirection, sunElevation, daylight, moonlight, storm: sky });
 
 		// Storm colours are scaled like the night colours so a night storm stays dark.
 		const brightness = lerp(0.05, 1, daylight);
@@ -699,11 +738,23 @@ onMounted(async () => {
 	// Ranat's storm (ranat.ts, ranatStorm): "ranat" in storm.json, everyone turning to it for each visitor
 	// RANAT_AFTER after they come; or ?ranat for this visit from now, ?ranat=300 five minutes in, ?ranat=off
 	// without it. While it is on, the freshening has given way to it.
+	// The cyclone (cyclone.ts, cycloneStorm): "cyclone" in storm.json, everyone ceasing for it for each visitor
+	// CYCLONE_AFTER after they come; or ?cyclone for this visit from now, ?cyclone=150 two and a half minutes
+	// in, ?cyclone=off without it. While it is on, the alarm, Ranat's storm and the freshening give way to it.
+	const cycloneAsked = query.get("cyclone");
+	const cycloneSeconds = () => {
+		const here = (Date.now() - pageOpened) / 1000;
+		if (cycloneAsked === "off") return undefined;
+		if (cycloneAsked !== null) return (Number(cycloneAsked) || 0) + here;
+		const byClock = cycloneSince(new Date());
+		return byClock === undefined ? undefined : Math.min(byClock, here - CYCLONE_AFTER);
+	};
 	const ranatAsked = query.get("ranat");
 	const ranatSeconds = () => {
 		const here = (Date.now() - pageOpened) / 1000;
 		if (ranatAsked === "off") return undefined;
 		if (ranatAsked !== null) return (Number(ranatAsked) || 0) + here;
+		if (alarmSeconds() !== undefined || cycloneSeconds() !== undefined) return undefined;
 		const byClock = ranatSince(new Date());
 		return byClock === undefined ? undefined : Math.min(byClock, here - RANAT_AFTER);
 	};
@@ -718,6 +769,23 @@ onMounted(async () => {
 	};
 	// How far Lantern's calls have brought the rain on over the boat (ranat.ts), for the storm's figures.
 	let ranatCalled = 0;
+	// The alarm (alarm.ts, alarmStorm): "alarm" in storm.json, everyone turning to it for each visitor
+	// ALARM_AFTER after they come; or ?alarm for this visit from now, ?alarm=150 two and a half minutes in,
+	// ?alarm=off without it. While it is on, Ranat's storm and the freshening have given way to it.
+	const alarmAsked = query.get("alarm");
+	const alarmSeconds = () => {
+		const here = (Date.now() - pageOpened) / 1000;
+		if (alarmAsked === "off") return undefined;
+		if (alarmAsked !== null) return (Number(alarmAsked) || 0) + here;
+		if (cycloneSeconds() !== undefined) return undefined;
+		const byClock = alarmSince(new Date());
+		return byClock === undefined ? undefined : Math.min(byClock, here - ALARM_AFTER);
+	};
+	// How far Mohabat has raised her storm (alarmRaised).
+	const alarmUp = () => {
+		const since = alarmSeconds();
+		return since === undefined ? 0 : alarmRaised(since);
+	};
 	const freshAsked = query.get("fresh");
 	// The sea-anchors (anchor.ts): whenever the boat has to be held back; or ?anchor for this visit as if
 	// it needed holding 60%, ?anchor=0.3 for 30%, ?anchor=off for none.
@@ -745,7 +813,7 @@ onMounted(async () => {
 		const here = (Date.now() - pageOpened) / 1000;
 		if (freshAsked === "off") return undefined;
 		if (freshAsked !== null) return (Number(freshAsked) || 0) + here;
-		if (ranatSeconds() !== undefined) return undefined;
+		if (ranatSeconds() !== undefined || alarmSeconds() !== undefined || cycloneSeconds() !== undefined) return undefined;
 		const byClock = freshSince(new Date());
 		return byClock === undefined ? undefined : Math.min(byClock, here - FRESH_AFTER);
 	};
@@ -769,10 +837,25 @@ onMounted(async () => {
 	const bothFigures = fiveFigures && wrathFigures;
 	// Fifteen times worse, or as storm.json or ?worse= says (worsened).
 	const worse = worseTimes(query.get("worse"));
+	// The cyclone's weather (cycloneStorm): its swells, then its wind and rain, the rain as much as its band
+	// cloud is over the boat (with the volumes; otherwise as its bands' timing has them).
+	const cycloneFigures = () => {
+		const since = cycloneSeconds();
+		if (since === undefined || !realNow) return undefined;
+		const swelled = cycloneSwelled(since);
+		const raised = cycloneRaised(since);
+		if (swelled <= 0 && raised <= 0) return undefined;
+		const band = clouds.on ? clouds.cycloneOverhead() : cycloneBandAt(since);
+		return cycloneStorm(realNow, swelled, raised, band, (PLACE.bearing + CYCLONE_BEARING + 360) % 360, PLACE.latitude < 0);
+	};
 	const pretendNow = () => {
 		// (Until the day's figures are known there is nothing yet to raise.)
 		if (vesalSeconds() !== undefined && !realNow) return asPretended;
-		// (Ranat's storm before any other.)
+		// (The cyclone's before any other, then the alarm's storm, then Ranat's.)
+		const cycloneWeather = cycloneFigures();
+		if (cycloneWeather) return { ...relaxed(cycloneWeather, realNow), ...asPretended };
+		const alarmRaise = alarmUp();
+		if (alarmRaise > 0 && realNow) return { ...relaxed(alarmStorm(realNow, alarmRaise), realNow), ...asPretended };
 		const ranatRaise = ranatUp();
 		const ranatPractising = ranatPractice();
 		if ((ranatRaise > 0 || ranatPractising > 0) && realNow) return { ...relaxed(ranatStorm(realNow, ranatRaise, ranatCalled, ranatPractising), realNow), ...asPretended };
@@ -936,11 +1019,8 @@ onMounted(async () => {
 	const compelled = createCompelled(scene, SCREEN_LAYER);
 	// Noon at night (noon.ts): "noon" in storm.json, or ?noon for this visit from now, ?noon=off.
 	const noon = createNoon(scene, SCREEN_LAYER);
-	// The serpents: the sea's own heat rising in plumes from an interlace of rolls, traced by the
-	// twelve (plumes.ts), whenever the sea is warmer than the air.
-	const plumes = createPlumes(scene, SCREEN_LAYER);
-	// The small vortex rings the flow sheds as it spends (rings.ts).
-	const rings = createRings(scene, SCREEN_LAYER);
+	// (The serpents, plumes.ts, and the small vortex rings the flow shed, rings.ts, are no longer made: the
+	// owner, 8 November, "remove all the circle weaves in the distance from herewith".)
 	// Siuan's haul and her mist (swells.ts).
 	const swells = createSwells(scene, SCREEN_LAYER);
 	// Jenna's storm: the bolts the channellers draw down, their air and water, and the swells they make.
@@ -977,6 +1057,15 @@ onMounted(async () => {
 	// the rain, Loom and Sail flinging the akasha's water across; __ranat() in the console.
 	const ranat = createRanat(scene, SCREEN_LAYER, waveUniforms);
 	(window as unknown as { __ranat?: () => string[] }).__ranat = ranat.describe;
+	// The alarm: the six's flows of light and their lamps, the sister thrown to the sea and mineralised,
+	// the stream into the sky, Mohabat's summons, her blood, the sharks and the punches; __alarm() in the
+	// console.
+	const alarm = createAlarm(scene, SCREEN_LAYER, waveUniforms);
+	(window as unknown as { __alarm?: () => string[] }).__alarm = alarm.describe;
+	// The cyclone: everyone ceasing, the link to Laeni and her rope far out into the cloud, the sky and the sea
+	// permeated degree by degree; __cyclone() in the console.
+	const cyclone = createCyclone(scene, SCREEN_LAYER, waveUniforms);
+	(window as unknown as { __cyclone?: () => string[] }).__cyclone = cyclone.describe;
 	const island = createIsland(scene, waveUniforms, camera.position, query.has("island") && query.get("island") !== "off");
 	const noonAsked = query.get("noon");
 	const noonSeconds = () => (noonAsked === "off" || calmMotion ? undefined : noonAsked !== null ? (Number(noonAsked) || 0) + (Date.now() - pageOpened) / 1000 : noonSince(new Date()));
@@ -1217,7 +1306,11 @@ onMounted(async () => {
 		const gathering = thundering !== undefined && (thundering < 700 || (thundering > jennaHours() * 3600 - 60 && thundering < jennaHours() * 3600 + 1900));
 		// (And all through Ranat's storm, which follows Lantern's calls for rain.)
 		const ranatGoing = ranatSeconds() !== undefined;
-		if (((raising !== undefined && changing) || swelling || gathering || ranatGoing) && stormNow() === stormOn && measured) {
+		// (And while Mohabat raises the alarm's storm.)
+		const alarmGoing = alarmSeconds() !== undefined;
+		// (And all through the cyclone, whose bands come and go.)
+		const cycloneGoing = cycloneSeconds() !== undefined;
+		if (((raising !== undefined && changing) || swelling || gathering || ranatGoing || alarmGoing || cycloneGoing) && stormNow() === stormOn && measured) {
 			pretend = pretendNow();
 			conditions.value = { ...measured, ...pretend };
 			return;
@@ -1236,6 +1329,8 @@ onMounted(async () => {
 	};
 	const stormInterval = setInterval(followSwitch, 30_000);
 	let lastPracticeTick = -1;
+	let lastAlarmTick = -1;
+	let lastCycloneTick = -1;
 	await breathe();
 	const stars = createStars(scene, camera, PLACE, planetPositions, skyBreath.hole);
 	waveUniforms.weaveCentre.value.set(knotPosition.x, knotPosition.z);
@@ -1363,7 +1458,28 @@ onMounted(async () => {
 			lastPracticeTick = practiceTick;
 			if (practiceTick >= 0) followSwitch();
 		}
-		const droppedNow = Math.max(tsunamiBusyNow, freshBusyNow, ranatBusyNow);
+		// The alarm: everyone drops what they are doing for it too.
+		const alarmAt = calmMotion ? undefined : alarmSeconds();
+		const alarmBusyNow = alarmAt === undefined ? 0 : alarmBusy(alarmAt);
+		alarmNow.value = alarmAt !== undefined && alarmAt >= 0;
+		// (While Mohabat raises her storm, its figures are worked out again every ten seconds.)
+		const alarmTick = alarmAt === undefined || alarmAt < ALARM_STORM || alarmAt > ALARM_STORM + ALARM_RAISE + 20 ? -1 : Math.floor((alarmAt - ALARM_STORM) / 10);
+		if (alarmTick !== lastAlarmTick) {
+			lastAlarmTick = alarmTick;
+			if (alarmTick >= 0) followSwitch();
+		}
+		// The cyclone: everyone ceases weaving for it.
+		const cycloneAt = calmMotion ? undefined : cycloneSeconds();
+		const cycloneBusyNow = cycloneAt === undefined ? 0 : cycloneBusy(cycloneAt);
+		cycloneWords.value = cycloneAt === undefined || cycloneAt < 0 ? undefined : CYCLONE_WORDS;
+		// (While its swells rise and its weather is raised its figures are worked out again every five seconds,
+		// and every ten after, for its bands.)
+		const cycloneTick = cycloneAt === undefined || cycloneAt < CYCLONE_SWELL ? -1 : cycloneAt < CYCLONE_WEATHER + CYCLONE_WEATHER_RISE + 20 ? Math.floor(cycloneAt / 5) : 10000 + Math.floor(cycloneAt / 10);
+		if (cycloneTick !== lastCycloneTick) {
+			lastCycloneTick = cycloneTick;
+			if (cycloneTick >= 0) followSwitch();
+		}
+		const droppedNow = Math.max(tsunamiBusyNow, freshBusyNow, ranatBusyNow, alarmBusyNow, cycloneBusyNow);
 		// (Nor is the sky opened while the strongest is stilling it.)
 		const stillingNow = stillingBegun(new Date(), stillAsked, pageOpened, stormAsked !== null);
 		const stillingAny = stillingNow !== undefined;
@@ -1448,6 +1564,8 @@ onMounted(async () => {
 		const sea = lerp(drawn ? seaState(drawn) : weather.value, 1, Math.max(fury, 0.7 * THREE.MathUtils.smoothstep(moment.weave, 0.1, 0.9)));
 		const sky = lerp(drawn ? skyState(drawn) : weather.value, 1, fury);
 		updateEnvironment([hour.value, sea, sky]);
+		clouds.update(delta, { conditions: liveOnly ?? drawn, sky, fury, alive, cyclone: cyclone.sky(), eye: camera.position });
+		if (clouds.on && clouds.plan().words !== cloudWords.value) cloudWords.value = clouds.plan().words;
 
 		// The live sea is drawn to measure: each swell and the wind's waves at their real height,
 		// length and direction, and foam and fine roughness from the real wind. The dial and the
@@ -1613,7 +1731,9 @@ onMounted(async () => {
 			spread: fury + 2 * moment.white * moment.veil,
 			gain: 0.5 / steadyExposure,
 		});
-		stars.update({ date: shownMoment, shown: starsOut * (1 - fogAmount) * alive, faintest: faintestStar, glow: milkyWayOut * (1 - fogAmount) * alive, gain: 2.2 / steadyExposure, throughHole: breathing ? alive : 0 });
+		// (The stars go faint behind the six's stream into the sky, alarm.ts.)
+		const starsFaint = 1 - 0.85 * alarm.streaming();
+		stars.update({ date: shownMoment, shown: starsOut * (1 - fogAmount) * alive * starsFaint, faintest: faintestStar, glow: milkyWayOut * (1 - fogAmount) * alive * starsFaint, gain: 2.2 / steadyExposure, throughHole: breathing ? alive : 0 });
 		// In the dark the four channellers weave along the water, and their braids light it.
 		waveUniforms.channelWind.value.set(crosswind, gustiness);
 		// By the dial and the story there is no forecast to read, so the need goes with the weather set.
@@ -1703,23 +1823,10 @@ onMounted(async () => {
 			channelling.flowPoint(ahead, flowWorld);
 			toScreen(flowWorld.x, flowWorld.y, flowWorld.z, flowScreen[i]!);
 		});
-		// The serpents, from the sea's real heat (plumes.ts).
-		plumes.update(
-			liveOnly && !calmMotion && droppedNow < 0.5
-				? { conditions: liveOnly, time, boat: camera.position, ahead: skyAhead, wind: rainWind, sea: seaAtBoat, day: daylight, gain: 1.5 / steadyExposure, water: embroideryTints[0]!, gold: embroideryTints[2]! }
-				: undefined,
-			delta,
-		);
-		// What the flow spends it sheds as small rings off its far reach (rings.ts).
-		rings.update(
-			calmMotion || droppedNow > 0.5
-				? undefined
-				: { time, delta, working: channelling.working * alive, energy: sea, spentAt: channelling.flowPoint, boat: camera.position, wind: rainWind, day: daylight, gain: 1.5 / steadyExposure, white: lerp(0.5, 3.5, daylight) / steadyExposure },
-		);
 		// The weaker channellers' deep weaves round the boat, slowing it: by day or night, as much as it needs.
 		// (More of it, and more of the sea round the boat, when the strongest have taken it over.)
 		// (The weaker ones' hidden plaits give way to the sea-anchors as those are cast, anchor.ts.)
-		waveUniforms.deepWeave.value = (0.3 * Math.max(holdLevel * (1 - 0.8 * anchor.level()), 0.6 * channelling.masters) * alive * (1 - Math.max(freshBusyNow, ranatBusyNow))) / steadyExposure;
+		waveUniforms.deepWeave.value = (0.3 * Math.max(holdLevel * (1 - 0.8 * anchor.level()), 0.6 * channelling.masters) * alive * (1 - Math.max(freshBusyNow, ranatBusyNow, alarmBusyNow, cycloneBusyNow))) / steadyExposure;
 		waveUniforms.deepMaster.value = channelling.masters;
 		waveUniforms.channelLoss.value = lightIsLoss;
 		waveUniforms.channelBalm.value = 0.9 * channelling.working * tending * lerp(0.5, 1, day) * alive;
@@ -1751,6 +1858,17 @@ onMounted(async () => {
 		waveUniforms.internalWaves.value = (0.5 + 0.5 * moment.weave) * alive;
 		vortexUniforms.vortexSpin.value = time * 0.8;
 		vortexUniforms.vortexGlow.value.copy(knotGlow).multiplyScalar((0.06 * formed) / steadyExposure);
+		// The cyclone's sky (cyclone.ts): the shader's cloud wound about the place over its centre, turning
+		// slowly the way it turns; no rings and no eye (nothing round in the sky).
+		const cycloneSky = cyclone.sky();
+		if (cycloneSky && cycloneSky.formed > 0 && formed <= 0) {
+			vortexUniforms.knotDirection.value.set(cycloneSky.centre.x - camera.position.x, 7000, cycloneSky.centre.y - camera.position.z).normalize();
+			vortexUniforms.vortex.value = 0;
+			const wound = THREE.MathUtils.smoothstep(cycloneSky.formed, 0.2, 1);
+			vortexUniforms.vortexTwist.value = -cycloneSky.turn * 2.6 * wound;
+			vortexUniforms.vortexTurn.value += (-cycloneSky.turn * delta * wound * 2 * Math.PI) / 1200;
+			vortexUniforms.vortexGlow.value.setRGB(0, 0, 0);
+		} else vortexUniforms.vortexTurn.value = 0;
 		toScreen(knotPosition.x, knotPosition.y, knotPosition.z, knotScreen);
 		toScreen(camera.position.x, 0, camera.position.z - 8000, horizonScreen);
 		// Where the horizon crosses the middle of the screen, and its tilt, for the navigation to stand on.
@@ -2137,6 +2255,52 @@ onMounted(async () => {
 					}
 				: undefined,
 		);
+		// The alarm (after the freshening, whose torch in the sea it borrows for Laeni's light).
+		alarm.update(
+			alarmAt !== undefined && liveOnly
+				? {
+						since: alarmAt,
+						time,
+						delta,
+						boat: camera.position,
+						ahead: skyAhead,
+						camera,
+						wind: rainWind,
+						waveHeight: liveOnly.waveHeight,
+						visibility: liveOnly.visibility,
+						seaAt: seaHeightAt,
+						day: daylight,
+						gain: 1.5 / steadyExposure,
+						exposure: steadyExposure,
+						air: skySheath[0]!,
+						water: skySheath[1]!,
+						gold: skySheath[2]!,
+						tints: embroideryTints,
+					}
+				: undefined,
+		);
+		// The cyclone: the link, Laeni's rope far out into the cloud, the sky and the sea permeated.
+		cyclone.update(
+			cycloneAt !== undefined && liveOnly
+				? {
+						since: cycloneAt,
+						time,
+						delta,
+						boat: camera.position,
+						ahead: skyAhead,
+						south: PLACE.latitude < 0 ? 1 : -1,
+						cloudBase: condensationLevel(liveOnly) * (1 - 0.25 * rainAmount(liveOnly)),
+						wind: rainWind,
+						visibility: liveOnly.visibility,
+						day: daylight,
+						gain: 1.5 / steadyExposure,
+						exposure: steadyExposure,
+						air: skySheath[0]!,
+						water: skySheath[1]!,
+						gold: skySheath[2]!,
+					}
+				: undefined,
+		);
 		// The six's noon: their sun, and their ropes up into it.
 		const noonAt = noonSeconds();
 		noonByThem = noonAt === undefined ? 0 : noonShare(noonAt, noonAsked !== null ? undefined : noonLetGo(new Date()));
@@ -2267,6 +2431,7 @@ onMounted(async () => {
 	dispose = () => {
 		warming = false;
 		drawnInto.dispose();
+		clouds.dispose();
 		window.removeEventListener("resize", onResize);
 		window.removeEventListener("pointermove", onPointerMove);
 		window.removeEventListener("touchstart", onTouchStart);
@@ -2300,8 +2465,8 @@ onMounted(async () => {
 		forecastCall.dispose();
 		sprayBow.dispose();
 		ranat.dispose();
-		rings.dispose();
-		plumes.dispose();
+		alarm.dispose();
+		cyclone.dispose();
 		stilling.dispose();
 		rainCut.dispose();
 		stopWatching();
